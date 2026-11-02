@@ -16,3 +16,12 @@ Severity:   wrong visual
 Error text: none
 Screenshot: image 1, 2, and 3 in Coding Project/colonist-custom-catan/BUGS/Image
 ```
+
+tide bug with resources (roll no resources when tile is flooded), even though it supposed to roll half rounded up
+port should have a node of interaction, harbor upgrade interaction should be on the port not on the city
+harbor should replace sprite for port
+fish spawn is too much, reduce it by 30%
+harbor does not work (when flooded)
+feed does not have a node of interaction to interact with (add for net, reuses tile selection from groundwork)
+update harbor hover tooltip
+fish function like resource (receive resource multiplier from settlement and city and so on)
