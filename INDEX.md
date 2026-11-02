@@ -144,6 +144,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 
 | File | What it does |
 |---|---|
+| `debug.ts` | server debug mode (sandbox grants, forced dice rolls, board piece brush, state/award/supply invariant auditor, and repro snapshot exporter) |
 | `game.ts` | game runner (start/rematch, dispatch one action, turn engine events into client effects) |
 | `lobby.ts` | lobby board tools (generate from a recipe, quick starts, settings merge, paint terrain/numbers/robber/ports) on the engine board |
 | `main.ts` | server entry (Express and Socket.io, /health, bot training log endpoints, serves the client) |
@@ -194,6 +195,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `avatars.ts` | player avatars (flat pictogram faces keyed by the shared avatar id, falls back to the name initial) |
 | `constants.ts` | resource and dev card metadata (names, token colors) |
 | `cursors.ts` | lobby cursors and laser pointer (non-hosts cannot edit the map, they point at it instead) |
+| `debug.ts` | client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays |
 | `globals.d.ts` | type declaration for the global socket.io `io`, loaded by a script tag in index.html |
 | `icons.ts` | flat resource pictograms, dev card glyphs, UI icons, piece shapes |
 | `logFilter.ts` | live log filter matching (pure: splits a filter key and decides whether a turn action matches it) |

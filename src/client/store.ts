@@ -1,4 +1,4 @@
-// MODULE: shared mutable client UI state (game state, build and drawer modes, camera, selections) with setters | DEPENDS ON: client/types | USED BY: client/actions, client/audio, client/cursors, client/main, client/mapmenu, client/pieceui, +12 more
+// MODULE: shared mutable client UI state (game state, build and drawer modes, camera, selections) with setters | DEPENDS ON: client/types | USED BY: client/actions, client/audio, client/cursors, client/debug, client/main, client/mapmenu, +13 more
 // Shared mutable UI state. Scalars are `let` exports with setters (ES live bindings),
 // objects are const and mutated in place, so other modules can keep reading them directly.
 import type { GameState, MapOptionsView, Resources } from './types';

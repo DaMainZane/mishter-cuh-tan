@@ -1,4 +1,4 @@
-// MODULE: tidebound.rickety_bridges addon (T4a rickety bridge piece: 1 wood, health 1, shared pool and shared 2x cost with bridges, bot goal; T4b upgrade to a full bridge; T4d collapse on a 7 in Seven Resolver; T4e Longest Road recalc; T11c tech gate + +4 bridge cap bonus) | DEPENDS ON: packs/tidebound/bridgeConsts, packs/tidebound/bridgeCore, shared/index | USED BY: packs/tidebound/addons.generated, packs/tidebound/bridges, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/tech, packs/tidebound/wrecks
+// MODULE: tidebound.rickety_bridges addon (T4a rickety bridge piece: 1 wood, health 1, shared pool and shared 2x cost with bridges, bot goal; T4b upgrade to a full bridge; T4d collapse on a 7 in Seven Resolver; T4e Longest Road recalc; T11c tech gate + +4 bridge cap bonus) | DEPENDS ON: packs/tidebound/bridgeConsts, packs/tidebound/bridgeCore, shared/index | USED BY: packs/tidebound/addons.generated, packs/tidebound/bridges, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/tech, packs/tidebound/wrecks, +1 more
 import {
   BOT_GOALS,
   canAfford,

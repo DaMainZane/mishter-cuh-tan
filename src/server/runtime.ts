@@ -1,4 +1,4 @@
-// MODULE: engine runtime for the server (registry, settings -> rules mapping, defaults) | DEPENDS ON: packs/index, packs/tidebound/index, server/types, shared/index | USED BY: server/bots/dialogue/context, server/bots/dialogue/index, server/bots/scheduler, server/bots/sim, server/game, server/lobby, +6 more
+// MODULE: engine runtime for the server (registry, settings -> rules mapping, defaults) | DEPENDS ON: packs/index, packs/tidebound/index, server/types, shared/index | USED BY: server/bots/dialogue/context, server/bots/dialogue/index, server/bots/scheduler, server/bots/sim, server/debug, server/game, +7 more
 import { allPacks } from '../packs';
 import { RISING_SEA_DEFAULT_LEVEL, TIDE_DEFAULT_LEVEL } from '../packs/tidebound';
 import { buildVisualManifest, createRegistry, mergeRules, registryFor, resolveAddons } from '../shared';

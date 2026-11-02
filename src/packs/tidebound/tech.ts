@@ -1,4 +1,4 @@
-// MODULE: Tidebound tech tree nodes (T11a-T11f: 8 extension nodes across Expansion & Industrial paths, techGate re-export, Grand Causeway 16 VP hook, Harbor Empire ceil(V/2) bank card grant) | DEPENDS ON: packs/base/constants, packs/base/techEffects, packs/tidebound/bridgeConsts, packs/tidebound/ricketyBridges, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks
+// MODULE: Tidebound tech tree nodes (T11a-T11f: 8 extension nodes across Expansion & Industrial paths, techGate re-export, Grand Causeway 16 VP hook, Harbor Empire ceil(V/2) bank card grant) | DEPENDS ON: packs/base/constants, packs/base/techEffects, packs/tidebound/bridgeConsts, packs/tidebound/ricketyBridges, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, +1 more
 import {
   bankGive,
   BOT_GOALS,

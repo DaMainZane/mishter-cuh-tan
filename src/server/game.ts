@@ -1,4 +1,4 @@
-// MODULE: game runner (start/rematch, dispatch one action, turn engine events into client effects) | DEPENDS ON: server/bots/brain, server/bots/dialogue, server/bots/trainingLog, server/lobby, server/rooms, server/runtime, +4 more | USED BY: server/bots/scheduler, server/socket
+// MODULE: game runner (start/rematch, dispatch one action, turn engine events into client effects) | DEPENDS ON: server/bots/brain, server/bots/dialogue, server/bots/trainingLog, server/lobby, server/rooms, server/runtime, +4 more | USED BY: server/bots/scheduler, server/debug, server/socket
 import { PLAYER_COLORS, createGame, currentPlayer, dispatch } from '../shared';
 import type { DispatchResult, GameEvent } from '../shared';
 import { emitBotDialogue, emitGameStartDialogue } from './bots/dialogue';

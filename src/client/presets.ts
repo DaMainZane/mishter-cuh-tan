@@ -183,7 +183,7 @@ export function deletePreset(id: string): void {
 }
 
 // The server answers a save with the finished preset. Same name = replace, so saving again "edits" a preset.
-socket.on('presetSaved', (msg: any) => {
+socket?.on('presetSaved', (msg: any) => {
   const p = msg?.preset;
   if (!p || typeof p.id !== 'string' || !ID_PATTERN.test(p.id) || typeof p.name !== 'string' || !Array.isArray(p.hexes)) {
     showToast('Could not save the preset.');

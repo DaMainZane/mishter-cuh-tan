@@ -1,4 +1,4 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/constants, client/icons, client/pieceModel, client/pieceui, client/render/bridgepicker, +7 more | USED BY: client/actions, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/constants, client/debug, client/icons, client/pieceModel, client/pieceui, +8 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
@@ -31,6 +31,7 @@ import { openBridgePicker } from './bridgepicker';
 import { renderPiratesMarkup } from './pirates';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
+import { isDebugOverlayActive, renderDebugBoardOverlayMarkup } from '../debug';
 
 const knownRoads = new Set<number>();
 const knownRoadPieces = new Map<number, { owner: string; pieceType: string }>();
@@ -81,6 +82,7 @@ let lastPieceSpotsHtml = '';
 let lastHexDynamicHtml = '';
 let lastRoadSpotsHtml = '';
 let lastVerticesHtml = '';
+let lastDebugHtml = '';
 
 interface HexGeomCache {
   rawPts: string;
@@ -162,7 +164,7 @@ export function updateCameraViewBox(): void {
     for (const id of ['boardVerticesLayer', 'boardPieceSpotsLayer']) {
       document.getElementById(id)?.style.setProperty('--building-scale', bs);
     }
-    for (const id of ['boardHexDynamicLayer', 'boardWrecksLayer', 'boardPiratesLayer']) {
+    for (const id of ['boardHexDynamicLayer', 'boardWrecksLayer', 'boardPiratesLayer', 'boardDebugLayer']) {
       document.getElementById(id)?.style.setProperty('--piece-zoom', pz);
     }
   }
@@ -252,6 +254,7 @@ function ensureBoardLayers(svg: HTMLElement): {
       <g id="roadSpotsLayer"></g>
       <g id="boardVerticesLayer"></g>
       <g id="boardPieceSpotsLayer"></g>
+      <g id="boardDebugLayer"></g>
     `;
     lastTerrainKey = '';
     lastPortsKey = '';
@@ -265,6 +268,7 @@ function ensureBoardLayers(svg: HTMLElement): {
     lastHexDynamicHtml = '';
     lastRoadSpotsHtml = '';
     lastVerticesHtml = '';
+    lastDebugHtml = '';
     lastBuildingScale = -1;
     lastRoadScale = -1;
     terrainLayer = document.getElementById('boardTerrainLayer')!;
@@ -1137,6 +1141,16 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   if (pieceSpotsHtml !== lastPieceSpotsHtml) {
     lastPieceSpotsHtml = pieceSpotsHtml;
     layers.pieceSpotsLayer.innerHTML = pieceSpotsHtml;
+  }
+
+  // 8. Debug overlay layer (H/V/E IDs, sandbox click targets, and all-icons stress test when Debug Mode is active)
+  const debugLayer = document.getElementById('boardDebugLayer');
+  if (debugLayer) {
+    const debugHtml = isDebugOverlayActive() ? renderDebugBoardOverlayMarkup() : '';
+    if (debugHtml !== lastDebugHtml) {
+      lastDebugHtml = debugHtml;
+      debugLayer.innerHTML = debugHtml;
+    }
   }
 }
 

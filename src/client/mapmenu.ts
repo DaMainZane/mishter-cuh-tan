@@ -427,7 +427,7 @@ export function mapToggleLock(): void {
 }
 
 // The server sends the option list once per connection.
-socket.on('mapOptions', (view: MapOptionsView) => {
+socket?.on('mapOptions', (view: MapOptionsView) => {
   if (!view || !Array.isArray(view.options) || !Array.isArray(view.quickStarts)) return;
   setMapOptions(view);
   lastMenuSig = '';

@@ -1,4 +1,4 @@
-// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/icons, client/mapmenu, client/pieceui, +15 more | USED BY: none
+// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +16 more | USED BY: none
 import { socket } from './socket';
 import { playDiceRollSound, playDiscardSound, playTone, playVictoryFanfareSound, playYourTurnSound, toggleSound } from './audio';
 import { hydrateIcons } from './icons';
@@ -46,6 +46,15 @@ import {
   setBrush, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, pushSettings, schedulePushSettings, addBot, removeBot, startGame, rematchLobby, switchVictoryTab,
   toggleVictoryMapInspect, setBuildMode, mainTurnButton, rollDice, buyDevCard, cycleAvatar, cycleBotTier, collapseLobbyUi, setSetupOpen
 } from './actions';
+import {
+  debugClickBoard,
+  initDebugMode,
+  sendDebugCmd,
+  setDebugBrush,
+  toggleDebugIds,
+  toggleDebugMode,
+  toggleDebugStressHex
+} from './debug';
 
 /** Tidebound T6d: switch the board between the tide overlays and the elevation heat map. */
 function toggleElevationView(): void {
@@ -77,7 +86,8 @@ Object.assign(window as any, {
   onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
   onRoadHover, onRoadMove, onRoadLeave,
   setHexOverlay, clearHexOverlays, showTimerPopup, dismissTimerPopup, triggerTimerPopupAction,
-  showEventTitleCard, showRoundRecapCard, dismissRoundRecapCard, toggleElevationView
+  showEventTitleCard, showRoundRecapCard, dismissRoundRecapCard, toggleElevationView,
+  toggleDebugMode, sendDebugCmd, setDebugBrush, toggleDebugIds, toggleDebugStressHex, debugClickBoard
 });
 
 function animateDice(sum?: number): void {
@@ -423,6 +433,7 @@ function init(): void {
   }, true);
   stage.addEventListener('contextmenu', e => e.preventDefault());
   initCursors();
+  initDebugMode();
 }
 
 if (document.readyState === 'loading') {
