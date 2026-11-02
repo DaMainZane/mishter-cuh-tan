@@ -1,4 +1,4 @@
-// MODULE: tidebound.bridges addon (wide-water map perk + T3 Bridge piece, ocean placement rule, 2x cost past 10 or 14 with Rickety bridges tech, Longest Road, bot goal, T11f demolish_bridge action & Grand Causeway 16 VP hook) | DEPENDS ON: packs/tidebound/bridgeConsts, packs/tidebound/bridgeCore, packs/tidebound/ricketyBridges, packs/tidebound/seaData, packs/tidebound/tech, shared/index | USED BY: packs/tidebound/addons.generated, packs/tidebound/index, packs/tidebound/wrecks
+// MODULE: tidebound.bridges addon (wide-water map perk + T3 Bridge piece, ocean placement rule, 2x cost past 10 or 14 with Rickety bridges tech, Longest Road, bot goal, T11f demolish_bridge action & Grand Causeway 16 VP hook) | DEPENDS ON: packs/tidebound/bridgeConsts, packs/tidebound/bridgeCore, packs/tidebound/ricketyBridges, packs/tidebound/seaData, packs/tidebound/tech, shared/index | USED BY: packs/tidebound/addons.generated, packs/tidebound/index, packs/tidebound/wrecks, server/debug
 import {
   addWaterTopology,
   bankGive,

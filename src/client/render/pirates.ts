@@ -1,4 +1,4 @@
-// MODULE: Tidebound T10 pirates on the board (pirate icon markup, the SVG layer markup, click to drive one off); draws its own styles | DEPENDS ON: client/audio, client/icons, client/pirateIcon, client/socket, client/store, client/util | USED BY: client/main, client/render/board
+// MODULE: Tidebound T10 pirates on the board (pirate icon markup, the SVG layer markup, click to drive one off); draws its own styles | DEPENDS ON: client/audio, client/icons, client/pirateIcon, client/socket, client/store, client/util | USED BY: client/debug, client/main, client/render/board
 import { playTone } from '../audio';
 import { hexIconLayout } from '../icons';
 import { PIRATE_ICON_CY, PIRATE_ICON_RADIUS, pirateIconMarkup, pirateLook } from '../pirateIcon';

@@ -1,4 +1,4 @@
-// MODULE: socket handlers (lobby editing + game actions; every game action goes through engine dispatch) | DEPENDS ON: packs/base/constants, packs/base/robbing, server/bots/dialogue, server/bots/tiers, server/game, server/lobby, +7 more | USED BY: server/main
+// MODULE: socket handlers (lobby editing + game actions; every game action goes through engine dispatch) | DEPENDS ON: packs/base/constants, packs/base/robbing, server/bots/dialogue, server/bots/tiers, server/debug, server/game, +8 more | USED BY: server/main
 import type { Server } from 'socket.io';
 import { AVATARS, PLAYER_COLORS } from '../shared';
 import { victimsOnHex } from '../packs/base/robbing';
@@ -12,6 +12,7 @@ import { broadcastRoom } from './net';
 import { registry } from './runtime';
 import { DEFAULT_TIER, TAKEOVER_TIER, normalizeTier, tierLabel } from './bots/tiers';
 import { reactToChat } from './bots/dialogue';
+import { applyDebugCommand, auditGameState } from './debug';
 import type { Room } from './types';
 
 const BOT_NAMES = ['Breeze', 'Sonny', 'Jess', 'TupacShakur', 'IdrisElba', 'Cleopatra', 'Napoleon'];
@@ -779,6 +780,32 @@ export function registerSocketHandlers(io: Server): void {
       if (room.chats.length > 60) room.chats.shift();
       reactToChat(room, socket.id, said);
       broadcastRoom(room);
+    }));
+
+    // ---- Debug Mode ---------------------------------------------------------------
+
+    socket.on('debugCmd', safe(({ code, cmd, payload }) => {
+      const room = rooms[code];
+      if (!room) return;
+      if (cmd === 'audit') {
+        socket.emit('debugReport', {
+          type: 'audit',
+          report: auditGameState(room, socket.id)
+        });
+        return;
+      }
+      const res = applyDebugCommand(room, socket.id, String(cmd || ''), payload ?? {});
+      if (!res.ok) {
+        socket.emit('errorMsg', res.message);
+        return;
+      }
+      broadcastRoom(room);
+      socket.emit('debugReport', {
+        type: cmd,
+        message: res.message,
+        snapshot: res.snapshot,
+        report: auditGameState(room, socket.id)
+      });
     }));
 
     // ---- Disconnect ---------------------------------------------------------------

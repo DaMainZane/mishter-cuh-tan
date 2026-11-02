@@ -1,4 +1,4 @@
-// MODULE: public entry of the shared engine | DEPENDS ON: shared/addons, shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, +27 more | USED BY: packs/_template/addons.generated, packs/_template/demo, packs/_template/index, packs/_template/lantern, packs/base/actions/bankTrade, packs/base/actions/build, +64 more
+// MODULE: public entry of the shared engine | DEPENDS ON: shared/addons, shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, +27 more | USED BY: packs/_template/addons.generated, packs/_template/demo, packs/_template/index, packs/_template/lantern, packs/base/actions/bankTrade, packs/base/actions/build, +65 more
 export * from './rng';
 export * from './types';
 export * from './palette';

@@ -1,4 +1,4 @@
-// MODULE: flat resource pictograms, dev card glyphs, UI icons, piece shapes | DEPENDS ON: none | USED BY: client/audio, client/main, client/mapmenu, client/pieceModel, client/presets, client/render/board, +10 more
+// MODULE: flat resource pictograms, dev card glyphs, UI icons, piece shapes | DEPENDS ON: none | USED BY: client/audio, client/debug, client/main, client/mapmenu, client/pieceModel, client/presets, +11 more
 // Style rules (see Design UI Philosophy.md): flat solid silhouettes, no gradients, no outlines,
 // drawn in a 28x28 box centered on 0,0 so one glyph works on tiles, hand cards and the trade UI.
 // Colors come from CSS classes in styles.css (.g-wood, .g-brick ...), which read the design tokens.

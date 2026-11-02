@@ -1,4 +1,4 @@
-// MODULE: client state builder (engine state -> the `gameState` shape the current client renders) | DEPENDS ON: packs/base/building, packs/base/robbing, packs/base/techEffects, packs/base/trading, server/bots/scheduler, server/rooms, +4 more | USED BY: server/net
+// MODULE: client state builder (engine state -> the `gameState` shape the current client renders) | DEPENDS ON: packs/base/building, packs/base/robbing, packs/base/techEffects, packs/base/trading, server/bots/scheduler, server/rooms, +4 more | USED BY: server/debug, server/net
 import { effectiveDiscardLimit, encodeRecipe, getPlayer, isOtherVersion, mergeViewOverlays, mergeViewPlayer, mergeViewShared, mergeViewVpBonus, publicVP, score, techPanelFor, totalCards, visibleWildCards, wildTokensOf } from '../shared';
 import type { Board, GameState, PlayerState } from '../shared';
 import { pieceCost } from '../packs/base/building';

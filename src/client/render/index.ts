@@ -1,4 +1,4 @@
-// MODULE: renderAll, draws every client panel (board, hand, sidebar, trade, tech, overlays) from the current state | DEPENDS ON: client/actions, client/avatars, client/icons, client/mapmenu, client/pieceui, client/presets, +14 more | USED BY: client/actions, client/main, client/render/drawer
+// MODULE: renderAll, draws every client panel (board, hand, sidebar, trade, tech, overlays) from the current state | DEPENDS ON: client/actions, client/avatars, client/debug, client/icons, client/mapmenu, client/pieceui, +15 more | USED BY: client/actions, client/main, client/render/drawer
 import { socket } from '../socket';
 import { state, buildMode, victoryTab, hideVictoryOverlay, elevationView } from '../store';
 import { isPendingSettingsPush } from '../actions';
@@ -18,6 +18,7 @@ import { turnClockHtml, syncTurnClockDisplay } from './turnclock';
 import { uiIcon, dieFaceSvg } from '../icons';
 import { esc } from '../util';
 import { avatarFace } from '../avatars';
+import { onDebugStateUpdated } from '../debug';
 import type { PlayerView } from '../types';
 
 let lastVicRenderKey = '';
@@ -251,6 +252,7 @@ export function renderAll(): void {
     lastBoardGameOverKey = goKey;
     renderBoard(me, isMyTurn);
   }
+  onDebugStateUpdated();
 }
 
 interface VicCol {

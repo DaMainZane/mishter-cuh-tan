@@ -1,4 +1,4 @@
-// MODULE: generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) | DEPENDS ON: client/icons, client/types, shared/visual | USED BY: client/actions, client/pieceui, client/render/board, client/render/hand, client/render/overlay, client/render/techpanel
+// MODULE: generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) | DEPENDS ON: client/icons, client/types, shared/visual | USED BY: client/actions, client/debug, client/pieceui, client/render/board, client/render/hand, client/render/overlay, +1 more
 import { getMiniSvg, shade, uiIcon } from './icons';
 import type { PlayerView, Resources, TechActionsView } from './types';
 import type { ManifestEntry, PiecePlayerData } from '../shared/visual';

@@ -1,4 +1,4 @@
-// MODULE: Turn history recorder & round summarizer | DEPENDS ON: server/types, shared/index | USED BY: server/game, server/types
+// MODULE: Turn history recorder & round summarizer | DEPENDS ON: server/types, shared/index | USED BY: server/debug, server/game, server/types
 import { currentPlayer } from '../shared';
 import type { GameEvent } from '../shared';
 import type { Room } from './types';

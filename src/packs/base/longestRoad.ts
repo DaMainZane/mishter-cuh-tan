@@ -1,4 +1,4 @@
-// MODULE: longest road metric (DFS over a player's roads and road-like edge pieces, blocked by opponent pieces) | DEPENDS ON: packs/base/placement, shared/index | USED BY: packs/base/awards
+// MODULE: longest road metric (DFS over a player's roads and road-like edge pieces, blocked by opponent pieces) | DEPENDS ON: packs/base/placement, shared/index | USED BY: packs/base/awards, server/debug
 import type { Ctx, Edge, Id } from '../../shared';
 import { isRoadPiece } from './placement';
 

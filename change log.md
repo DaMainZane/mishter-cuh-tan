@@ -1,5 +1,21 @@
 # Change Log
 
+## 2026-11-02 (Pass 111: Debug Mode — sandbox grants, forced dice rolls, in-game board brush, invariant & client-vs-server spot auditor, and FPS/SVG node profiler; headers, index, typecheck and all 66 test files passed)
+### Added
+- **Server Debug Mode (`src/server/debug.ts`, `src/server/socket.ts`)**:
+  - `auditGameState(room, viewerId)` checks Longest Road award consistency (`longestRoadFor`, `longestRoadHasBridge`, `grandCausewayBonusVp`), verifies `score(g, reg, p, true) === sum(vpBreakdown)`, audits base piece supplies (`settlement`, `city`, `road`), shared `bridge` + `rickety_bridge` pools, and `net` tile caps, and extracts the server's ground-truth `legalSpots` (`settlementVertices`, `cityVertices`, `roadEdges`, `bridgeEdges`, `ricketyEdges`, `netHexes`, `harborVertices`, `portRaiseVertices`).
+  - `applyDebugCommand(room, actorId, cmd, payload)` handles `grantResources` (`+10` all resources), `grantFish` (`+5` fish tokens), `unlockAllTechs`, `forceRoll` (`2..12` through the real `onRoll` + `resolveSeven` / `runProductionPipeline` hooks), `paintPiece` (place/clear `settlement`, `city`, `road`, `bridge`, `rickety_bridge`, `net`, `pirate`, `wreck_sea`, `wreck_shore`, `robber` on any hex/vertex/edge while keeping piece pools and awards synced), and `exportSnapshot` (JSON repro state).
+  - Wired `socket.on('debugCmd', ...)` in `src/server/socket.ts` emitting `debugReport`.
+- **Client Debug Mode HUD & Board Overlay (`src/client/debug.ts`, `src/client/render/board.ts`, `src/client/render/index.ts`, `src/client/main.ts`, `src/client/styles.css`, `public/index.html`)**:
+  - Toggled via `?debug=1`, pressing `` ` `` or `F2`, or clicking **Debug Mode** in `#gameSettingsMenu`.
+  - Live **FPS / Max Frame Spike (3s) / SVG Layer Node Counter** (`Terrain`, `Roads`, `Vertices`, `Overlays`, `Total`).
+  - Automatic **Client-vs-Server Spot Diff** (`diffClientVsServerSpots`) comparing `canClientPlaceSettlement`, `canClientPlaceRoad`, `canClientPlaceBridge`, `netSpots`, `harborSpots`, and `portRaiseSpots` against the server's `legalActions`.
+  - `#boardDebugLayer` overlay in `board.ts` supporting **Show H/V/E IDs**, **All-Icons Stress Test** (simultaneously drawing number token, robber, fish ground, net, pirate, sea wreck, and shore wreck on the center hex), and clickable in-game board brush targets.
+### Tests
+- `tests/debugmode.test.ts` (4 tests covering clean game audit, supply/award corruption detection, sandbox commands & repro export, and client-vs-server spot desync diffing).
+### Not verified
+- Not seen in the game: visual layout of `#debugHudPanel` on narrow mobile screens.
+
 ## 2026-11-02 (Pass 110: Bug List — Bug 3 tech cost balancing; headers, index, typecheck and all 65 test files passed)
 ### Fixed
 - **Bug 3 — Tidebound tech cost balancing (`src/shared/stage1.ts`)**: in active games (`placedCount(g, pid, 'settlement') >= 1` or `hasTech(g, pid, 'tidebound.harbor_charters')` with Tidebound DLC or `offset >= 3`), `techCostCards` now exempts the 2 starting settlements (`effV = Math.max(0, v - 2)`) and scales down tier offsets (`effOffset = Math.floor(offset * 0.4)`), reducing real-game Tidebound tech costs from `2 / 6 / 9 / 11 / 15` cards down to `2 / 3 / 5 / 5 / 8` cards at game start while keeping legacy unit tests and `tests/view.snapshot.json` unchanged.
