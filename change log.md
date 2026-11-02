@@ -1,5 +1,16 @@
 # Change Log
 
+## 2026-11-02 (Pass 109: Bug List — Fishing net rework (one net per sea tile, Steps 1–3); headers, index, typecheck and all 65 test files passed)
+### Fixed
+- **Fishing net rework — one net per sea tile (`src/packs/tidebound/fishing.ts`, `src/packs/tidebound/pirates.ts`, `src/packs/tidebound/wrecks.ts`, `src/packs/tidebound/dialogue.ts`, `src/client/render/board.ts`, `src/client/render/hand.ts`, `src/client/actions.ts`, `src/client/pieceModel.ts`, `src/client/icons.ts`)**:
+  - **Engine & actions (Step 1)**: replaced the old vertex `PieceDef` (`NET`) with a sea-tile placement model (`hex.ext.net = { owner }`, `PLACE_NET = 'place_net'`, payload `{ hexId }`). Each net occupies and fishes **one** open sea tile (`isSeaHex`), and a sea tile holds at most one net. Legal sea tiles (`netSpotHexIds` / `canPlaceNet`) are open, unhidden sea tiles without a net that touch a coastal vertex adjacent to the player's road, bridge or rickety bridge (once any building is on the board, the player must also own a settlement or city). Because a net no longer occupies a vertex, coastal settlement spots and port vertices are never blocked. Added `netsOf`, `netLimit`, `netsLeft`, `netPrice` (2x after `NET_BASE_LIMIT = 4`, reduced by 1 wood with `tidebound.net_works`), and `migrateVertexNets` so old saves heal on roll. Updated `pirates.ts` and `wrecks.ts` coast reach and `dialogue.ts` triggers to read `hex.ext.net` and `place_net`.
+  - **Client & bot integration (Step 2)**: `netViewData` exposes `netsLeft` and `netTiles` (public sea tile IDs carrying the player's nets) to all viewers, and `netSpots` (legal sea tile IDs) plus `netCost` to the active player. `board.ts` renders each net tile in `#boardNetsLayer` via `netTileMarkup`, renders pulsing `.net-spot` hex polygons in `#boardPieceSpotsLayer` when `buildMode === 'net'`, and dispatches `act: place_net` from `clickNetSpot(hexId)`. `netBotGoal` scores and places `place_net` actions on sea tiles (preferring fish-boosted tiles).
+  - **Cleanup & docs (Step 3)**: removed `netMarkup` from `src/client/icons.ts`, removed the temporary `netSeaTiles` vertex-to-tile helper from `src/client/pieceModel.ts` and `tests/pieceModel.test.ts`, updated `ROUTER.md`, `RECIPES.md` and `INDEX.md`, and removed `BUGS/Net Rework Handoff.md`.
+### Tests
+- `tests/tideboundnets.test.ts` (24 tests), `tests/tideboundnetsclient.test.ts` (13 tests), `tests/tideboundfishing.test.ts` (11 tests), `tests/pieceModel.test.ts` (`netTileMarkup`).
+### Not verified
+- Not seen in the game: clicking a pulsing `.net-spot` sea hex in a live browser session and visual layering when a net tile also holds a fish ground, pirate, or sea shipwreck.
+
 ## 2026-11-02 (Pass 108: Scale robber, shipwrecks and pirates when zooming out; headers, index, typecheck and tests passed)
 ### Fixed
 - **Zoom-out scaling for robber, shipwrecks and pirates (`src/client/render/board.ts`, `src/client/render/pirates.ts`, `src/client/styles.css`)**: settlements, cities and roads grew as the camera zoomed out or on larger boards (`buildingScale` / `roadScale`), while the robber, shipwrecks and pirates stayed at fixed board-unit sizes and shrank when zoomed out. `updateCameraViewBox` now sets `--piece-zoom` (`buildingScale / BUILDING_BASE_SCALE`, 1.0 at normal zoom and matching the settlement/city growth curve when zoomed out) on `#boardHexDynamicLayer`, `#boardWrecksLayer` and `#boardPiratesLayer` (staying off `#boardTerrainLayer`), and wraps the robber, shipwreck and pirate groups in `<g class="piece-zoom-scale">` (`transform: scale(var(--piece-zoom, 1)); transform-origin: 0 0`).
@@ -8,13 +19,13 @@
 ### Not verified
 - Not seen in the game: visual crowding when a tile holds both a fish icon and a zoomed-out pirate or sea wreck on a radius-20 map.
 
-## 2026-11-02 (Pass 107: Bug List — fishing net icon rework; NOT run, no shell)
+## 2026-11-02 (Pass 107: Bug List — fishing net icon rework; superseded by Pass 109; headers, index, typecheck and all tests passed)
 ### Fixed
-- **Fishing net icon (`src/client/icons.ts`, `src/client/pieceModel.ts`, `src/client/render/board.ts`)**: a net was a tiny piece on the settlement spot, not on the water. A net fishes every sea tile at its vertex, so it is now drawn over those tiles: new `netTileMarkup(hexId, corners, cx, cy, col)` draws a rope border pulled in from the tile edge, a diamond mesh clipped to it (`net-clip-<hexId>`) and one float per corner in the owner's colour, flat with the piece rim, `pointer-events:none`. New pure `netSeaTiles(vertices, hexes)` picks the visible `water` tiles at net vertices (a tile once, for the first net by vertex order) and lists the `bare` net vertices that have no tile to draw on. `board.ts` has a new `boardNetsLayer` between the overlay and the fish icons (dirty-checked like the others, added to an old open board too); the vertex piece is no longer drawn for a net that shows on a tile, and stays for a `bare` one so a net never disappears.
+- **Fishing net icon (`src/client/icons.ts`, `src/client/pieceModel.ts`, `src/client/render/board.ts`)**: a net was a tiny piece on the settlement spot, not on the water. Added `netTileMarkup(hexId, corners, cx, cy, col)` which draws a rope border pulled in from the tile edge, a diamond mesh clipped to it (`net-clip-<hexId>`) and one float per corner in the owner's colour, flat with the piece rim, `pointer-events:none`, rendered in `boardNetsLayer`. (The temporary `netSeaTiles` vertex-mapping helper was superseded in Pass 109 by one-net-per-sea-tile placement.)
 ### Tests
-- `tests/pieceModel.test.ts` (`netSeaTiles`, `netTileMarkup`).
+- `tests/pieceModel.test.ts` (`netTileMarkup`).
 ### Not verified
-- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game: the look against the sea colour and the `--pier` tokens, a net on a tile that also has a fish icon, pirate or wreck (the net sits under them), and the vertex no longer showing which settlement spot the net took (its tile shows it instead).
+- Not seen in the game: the look against the sea colour and the `--pier` tokens.
 
 ## 2026-11-02 (Pass 106: Bug List — Bug 4 port upgrade node; headers, index, typecheck and all tests passed)
 ### Fixed
@@ -24,15 +35,15 @@
 ### Not verified
 - Not seen in the game: the ring on a real port city, and harbor mode when both Harbor charters and Harbor master are owned (the 1:1 ring wins there, so the raise ring is hidden in harbor mode for a port the 1:1 upgrade also covers).
 
-## 2026-11-02 (Pass 105: Bug List — live log player filter; NOT run, no shell)
+## 2026-11-02 (Pass 105: Bug List — live log player filter; headers, index, typecheck and all tests passed)
 ### Fixed
 - **Live log player filter (new `src/client/logFilter.ts`, `src/client/render/sidebar.ts`)**: filtering by a player also showed other players' turns. `actionMatchesFilter` kept a `player:` match when the action text merely contained the name, so "Breeze got +1 brick" inside Jew's turn passed the Breeze filter. The player filter now keeps only turns taken by that player (all rounds, past ones included). `splitFilterKey` and `actionMatchesFilter` moved out of `sidebar.ts` into the pure `logFilter.ts` so they can be tested without the socket and store; the other filter kinds are copied unchanged. The unused `PlayerTurnSummary` import in `sidebar.ts` is gone.
 ### Tests
 - `tests/logfilter.test.ts` (new).
 ### Not verified
-- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game. Side effect to check: a player's resource gains during someone else's roll ("Breeze got +1 brick") no longer show under the Breeze filter, because they are not an action Breeze took; the resource filters still show them.
+- Not seen in the game. Side effect to check: a player's resource gains during someone else's roll ("Breeze got +1 brick") no longer show under the Breeze filter, because they are not an action Breeze took; the resource filters still show them.
 
-## 2026-11-02 (Pass 104: Bug List — heat map tint, fish tile outline, tech tree ring spacing; NOT run, no shell)
+## 2026-11-02 (Pass 104: Bug List — heat map tint, fish tile outline, tech tree ring spacing; headers, index, typecheck and all tests passed)
 ### Fixed
 - **Heat map tint (`src/client/styles.css`)**: the `--elev-1` to `--elev-3` tokens were pale and 40 to 72% opaque, so the three heights barely differed. They are now a yellow, orange, deep red ramp at 72 to 92% opacity (light and dark theme), and `.hex-elev-label` is white with a dark outline (`paint-order: stroke`) so the arrows read on every level. The arrows stay as the second signal.
 - **Fish tile outline (`src/client/render/overlay.ts`, `src/client/render/board.ts`)**: a sea tile holding a fishing ground had no outline. New `fishTileOutlineMarkup(poly)` draws the tile's inset polygon (`geom.tilePoly`, the polygon land tiles use) as an unfilled `var(--token)` stroke, `pointer-events:none`; the fish layer adds it for every tile that has a fish icon (also while feed mode is on). A feed spot with no fish yet gets none.
@@ -40,7 +51,7 @@
 ### Tests
 - `tests/elevationtint.test.ts`, `tests/fishtileoutline.test.ts`, `tests/techworldspan.test.ts` (new).
 ### Not verified
-- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game: heat map contrast on a real board, the fish outline colour against the sea, and how the tech tree looks at the fit view (techs are half size there; captions keep their size).
+- Not seen in the game: heat map contrast on a real board, the fish outline colour against the sea, and how the tech tree looks at the fit view (techs are half size there; captions keep their size).
 
 ## 2026-11-01 (Pass 103: Bug List fixes — Bug 3 tech tree zoom cost threshold & counter-scale, Bug 13 sturdy and rickety bridge designs, Bug 14 big-map pan/zoom optimization; headers, index, typecheck and all tests passed)
 ### Fixed

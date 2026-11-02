@@ -24,18 +24,6 @@ Screenshot: none
 ```
 
 ```
-BUG 4
-Saw:        gameplay
-Expected:   when harbor tech is unlocked and the condition is met, a 3:1 harbor with access to a city nearby also receive a prompt node like when placing city or road. Clicking on that node with enough resources will upgrade the port to a harbor
-Actual:     cannot interact with the port. when clicking on the harbor button, it said not enough resource even though it is not.
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   gameplay
-Error text: none
-Screenshot: none
-```
-
-```
 BUG 5
 Saw:        UI
 Expected:   Rework the build interaction UI as follows:
@@ -51,18 +39,6 @@ Repro:      all
 Severity:   wrong visual
 Error text: none
 Screenshot: image 1, 2, and 3 in Coding Project/colonist-custom-catan/BUGS/Image
-```
-
-```
-BUG
-Saw:        UI
-Expected:   Fishing net icon rework, similar net texture in core keeper but adapted to our design philosophy UI
-Actual:     it actually just a very small thing sitting not in water but in places where settlement supposed to be
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   wrong rule
-Error text: none
-Screenshot: image 8 and 9 (8 is how it supposed to be, and 9 is reference image for design) in Coding Project/colonist-custom-catan/BUGS/Image
 ```
 
 ```
