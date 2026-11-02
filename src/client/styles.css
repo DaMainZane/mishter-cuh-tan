@@ -239,8 +239,8 @@ svg#boardSvg.is-panning {
 
 /* In-game menu popover */
 .game-settings-menu {
-  position: absolute; top: 12px; left: 64px; width: 272px; padding: 14px; z-index: 65;
-  display: flex; flex-direction: column; gap: 14px;
+  position: absolute; top: 12px; left: 64px; width: 284px; padding: 14px; z-index: 65;
+  display: flex; flex-direction: column; gap: 12px;
   background: var(--surface); border-radius: var(--r-lg); box-shadow: var(--shadow);
 }
 .menu-head { display: flex; align-items: center; justify-content: space-between; font-weight: 700; font-size: 14px; }
@@ -253,8 +253,8 @@ svg#boardSvg.is-panning {
 }
 .speed-preset-btn:hover { background: var(--surface-3); }
 .speed-preset-btn.active { background: var(--accent); color: var(--on-accent); }
-.menu-actions { display: flex; gap: 6px; border-top: 1px solid var(--line); padding-top: 12px; }
-.menu-actions .btn { flex: 1; }
+.menu-actions { display: flex; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.menu-actions .btn { flex: 1 1 calc(50% - 4px); min-width: 112px; white-space: nowrap; }
 
 /* ---------- Lobby dock (map painter and rules) ---------- */
 #lobbyToolbar {
