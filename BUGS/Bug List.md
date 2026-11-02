@@ -1,44 +1,6 @@
-```
-BUG 4
-Saw:        event (spawning mechanic)
-Expected:   Fish token should either spawn single next to shore, or in cluster in the ocean (need a classification for what is ocean, maybe middle tiles between landmass). Cluster fish zone boost fish yield in net (compounding with other means to increase fish from net). More fish in cluster (4 tiles of fish together field higher chance to get fish than 3 tiles)
-Actual:     Fish token spawn randomly, all over the place. Lacking mechanic
-Decided:    (2026-11-01) Ocean = water tiles that are not next to land. A cluster of 3 fish tiles gives a net the same chance as a settlement on a 4-2-3 spot (6 dots: token 4 = 3, token 2 = 1, token 3 = 2); each extra connected fish tile adds +2 dots (4 tiles = 4-4-3 = 8 dots). It stacks with the other ways to raise net fish.
-Rules:      (2026-11-01) The spawn uses a derived random stream, not g.rng. CLAUDE.md already allows that, so it needs no change, and the golden snapshot should stay untouched with Tidebound off. Not checked yet; confirm when coding.
-Open:       Yield of a cluster of 1 or 2, and of a single fish next to shore. If the +2 rule runs downward: 2 tiles = 4 dots, 1 tile = 2 dots. Confirm. 
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   wrong rule
-Error text: none
-Screenshot: image 3 in Coding Project/colonist-custom-catan/BUGS/Image
-```
 
 ```
-BUG 7 
-Saw:        UI
-Expected:   fish icon is similar to the other icon in design, should be easier to see (also icon similar to 5 resources in design) - sheep, tree, etc. icon design is very good
-Actual:     very bland 
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   wrong UI
-Error text: none
-Screenshot: image 7 and 6 (7 is fish and 6 is resources as reference) in Coding Project/colonist-custom-catan/BUGS/Image
-```
-
-```
-BUG 13
-Saw:        UI
-Expected:   bridge icon (both rickety and normal, with color outline to see whose it belong to) is beautiful, standout from normal road design but still follow UI philosophy design. 
-Actual:     it is bland, ugly, and uninspiring. also weird lines running across it. not uniform
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   wrong UI
-Error text: none
-Screenshot: image 10 in Coding Project/colonist-custom-catan/BUGS/Image
-```
-
-```
-BUG 14
+BUG 1
 Saw:        optimization
 Expected:   Optimized big map to reduce lag when moving around the screen
 Actual:     lag spike, stuttering, and framerate issues persist
@@ -49,8 +11,56 @@ Error text: none
 Screenshot: none
 ```
 
-tech tree UI fix and cost rebalancing
-harbor cannot be interact to build (it should work like upgrading settlement to city) (also update description)
-heat map changes (tint)
-Click to filter by player exist but does work
-Fishing net icon rework
+```
+BUG 3
+Saw:        Balancing
+Expected:   cheap prices for tech with enough opportunity cost for player to consider
+Actual:     cost of tech globally is too expensive, opportunity cost too high
+Before it:  none
+Repro:      dlc - tidebound
+Severity:   gameplay
+Error text: none
+Screenshot: none
+```
+
+```
+BUG 4
+Saw:        gameplay
+Expected:   when harbor tech is unlocked and the condition is met, a 3:1 harbor with access to a city nearby also receive a prompt node like when placing city or road. Clicking on that node with enough resources will upgrade the port to a harbor
+Actual:     cannot interact with the port. when clicking on the harbor button, it said not enough resource even though it is not.
+Before it:  none
+Repro:      dlc - tidebound
+Severity:   gameplay
+Error text: none
+Screenshot: none
+```
+
+```
+BUG 5
+Saw:        UI
+Expected:   Rework the build interaction UI as follows:
+
+1. **Hotspots:** Every valid build node (vertex/edge) shows a pulsing, semi-transparent marker as an interaction affordance. Only valid placements are shown, and invalid ones are hidden.
+2. **Contextual popover:** Clicking a hotspot opens a small popover anchored to that node, listing only the pieces that can legally be placed there (e.g. Settlement, City, Road). Clicking outside or pressing Esc closes it.
+3. **Cost tooltip:** Hovering any option in the popover shows a tooltip with its resource cost, using the resource icons with quantities (reuse what we already have). Resources the player lacks are shown dimmed. Options the player can’t afford are disabled but still show the tooltip.
+4. **Consistency:** The same tooltip component is used on the bottom build toolbar (Harbor / Settle / City), so cost is visible before entering placement mode.
+5. **Input:** Tooltips appear on hover with a short delay (~150 ms) on desktop, and on long-press on touch.
+Actual:     currently is one long line of buttons
+Before it:  none
+Repro:      all
+Severity:   wrong visual
+Error text: none
+Screenshot: image 1, 2, and 3 in Coding Project/colonist-custom-catan/BUGS/Image
+```
+
+```
+BUG
+Saw:        UI
+Expected:   Fishing net icon rework, similar net texture in core keeper but adapted to our design philosophy UI
+Actual:     it actually just a very small thing sitting not in water but in places where settlement supposed to be
+Before it:  none
+Repro:      dlc - tidebound
+Severity:   wrong rule
+Error text: none
+Screenshot: image 8 and 9 (8 is how it supposed to be, and 9 is reference image for design) in Coding Project/colonist-custom-catan/BUGS/Image
+```

@@ -76,10 +76,10 @@
   --target-dark: #1f262d;
 
   /* Tidebound tides: elevation heat map (darker = higher); flood and warning tints come from the visual manifest (--ov-*) */
-  --elev-1: rgba(236, 224, 168, 0.55);
-  --elev-2: rgba(201, 150, 84, 0.62);
-  --elev-3: rgba(122, 78, 52, 0.72);
-  --elev-ink: #2b2f33;
+  --elev-1: rgba(250, 226, 130, 0.78);
+  --elev-2: rgba(226, 126, 52, 0.84);
+  --elev-3: rgba(150, 36, 28, 0.92);
+  --elev-ink: #ffffff;
 
   /* shape, size, depth */
   --r-sm: 6px;
@@ -108,9 +108,9 @@
   --ok: #6aa664;
   --dev: #7b6790;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
-  --elev-1: rgba(236, 224, 168, 0.40);
-  --elev-2: rgba(214, 160, 92, 0.52);
-  --elev-3: rgba(150, 98, 66, 0.66);
+  --elev-1: rgba(240, 214, 120, 0.72);
+  --elev-2: rgba(214, 112, 44, 0.80);
+  --elev-3: rgba(166, 44, 36, 0.90);
   --elev-ink: #f4f1ea;
 }
 
@@ -1776,7 +1776,7 @@ svg#boardSvg.is-panning {
 .hex-elev-1 { fill: var(--elev-1); }
 .hex-elev-2 { fill: var(--elev-2); }
 .hex-elev-3 { fill: var(--elev-3); }
-.hex-elev-label { fill: var(--elev-ink); font-size: 14px; font-weight: 800; text-anchor: middle; letter-spacing: 0.08em; }
+.hex-elev-label { fill: var(--elev-ink); stroke: rgba(0, 0, 0, 0.55); stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; font-size: 14px; font-weight: 800; text-anchor: middle; letter-spacing: 0.08em; }
 .nav-btn.on { background: var(--accent); color: var(--on-accent); }
 
 /* ---------- Tidebound fishing nets: build spots shown in net mode ---------- */

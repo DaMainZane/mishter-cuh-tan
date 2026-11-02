@@ -193,6 +193,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `cursors.ts` | lobby cursors and laser pointer (non-hosts cannot edit the map, they point at it instead) |
 | `globals.d.ts` | type declaration for the global socket.io `io`, loaded by a script tag in index.html |
 | `icons.ts` | flat resource pictograms, dev card glyphs, UI icons, piece shapes |
+| `logFilter.ts` | live log filter matching (pure: splits a filter key and decides whether a turn action matches it) |
 | `main.ts` | client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) |
 | `mapmenu.ts` | lobby map menu (summary line, option dropdown drawn from the server's option list, seed line, report, quick start chips) |
 | `pieceModel.ts` | generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) |
@@ -283,5 +284,9 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `turnhistory.test.ts` | Turn history recorder (`recordTurnHistory`): setup placements under round 0, rolls, consolidated production, builds, dev cards, robber and steals, bank trades, discards on a 7, rounds advance; trade replies make no empty turn and log on the current player's turn, Monopoly / Knight / Year of Plenty detail, engine log lines folded in once (`takeNewLogLines`) |
 | `tideboundmapdefaults.test.ts` | Turning Tidebound on in the lobby (`applyTideboundMapDefaults`): islands + wide water picks, radius raised to `TIDEBOUND_MAP_RADIUS`, a bigger host radius kept |
 | `techpanelview.test.ts` | Tech tree pan and zoom maths (`client/techView.ts`, Bugs 2 and 3): default view, scale limits, zoom keeps the point under the cursor, zoom out and back, pan clamped to the world edges (none at scale 1, a smaller world stays inside), `viewCss`, and `costsVisible` (costs show from `COST_MIN_SCALE` up, hidden when zoomed out) |
+| `elevationtint.test.ts` | Tidebound elevation heat map tint (`--elev-1` to `--elev-3` in `client/styles.css`, light and dark): opaque enough, clearly darker at each height step, red at the highest level |
+| `fishtileoutline.test.ts` | Fish tile outline (`fishTileOutlineMarkup` in `client/render/overlay.ts`): unfilled tile polygon, never takes clicks, nothing without a polygon |
+| `techworldspan.test.ts` | Tech tree ring spacing (`WORLD_SPAN`, `FIT_VIEW` in `client/techView.ts`): world at least 2x the stage, opening view fits it, no pan while it all fits, pan clamped to the bigger world, zoom keeps the point under the cursor, span 1 behaves as before |
+| `logfilter.test.ts` | Live log filter (`client/logFilter.ts`): the player filter keeps only that player's own turns (an action in another player's turn that names them is dropped, past rounds stay), and the round, category, resource and value filters still work |
 | `pirateicon.test.ts` | Pirate icon (`client/pirateIcon.ts`, Bug 6): same id gives the same look, the head only from the head list, every head gets used, the sail plus exactly one unmirrored glyph, no black background square, size about 1.5x the old ship, and the board layer (`renderPiratesMarkup`) drawing the new icon, keeping the strength badge and ringing the bigger badge |
 

@@ -259,6 +259,43 @@ export function netMarkup(col: string): string {
 }
 
 /**
+ * Tidebound fishing net drawn over the sea tile it fishes (fishing net bug): a rope border pulled in from the tile edge, a diamond mesh clipped to that border,
+ * and one float per corner in the owner's color. Flat and matte like the other pieces (no gradients); the rope and mesh read the `--pier` tokens, the border has
+ * the same light rim as the pieces. Drawn in board coordinates from the tile's `corners`, so no transform is needed. `pointer-events:none`: a net never takes a click.
+ * Each tile gets its own clip id (`net-clip-<hexId>`).
+ */
+export function netTileMarkup(hexId: number, corners: { x: number; y: number }[], cx: number, cy: number, col: string): string {
+  if (corners.length < 3) return '';
+  const INSET = 9;
+  const pts = corners.map(c => {
+    const dx = c.x - cx, dy = c.y - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    const k = Math.max(0, (len - INSET) / len);
+    return { x: cx + dx * k, y: cy + dy * k };
+  });
+  const poly = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const R = Math.max(...pts.map(p => Math.hypot(p.x - cx, p.y - cy)));
+  const step = Math.max(8, R / 4);
+  let up = '';
+  let down = '';
+  for (let s = -R; s <= R + 0.01; s += step) {
+    up += `M${(cx + s - R).toFixed(1)},${(cy - R).toFixed(1)}L${(cx + s + R).toFixed(1)},${(cy + R).toFixed(1)}`;
+    down += `M${(cx + s - R).toFixed(1)},${(cy + R).toFixed(1)}L${(cx + s + R).toFixed(1)},${(cy - R).toFixed(1)}`;
+  }
+  const id = `net-clip-${Math.floor(Number(hexId)) || 0}`;
+  const floats = pts
+    .map(p => `<circle class="net-float" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4.6" style="fill:${col};stroke:var(--piece-rim);stroke-width:1.8"/>`)
+    .join('');
+  return `<g class="net-tile" style="pointer-events:none">`
+    + `<defs><clipPath id="${id}"><polygon points="${poly}"/></clipPath></defs>`
+    + `<g class="net-mesh" clip-path="url(#${id})" style="fill:none;stroke:var(--pier);stroke-width:1.7;stroke-linecap:round;opacity:.9"><path d="${up}"/><path d="${down}"/></g>`
+    + `<polygon points="${poly}" style="fill:none;stroke:var(--piece-rim);stroke-width:7;stroke-linejoin:round"/>`
+    + `<polygon class="net-rope" points="${poly}" style="fill:none;stroke:var(--pier);stroke-width:3.4;stroke-linejoin:round"/>`
+    + floats
+    + `</g>`;
+}
+
+/**
  * Tidebound bridge and rickety bridge edge pieces drawn around the edge midpoint `(0, 0)` (Bug 13):
  * - `bridge` (sturdy): a bold player-colored outer frame (`col`) with a light silhouette rim (`var(--piece-rim)`), a recessed dark timber bed (`var(--pier-dark)`),
  *   5 uniform flat timber planks (`var(--pier)`) inset cleanly inside the side rails, and 4 corner bollard posts.

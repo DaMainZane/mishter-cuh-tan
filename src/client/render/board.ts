@@ -1,8 +1,8 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/constants, client/icons, client/pieceui, client/render/bridgepicker, client/render/hand, +6 more | USED BY: client/actions, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/constants, client/icons, client/pieceModel, client/pieceui, client/render/bridgepicker, +7 more | USED BY: client/actions, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
-import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, wreckMarkup, hexIconLayout } from '../icons';
+import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netMarkup, netTileMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, wreckMarkup, hexIconLayout } from '../icons';
 import {
   playTone,
   playPlaceRoadSound,
@@ -24,12 +24,13 @@ import {
   addInFlightResource, releaseInFlightResource, addInFlightDev, releaseInFlightDev
 } from '../store';
 import { renderHand } from './hand';
-import { overlayPatternDefsMarkup, renderElevationMarkup, renderHexOverlaysMarkup } from './overlay';
+import { fishTileOutlineMarkup, overlayPatternDefsMarkup, renderElevationMarkup, renderHexOverlaysMarkup } from './overlay';
 import { renderSidebar, visibleRect } from './sidebar';
 import { esc } from '../util';
 import { openBridgePicker } from './bridgepicker';
 import { renderPiratesMarkup } from './pirates';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
+import { netSeaTiles, portRaiseSpots } from '../pieceModel';
 
 const knownRoads = new Set<number>();
 const knownRoadPieces = new Map<number, { owner: string; pieceType: string }>();
@@ -69,6 +70,8 @@ let lastPlacedRoadsKey = '';
 let lastOverlayHtml = '';
 // Same for the fish icons on the sea (T7c): rewritten only when their markup changes.
 let lastFishHtml = '';
+// Fishing nets over the sea tiles they fish (fishing net bug): rewritten only when their markup changes.
+let lastNetsHtml = '';
 let lastWrecksHtml = '';
 let lastPiratesHtml = '';
 // R8.7: the generic spot layer for manifest pieces is only rewritten when its markup changes.
@@ -211,6 +214,7 @@ function ensureHexGeomCache(hexes: any[]): void {
 function ensureBoardLayers(svg: HTMLElement): {
   terrainLayer: HTMLElement;
   overlayLayer: HTMLElement;
+  netsLayer: Element;
   fishLayer: Element;
   wrecksLayer: Element;
   piratesLayer: Element;
@@ -229,6 +233,7 @@ function ensureBoardLayers(svg: HTMLElement): {
       ${overlayPatternDefsMarkup()}
       <g id="boardTerrainLayer"></g>
       <g id="boardOverlayLayer"></g>
+      <g id="boardNetsLayer"></g>
       <g id="boardFishLayer"></g>
       <g id="boardWrecksLayer"></g>
       <g id="boardPiratesLayer"></g>
@@ -246,6 +251,7 @@ function ensureBoardLayers(svg: HTMLElement): {
     lastPortsKey = '';
     lastPlacedRoadsKey = '';
     lastOverlayHtml = '';
+    lastNetsHtml = '';
     lastFishHtml = '';
     lastWrecksHtml = '';
     lastPiratesHtml = '';
@@ -264,6 +270,14 @@ function ensureBoardLayers(svg: HTMLElement): {
     fishLayer.id = 'boardFishLayer';
     document.getElementById('boardOverlayLayer')!.after(fishLayer);
     lastFishHtml = '';
+  }
+  // Same for the nets layer, which sits under the fish icons.
+  let netsLayer: Element | null = document.getElementById('boardNetsLayer');
+  if (!netsLayer) {
+    netsLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    netsLayer.id = 'boardNetsLayer';
+    fishLayer.before(netsLayer);
+    lastNetsHtml = '';
   }
   let wrecksLayer: Element | null = document.getElementById('boardWrecksLayer');
   if (!wrecksLayer) {
@@ -291,6 +305,7 @@ function ensureBoardLayers(svg: HTMLElement): {
   return {
     terrainLayer,
     overlayLayer: document.getElementById('boardOverlayLayer')!,
+    netsLayer,
     fishLayer,
     wrecksLayer,
     piratesLayer,
@@ -644,6 +659,20 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.overlayLayer.innerHTML = overlayHtml;
   }
 
+  // Fishing nets (fishing net bug): a net covers the sea tile(s) at its vertex, so it is drawn there, under the fish icons. A net with no tile to show on keeps its small vertex piece.
+  const netInfo = netSeaTiles(vertices, hexes);
+  const bareNetVertices = new Set<number>(netInfo.bare);
+  let netsHtml = '';
+  for (const t of netInfo.tiles) {
+    const h = hexes[t.hexId];
+    const netCol = state.players.find(p => p.id === t.owner)?.color || '#888';
+    netsHtml += netTileMarkup(h.id, h.corners, h.x, h.y, netCol);
+  }
+  if (netsHtml !== lastNetsHtml) {
+    lastNetsHtml = netsHtml;
+    layers.netsLayer.innerHTML = netsHtml;
+  }
+
   // Fishing grounds (T7c, T7e) & shared hex icon slot layout (Bugs 5, 9, 17):
   // When a fish icon shares a sea tile with a pirate or sea wreck, each icon shifts into its predetermined slot so they never overlap.
   const fishIcons: Record<number, number> = state.fishIcons ?? {};
@@ -672,6 +701,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     });
     const fx = Number(h.x) + fishOffset.dx;
     const fy = Number(h.y) + fishOffset.dy;
+    if (hasIcon) fishHtml += fishTileOutlineMarkup(hexGeomCache.get(id)?.tilePoly);
     if (feedSpotSet?.has(id)) {
       fishHtml += `
         <g transform="translate(${fx.toFixed(1)}, ${fy.toFixed(1)})" class="fish-spot" onclick="clickFeedSpot(${id})" style="cursor:pointer">
@@ -1011,7 +1041,13 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   const harborSpotSet = isMyTurn && buildMode === 'harbor' && state.phase === 'MAIN' && me && canClientAffordHarbor(me)
     ? new Set<number>(me.harborSpots ?? [])
     : null;
+  // Harbor charters (BUG 4): your 3:1 port cities you can pay to raise to 2:1 get an upgrade ring without any build mode (like settlement to city). Not while another mode is on.
+  const raiseSet = isMyTurn && state.phase === 'MAIN' && me && (!buildMode || buildMode === 'harbor')
+    ? new Set<number>(portRaiseSpots(state.techActions?.harbor, true).filter(s => s.affordable).map(s => s.vertexId))
+    : null;
   for (const v of vertices) {
+    // A net that shows on a sea tile (nets layer) is not drawn on its vertex.
+    if (v.building?.type === 'net' && !bareNetVertices.has(v.id)) continue;
     if (v.building) {
       const owner = state.players.find(p => p.id === v.building.owner);
       const col = owner?.color || '#888';
@@ -1023,10 +1059,13 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const isCity = v.building.type === 'city';
       const isNet = v.building.type === 'net';
       const canHarbor = isCity && Boolean(harborSpotSet?.has(v.id));
+      const canRaise = !canHarbor && !canUpgrade && Boolean(raiseSet?.has(v.id));
       const isClickable = canUpgrade || canRobThisBuilding || canHarbor;
       const clickAttr = canHarbor
         ? `clickHarborSpot(${v.id})`
-        : (isCity ? canRobThisBuilding : isClickable)
+        : canRaise
+          ? `upgradePortClick(${v.id})`
+          : (isCity ? canRobThisBuilding : isClickable)
           ? `clickVertex(${v.id})`
           : '';
       const ringR = isCity ? 27 : 22;
@@ -1038,7 +1077,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
             ${anim.isAnimating ? `<circle cx="0" cy="0" r="${ringR + 4}" class="piece-impact-ring" style="${anim.delayStyle}" />` : ''}
             ${clickAttr ? `<circle r="${ringR + 2}" fill="transparent" />` : ''}
             ${canRobThisBuilding ? `<circle r="${ringR}" class="target-ring rob" />` : ''}
-            ${((!isCity && canUpgrade) || canHarbor) && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade" />` : ''}
+            ${((!isCity && canUpgrade) || canHarbor || canRaise) && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade" />` : ''}
             <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
               ${placedVertexMarkup(v.building.type, col) ?? (isCity ? cityMarkup(col) : isNet ? netMarkup(col) : settlementMarkup(col))}
             </g>

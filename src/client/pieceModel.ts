@@ -1,6 +1,6 @@
-// MODULE: generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) | DEPENDS ON: client/icons, client/types, shared/visual | USED BY: client/pieceui, client/render/hand, client/render/overlay, client/render/techpanel
+// MODULE: generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) | DEPENDS ON: client/icons, client/types, shared/visual | USED BY: client/actions, client/pieceui, client/render/board, client/render/hand, client/render/overlay, client/render/techpanel
 import { getMiniSvg, shade, uiIcon } from './icons';
-import type { PlayerView, Resources } from './types';
+import type { PlayerView, Resources, TechActionsView } from './types';
 import type { ManifestEntry, PiecePlayerData } from '../shared/visual';
 
 // R8.7. Everything here is a function of plain data, so `tests/pieceModel.test.ts` runs it in node with no DOM. The impure half (reading the store, writing the
@@ -216,6 +216,57 @@ export function recipeStripHtml(cost: Resources | undefined, hand: Resources | u
 }
 
 // ---- Spots -------------------------------------------------------------------------------------------------------------
+
+/** One port that Harbor charters can raise from 3:1 to 2:1: a hotspot on the board (BUG 4). `cost` and `affordable` are what a cost tooltip or popover option needs (BUG 5). */
+export interface PortRaiseSpot {
+  vertexId: number;
+  cost: Resources;
+  affordable: boolean;
+}
+
+/**
+ * The hotspots for raising a port (action `upgrade_port`, from the server's `techActions.harbor`): your ports that are not raised yet (`level` 0).
+ * Empty without the tech (`harbor` null), off your main-phase turn, or when every port is already raised. An unaffordable spot is still listed with
+ * `affordable: false`, so the caller can show it disabled (BUG 5) or hide it.
+ */
+export function portRaiseSpots(harbor: TechActionsView['harbor'] | undefined, myMainTurn: boolean): PortRaiseSpot[] {
+  if (!harbor || !myMainTurn) return [];
+  return harbor.ports
+    .filter(p => p.level < 1)
+    .map(p => ({ vertexId: p.vertexId, cost: harbor.cost, affordable: harbor.affordable }));
+}
+
+/** One sea tile covered by a player's fishing net. */
+export interface NetTile {
+  hexId: number;
+  owner: string;
+}
+
+/**
+ * The sea tiles to draw a net on (fishing net bug). A net is a vertex piece that fishes every sea tile at its vertex, so each visible `water` tile at a net
+ * vertex gets a net. A tile is listed once, for the first net (by vertex order) that covers it. `bare` lists the net vertices with no tile to draw on
+ * (the sea tile is hidden by fog, or not `water`), so the caller keeps their small vertex piece instead of making the net disappear.
+ */
+export function netSeaTiles(
+  vertices: readonly { id: number; hexIds: readonly number[]; building?: { type: string; owner: string } | null }[],
+  hexes: readonly { type: string; fog?: boolean }[]
+): { tiles: NetTile[]; bare: number[] } {
+  const owners = new Map<number, string>();
+  const bare: number[] = [];
+  for (const v of vertices) {
+    if (v.building?.type !== 'net') continue;
+    let drew = false;
+    for (const hexId of v.hexIds) {
+      const h = hexes[hexId];
+      if (!h || h.type !== 'water' || h.fog) continue;
+      drew = true;
+      if (!owners.has(hexId)) owners.set(hexId, v.building.owner);
+    }
+    if (!drew) bare.push(v.id);
+  }
+  const tiles = [...owners.entries()].sort((a, b) => a[0] - b[0]).map(([hexId, owner]) => ({ hexId, owner }));
+  return { tiles, bare };
+}
 
 function isEdgeSlot(e: ManifestEntry): boolean {
   return e.slot === 'edge' || e.slot === 'edge:ocean';

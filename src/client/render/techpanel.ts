@@ -5,7 +5,7 @@ import { playTone } from '../audio';
 import { socket } from '../socket';
 import { state } from '../store';
 import type { Resources, TechActionsView, TechRowView } from '../types';
-import { DEFAULT_VIEW, clampView, costsVisible, panBy, viewCss, zoomAt } from '../techView';
+import { FIT_VIEW, WORLD_SPAN, clampView, costsVisible, panBy, viewCss, zoomAt } from '../techView';
 import type { TechView } from '../techView';
 import { esc } from '../util';
 
@@ -47,7 +47,7 @@ let lastHtml = '';
 /** The tile picked in the Ground work list, waiting for the resource choice. */
 let pickedHex: number | null = null;
 /** Pan and zoom of the tree. Kept here, not in the markup, so a redraw does not reset it; `applyView` writes it to the DOM. */
-let view: TechView = DEFAULT_VIEW;
+let view: TechView = FIT_VIEW;
 /** True while the player drags the tree (the tooltips hide meanwhile). */
 let dragging = false;
 
@@ -65,7 +65,7 @@ const CSS = `
 #techPanel .tp-stage{position:relative;aspect-ratio:1;margin:0 auto;width:max(300px,min(640px,100%,calc(100vh - 180px)));overflow:hidden;overflow:clip;border-radius:var(--r);background:var(--surface-2);touch-action:none;user-select:none;cursor:grab}
 #techPanel .tp-stage.tp-dragging{cursor:grabbing}
 #techPanel .tp-stage.tp-dragging .tp-tip{display:none!important}
-#techPanel .tp-world{position:absolute;inset:0;transform-origin:0 0}
+#techPanel .tp-world{position:absolute;left:0;top:0;width:${WORLD_SPAN * 100}%;height:${WORLD_SPAN * 100}%;transform-origin:0 0}
 #techPanel .tp-stage.tp-far .tp-cap .recipe-cards-strip{display:none}
 #techPanel .tp-stage.tp-far .tp-node:hover .tp-cap .recipe-cards-strip,#techPanel .tp-stage.tp-far .tp-node:focus-visible .tp-cap .recipe-cards-strip{display:flex}
 #techPanel .tp-zoom{display:flex;align-items:center;gap:6px}
@@ -173,7 +173,7 @@ function applyView(): void {
   const stage = document.querySelector<HTMLElement>('#techPanel .tp-stage');
   const world = stage?.querySelector<HTMLElement>('.tp-world');
   if (!stage || !world) return;
-  view = clampView(view, stage.clientWidth, stage.clientHeight);
+  view = clampView(view, stage.clientWidth, stage.clientHeight, WORLD_SPAN);
   world.style.transform = viewCss(view);
   stage.style.setProperty('--tp-inv', (1 / view.scale).toFixed(3));
   stage.classList.toggle('tp-far', !costsVisible(view.scale));
@@ -184,8 +184,8 @@ function applyView(): void {
 function zoomButton(kind: string): void {
   const stage = document.querySelector<HTMLElement>('#techPanel .tp-stage');
   if (!stage) return;
-  if (kind === 'reset') view = DEFAULT_VIEW;
-  else view = zoomAt(view, kind === 'in' ? 1.25 : 0.8, stage.clientWidth / 2, stage.clientHeight / 2, stage.clientWidth, stage.clientHeight);
+  if (kind === 'reset') view = FIT_VIEW;
+  else view = zoomAt(view, kind === 'in' ? 1.25 : 0.8, stage.clientWidth / 2, stage.clientHeight / 2, stage.clientWidth, stage.clientHeight, WORLD_SPAN);
   applyView();
   playTone(520, 0.04);
 }
@@ -212,7 +212,7 @@ function bindPanZoom(panel: HTMLElement): void {
     e.preventDefault();
     const r = st.getBoundingClientRect();
     const unit = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 0.5 : 0.0015;
-    view = zoomAt(view, Math.exp(-e.deltaY * unit), e.clientX - r.left, e.clientY - r.top, st.clientWidth, st.clientHeight);
+    view = zoomAt(view, Math.exp(-e.deltaY * unit), e.clientX - r.left, e.clientY - r.top, st.clientWidth, st.clientHeight, WORLD_SPAN);
     applyView();
   }, { passive: false });
 
@@ -236,7 +236,7 @@ function bindPanZoom(panel: HTMLElement): void {
       const [a, b] = [...pointers.values()];
       if (pinch > 0 && now > 0 && a && b) {
         const r = st.getBoundingClientRect();
-        view = zoomAt(view, now / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, w, h);
+        view = zoomAt(view, now / pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, w, h, WORLD_SPAN);
       }
       pinch = now;
       moved = true;
@@ -249,7 +249,7 @@ function bindPanZoom(panel: HTMLElement): void {
       dragging = true;
       try { st.setPointerCapture(e.pointerId); } catch { /* the pointer is already gone */ }
     }
-    view = panBy(view, e.clientX - p.x, e.clientY - p.y, w, h);
+    view = panBy(view, e.clientX - p.x, e.clientY - p.y, w, h, WORLD_SPAN);
     p.x = e.clientX;
     p.y = e.clientY;
     applyView();
@@ -505,7 +505,7 @@ function myTurnNow(): boolean {
 export function toggleTechPanel(force?: boolean): void {
   const wasOpen = open;
   open = typeof force === 'boolean' ? force : !open;
-  if (open && !wasOpen) view = DEFAULT_VIEW;
+  if (open && !wasOpen) view = FIT_VIEW;
   playTone(open ? 560 : 460, 0.05);
   if (!state) return;
   renderTechPanel(myTurnNow());

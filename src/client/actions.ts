@@ -1,4 +1,4 @@
-// MODULE: client UI actions (host-only edit guard, build mode and brush selection, affordability checks, requests sent to the server) | DEPENDS ON: client/audio, client/avatars, client/pieceui, client/render/board, client/render/index, client/socket, +2 more | USED BY: client/main, client/render/index
+// MODULE: client UI actions (host-only edit guard, build mode and brush selection, affordability checks, requests sent to the server) | DEPENDS ON: client/audio, client/avatars, client/pieceModel, client/pieceui, client/render/board, client/render/index, +3 more | USED BY: client/main, client/render/index
 import { playTone } from './audio';
 import { socket } from './socket';
 import {
@@ -9,6 +9,7 @@ import { renderAll, renderVictoryScreen } from './render/index';
 import { canClientAffordPiece, canClientAffordFeed, canClientAffordHarbor } from './render/board';
 import { showToast } from './ui';
 import { pieceModeHint } from './pieceui';
+import { portRaiseSpots } from './pieceModel';
 import { AVATAR_CHOICES } from './avatars';
 
 // Map and lobby editing belongs to the host. Everyone else points with a cursor (Shift = laser).
@@ -494,6 +495,13 @@ export function setBuildMode(mode: string): void {
   if (turningOn && mode === 'harbor' && state) {
     const me = state.players.find(p => p.id === socket.id);
     if (me && (me.harborsLeft ?? 1) <= 0) showToast('You have already built your harbor.');
+    else if (me && !me.harborCost) {
+      // Only Harbor charters so far (no 1:1 harbor tech): the nodes are the port cities that can be raised to 2:1 (BUG 4).
+      const raise = portRaiseSpots(state.techActions?.harbor, true);
+      if (raise.length === 0) showToast('Build a city on a 3:1 port to raise it to 2:1.');
+      else if (!raise.some(s => s.affordable)) showToast('Not enough resources to raise a port.');
+      else showToast('Click a glowing port city to raise it to 2:1.');
+    }
     else if (me && !canClientAffordHarbor(me)) showToast('Not enough resources for a harbor.');
     else if (me && !me.harborSpots?.length) showToast('Build a city on a port first to upgrade it to a harbor.');
   }

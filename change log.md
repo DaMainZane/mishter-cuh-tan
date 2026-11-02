@@ -1,5 +1,39 @@
 # Change Log
 
+## 2026-11-02 (Pass 107: Bug List — fishing net icon rework; NOT run, no shell)
+### Fixed
+- **Fishing net icon (`src/client/icons.ts`, `src/client/pieceModel.ts`, `src/client/render/board.ts`)**: a net was a tiny piece on the settlement spot, not on the water. A net fishes every sea tile at its vertex, so it is now drawn over those tiles: new `netTileMarkup(hexId, corners, cx, cy, col)` draws a rope border pulled in from the tile edge, a diamond mesh clipped to it (`net-clip-<hexId>`) and one float per corner in the owner's colour, flat with the piece rim, `pointer-events:none`. New pure `netSeaTiles(vertices, hexes)` picks the visible `water` tiles at net vertices (a tile once, for the first net by vertex order) and lists the `bare` net vertices that have no tile to draw on. `board.ts` has a new `boardNetsLayer` between the overlay and the fish icons (dirty-checked like the others, added to an old open board too); the vertex piece is no longer drawn for a net that shows on a tile, and stays for a `bare` one so a net never disappears.
+### Tests
+- `tests/pieceModel.test.ts` (`netSeaTiles`, `netTileMarkup`).
+### Not verified
+- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game: the look against the sea colour and the `--pier` tokens, a net on a tile that also has a fish icon, pirate or wreck (the net sits under them), and the vertex no longer showing which settlement spot the net took (its tile shows it instead).
+
+## 2026-11-02 (Pass 106: Bug List — Bug 4 port upgrade node; headers, index, typecheck and all tests passed)
+### Fixed
+- **Bug 4 (`src/client/pieceModel.ts`, `src/client/render/board.ts`, `src/client/actions.ts`)**: with only Harbor charters researched there was no way to raise a 3:1 port on the board, and the Harbor toolbar button said "Not enough resources for a harbor" even with enough cards. Harbor mode only knew the 1:1 harbor (`upgrade_harbor`), whose price (`harborCost`) the server sends only with Harbor master. New pure `portRaiseSpots(harbor, myMainTurn)` lists the ports not yet raised from `techActions.harbor`, each with `cost` and `affordable` (so the Bug 5 popover and cost tooltip can reuse it). `board.ts` draws the upgrade ring on your affordable 3:1 port cities on your main-phase turn (no build mode, or harbor mode) and the click emits `upgrade_port` through `upgradePortClick`; a settlement that can also become a city keeps the city ring. `setBuildMode('harbor')` without Harbor master now says why: no port city, cannot pay, or click the glowing city.
+### Tests
+- `tests/pieceModel.test.ts` (`portRaiseSpots`).
+### Not verified
+- Not seen in the game: the ring on a real port city, and harbor mode when both Harbor charters and Harbor master are owned (the 1:1 ring wins there, so the raise ring is hidden in harbor mode for a port the 1:1 upgrade also covers).
+
+## 2026-11-02 (Pass 105: Bug List — live log player filter; NOT run, no shell)
+### Fixed
+- **Live log player filter (new `src/client/logFilter.ts`, `src/client/render/sidebar.ts`)**: filtering by a player also showed other players' turns. `actionMatchesFilter` kept a `player:` match when the action text merely contained the name, so "Breeze got +1 brick" inside Jew's turn passed the Breeze filter. The player filter now keeps only turns taken by that player (all rounds, past ones included). `splitFilterKey` and `actionMatchesFilter` moved out of `sidebar.ts` into the pure `logFilter.ts` so they can be tested without the socket and store; the other filter kinds are copied unchanged. The unused `PlayerTurnSummary` import in `sidebar.ts` is gone.
+### Tests
+- `tests/logfilter.test.ts` (new).
+### Not verified
+- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game. Side effect to check: a player's resource gains during someone else's roll ("Breeze got +1 brick") no longer show under the Breeze filter, because they are not an action Breeze took; the resource filters still show them.
+
+## 2026-11-02 (Pass 104: Bug List — heat map tint, fish tile outline, tech tree ring spacing; NOT run, no shell)
+### Fixed
+- **Heat map tint (`src/client/styles.css`)**: the `--elev-1` to `--elev-3` tokens were pale and 40 to 72% opaque, so the three heights barely differed. They are now a yellow, orange, deep red ramp at 72 to 92% opacity (light and dark theme), and `.hex-elev-label` is white with a dark outline (`paint-order: stroke`) so the arrows read on every level. The arrows stay as the second signal.
+- **Fish tile outline (`src/client/render/overlay.ts`, `src/client/render/board.ts`)**: a sea tile holding a fishing ground had no outline. New `fishTileOutlineMarkup(poly)` draws the tile's inset polygon (`geom.tilePoly`, the polygon land tiles use) as an unfilled `var(--token)` stroke, `pointer-events:none`; the fish layer adds it for every tile that has a fish icon (also while feed mode is on). A feed spot with no fish yet gets none.
+- **Tech tree ring spacing (`src/client/techView.ts`, `src/client/render/techpanel.ts`)**: rings are 2x further apart in pixels. The tree keeps its percent layout (`layout` and its radii untouched) but lives in a `.tp-world` that is `WORLD_SPAN` (2) times the stage; techs keep their size. `clampView`, `zoomAt` and `panBy` take an optional `span` (default 1, so old callers behave as before); `FIT_VIEW` (scale `1 / WORLD_SPAN`) is the opening and Reset view, so the whole tree is in view first and zooming in reads the techs at full size with 2x the room.
+### Tests
+- `tests/elevationtint.test.ts`, `tests/fishtileoutline.test.ts`, `tests/techworldspan.test.ts` (new).
+### Not verified
+- Nothing was run (no shell): `npm run headers:write`, `npm run index`, `npm run typecheck`, `npm test`. Not seen in the game: heat map contrast on a real board, the fish outline colour against the sea, and how the tech tree looks at the fit view (techs are half size there; captions keep their size).
+
 ## 2026-11-01 (Pass 103: Bug List fixes — Bug 3 tech tree zoom cost threshold & counter-scale, Bug 13 sturdy and rickety bridge designs, Bug 14 big-map pan/zoom optimization; headers, index, typecheck and all tests passed)
 ### Fixed
 - **Bug 3 (`src/client/techView.ts`, `src/client/render/techpanel.ts`)**: raised `COST_MIN_SCALE` from `0.85` to `1.25` so at the default whole-tree overview (`scale = 1`, where all rings are visible as in `BUGS/Image/2.png`), `costsVisible(1)` is `false` and the cost strips stay hidden until the player zooms in (`>= 1.25`) or hovers/focuses a single node; counter-scaled `#techPanel .tp-cap` with `scale(var(--tp-inv, 1))` (`transform-origin: 50% 0`) so zooming in separates the nodes in screen space while keeping captions and cost cards at a compact 1x size instead of ballooning over neighboring nodes; widened `PATH_ANGLE_DEG` from `±8.5°` to `±11.5°`.

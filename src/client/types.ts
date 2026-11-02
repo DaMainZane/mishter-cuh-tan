@@ -1,4 +1,4 @@
-// MODULE: loose client-side view types (PlayerView, GameState, Resources) | DEPENDS ON: shared/visual | USED BY: client/mapmenu, client/pieceModel, client/pieceui, client/render/index, client/render/setup, client/render/sidebar, +4 more
+// MODULE: loose client-side view types (PlayerView, GameState, Resources) | DEPENDS ON: shared/visual | USED BY: client/logFilter, client/mapmenu, client/pieceModel, client/pieceui, client/render/index, client/render/setup, +5 more
 // Loose client-side view types. Tightened when shared engine types arrive (Step 2).
 import type { PiecePlayerData } from '../shared/visual';
 

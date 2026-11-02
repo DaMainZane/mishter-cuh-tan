@@ -1,4 +1,4 @@
-// MODULE: right sidebar (merged live log & turn history with RS card icons and click-to-filter, chat leaf, bank, player rows) | DEPENDS ON: client/avatars, client/constants, client/icons, client/socket, client/store, client/types, +1 more | USED BY: client/main, client/render/board, client/render/index
+// MODULE: right sidebar (merged live log & turn history with RS card icons and click-to-filter, chat leaf, bank, player rows) | DEPENDS ON: client/avatars, client/constants, client/icons, client/logFilter, client/socket, client/store, +2 more | USED BY: client/main, client/render/board, client/render/index
 import { RESOURCES } from '../constants';
 import { dieFaceSvg, getDevSvg, getMiniSvg, uiIcon } from '../icons';
 import { socket } from '../socket';
@@ -10,9 +10,10 @@ import {
   logFilter,
   setLogFilter
 } from '../store';
-import type { PlayerTurnSummary, RoundSummary, TurnActionItem, TurnActionResource } from '../types';
+import type { RoundSummary, TurnActionItem, TurnActionResource } from '../types';
 import { esc } from '../util';
 import { avatarFace } from '../avatars';
+import { actionMatchesFilter, splitFilterKey } from '../logFilter';
 
 // Log and chat are text the player may select and copy. Re-writing innerHTML on every game update
 // would wipe the selection, so each feed only re-renders when its content actually changed.
@@ -260,11 +261,6 @@ function formatLogTextWithRsCards(rawText: string): string {
   return safe;
 }
 
-function splitFilterKey(filter: string): [string, string] {
-  const idx = filter.indexOf(':');
-  return idx < 0 ? [filter, ''] : [filter.slice(0, idx), filter.slice(idx + 1)];
-}
-
 export function describeActiveFilter(filter: string): string {
   const [kind, val] = splitFilterKey(filter);
   if (kind === 'res') return RES_LABELS[val] || val;
@@ -273,35 +269,6 @@ export function describeActiveFilter(filter: string): string {
   if (kind === 'round') return val === '0' ? 'Setup' : `Round ${val}`;
   if (kind === 'val') return val;
   return filter;
-}
-
-function actionMatchesFilter(act: TurnActionItem, turn: PlayerTurnSummary, round: RoundSummary, filter: string | null): boolean {
-  if (!filter) return true;
-  const [kind, val] = splitFilterKey(filter);
-  const vLow = (val || '').toLowerCase();
-  if (kind === 'player') {
-    return (
-      turn.playerName.toLowerCase() === vLow ||
-      act.text.toLowerCase().includes(vLow)
-    );
-  }
-  if (kind === 'round') {
-    return String(round.round) === val;
-  }
-  if (kind === 'cat') {
-    return act.category === vLow;
-  }
-  if (kind === 'res') {
-    if (act.resources?.some(r => r.resource.toLowerCase() === vLow)) return true;
-    return act.text.toLowerCase().includes(vLow);
-  }
-  if (kind === 'val') {
-    return (
-      (act.badge || '').toLowerCase() === vLow ||
-      act.text.toLowerCase().includes(vLow)
-    );
-  }
-  return true;
 }
 
 function logLineMatchesFilter(lineText: string, filter: string | null): boolean {

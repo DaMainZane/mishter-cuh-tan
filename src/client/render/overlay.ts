@@ -251,6 +251,15 @@ export function renderElevationMarkup(
   return html;
 }
 
+/**
+ * Outline for a sea tile that holds a fishing ground, so it reads as a tile like the land ones (Tidebound fish tile outline).
+ * `poly` is the tile's inset polygon (the same one the land tiles use). Returns '' when there is no polygon.
+ */
+export function fishTileOutlineMarkup(poly: string | undefined): string {
+  if (!poly) return '';
+  return `<polygon class="fish-tile-outline" points="${esc(poly)}" style="fill:none;stroke:var(--token);stroke-width:3.5;stroke-linejoin:round;pointer-events:none" />`;
+}
+
 // ---- 2. Timer-bar popup (peace offers, event vetoes, gate permits) ------------------------------------------
 
 function tickTimerPopups(): void {
