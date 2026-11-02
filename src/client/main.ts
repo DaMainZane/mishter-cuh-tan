@@ -11,7 +11,8 @@ import {
 } from './store';
 import { renderAll } from './render/index';
 import {
-  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations,
+  rerenderBoard, resetCamera, getBoardBounds, beginBoardPan, updateBoardPan, commitBoardPan,
+  triggerFlyingResourceAnimations, triggerCardTransferAnimations,
   triggerAwardAnimation, onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
   onRoadHover, onRoadMove, onRoadLeave
 } from './render/board';
@@ -352,6 +353,7 @@ function init(): void {
 
     setCamZoom(newZoom);
     setCamPan(newPanX, newPanY);
+    commitBoardPan();
     rerenderBoard();
   }, { passive: false });
 
@@ -374,6 +376,7 @@ function init(): void {
 
     if (e.button === 2 || e.button === 1 || e.altKey || (e.button === 0 && !isLobbyPaintTarget)) {
       setIsPanning(true);
+      beginBoardPan();
       panStart.x = e.clientX;
       panStart.y = e.clientY;
       const svg = document.getElementById('boardSvg');
@@ -400,14 +403,14 @@ function init(): void {
       const dy = e.clientY - panStart.y;
       panStart.x = e.clientX;
       panStart.y = e.clientY;
-      setCamPan(camPanX + dx * worldPerPx, camPanY + dy * worldPerPx);
-      rerenderBoard();
+      updateBoardPan(dx, dy, worldPerPx);
     }
   });
   window.addEventListener('mouseup', () => {
     setIsMouseDown(false);
     setIsPanning(false);
     panSvgRect = null;
+    commitBoardPan();
     const svg = document.getElementById('boardSvg');
     if (svg) svg.classList.remove('is-panning');
   });

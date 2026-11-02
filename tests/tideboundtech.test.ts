@@ -372,10 +372,37 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(score(g, reg, p1, true)).toBe(GRAND_CAUSEWAY_VP);
     expect(publicVP(g, reg, p1)).toBe(GRAND_CAUSEWAY_VP);
 
+    // Even if a player extends their land road so the strictly longest simple path is land-only and the bridge sits on a shorter branch,
+    // Grand Causeway still turns Longest Road to 16 VP while they hold Longest Road and have a bridge on the board.
+    g.board.edges[5].piece = { type: 'road', owner: 'p1' };
+    expect(longestRoadHasBridge(g, reg, 'p1')).toBe(true);
+    expect(grandCausewayBonusVp(g, reg, 'p1')).toBe(GRAND_CAUSEWAY_BONUS_VP);
+    expect(score(g, reg, p1, true)).toBe(GRAND_CAUSEWAY_VP);
+
     // Losing Longest Road immediately drops the +14 bonus
     g.awards.longestRoad = 'p2';
     expect(grandCausewayBonusVp(g, reg, 'p1')).toBe(0);
     expect(score(g, reg, p1, true)).toBe(0);
+  });
+
+  it('discounts Tidebound tech costs in active games with starting settlements so tiers cost 2 / 3 / 5 / 5 / 8 cards (Bug 3)', () => {
+    const { g, reg } = makeMainGame(true);
+    // Standard game start: 2 settlements on the board (V = 2)
+    g.board.vertices[0].piece = { type: 'settlement', owner: 'p1' };
+    g.board.vertices[2].piece = { type: 'settlement', owner: 'p1' };
+    expect(techBuildingValue(g, 'p1')).toBe(2);
+
+    const panel = techPanelFor(g, reg, 'p1')!;
+    const costOf = (id: string) => panel.find(r => r.id === id)!.cost;
+
+    expect(costOf(TECH_HARBOR_CHARTERS)).toBe(2);
+    expect(costOf(TECH_RICKETY_BRIDGES)).toBe(3);
+    expect(costOf(TECH_FISHING_NETS)).toBe(3);
+    expect(costOf(TECH_SALVAGE_CREW)).toBe(5);
+    expect(costOf(TECH_NET_WORKS)).toBe(5);
+    expect(costOf(TECH_HARBOR_MASTER)).toBe(5);
+    expect(costOf(TECH_GRAND_CAUSEWAY)).toBe(8);
+    expect(costOf(TECH_HARBOR_EMPIRE)).toBe(8);
   });
 
   it('Harbor Empire raises harbor limit to 2 and grants ceil(V / 2) random cards on unlock with zero g.rng draws', () => {
@@ -410,3 +437,4 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(g.rng).toEqual(rngBefore);
   });
 });
+

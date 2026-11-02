@@ -9,7 +9,7 @@ export function registerAwards(api: PackApi): void {
     vp: 2,
     min: 5,
     metric: (ctx, player) => longestRoadFor(ctx, player.id),
-    recomputeOn: ['build']
+    recomputeOn: ['build', 'upgrade_bridge', 'demolish_bridge', 'research_tech']
   });
 
   api.award({

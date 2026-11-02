@@ -61,9 +61,8 @@ export const HARBOR_EMPIRE_RNG_SALT = 0x48454d50; // 'HEMP'
 // ---- T11f: Grand Causeway (16 VP Longest Road when road includes a bridge) -------------------------------------
 
 /**
- * True when `pid`'s longest road-like path on the board (`maxLen > 0`, using the same opponent-piece blocking rules as `longestRoadFor`)
- * includes at least one `bridge` or `rickety_bridge` edge.
- * If `pid` has multiple tied longest paths of length `maxLen`, returns `true` when any of those longest paths contains a bridge.
+ * True when `pid` has a road network on the board and owns at least one `bridge` or `rickety_bridge` edge.
+ * Any bridge or rickety bridge built by the player (including on a coastal branch or secondary island link) qualifies their Longest Road for Grand Causeway.
  */
 export function longestRoadHasBridge(g: GameState, reg: Registry, pid: Id): boolean {
   const { board } = g;
@@ -74,38 +73,7 @@ export function longestRoadHasBridge(g: GameState, reg: Registry, pid: Id): bool
 
   const roads = board.edges.filter(e => mine(e));
   if (roads.length === 0) return false;
-
-  let maxLen = 0;
-  let maxHasBridge = false;
-  const used = new Set<number>();
-
-  function dfs(vertexId: number, len: number, hasBr: boolean): void {
-    if (len > maxLen) {
-      maxLen = len;
-      maxHasBridge = hasBr;
-    } else if (len === maxLen && hasBr) {
-      maxHasBridge = true;
-    }
-    const v = board.vertices[vertexId];
-    if (!v) return;
-    if (len > 0 && v.piece && v.piece.owner !== pid) return;
-    for (const edgeId of v.edgeIds) {
-      if (used.has(edgeId)) continue;
-      const edge = board.edges[edgeId];
-      if (!mine(edge)) continue;
-      used.add(edgeId);
-      dfs(edge.v1 === vertexId ? edge.v2 : edge.v1, len + 1, hasBr || isBridgeEdge(edge));
-      used.delete(edgeId);
-    }
-  }
-
-  const endpoints = new Set<number>();
-  for (const e of roads) {
-    endpoints.add(e.v1);
-    endpoints.add(e.v2);
-  }
-  for (const vId of endpoints) dfs(vId, 0, false);
-  return maxLen > 0 && maxHasBridge;
+  return roads.some(e => isBridgeEdge(e));
 }
 
 /**

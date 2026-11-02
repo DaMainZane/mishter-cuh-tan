@@ -375,10 +375,12 @@ function nodeHtml(p: Placed, canAct: boolean, hand: Resources | undefined): stri
         ? 'Research on your turn'
         : r.reason || 'Not available yet';
   const click = mode === 'can' ? `onclick="researchTechClick('${esc(r.id)}')"` : '';
-  // Net rework: the server text (`tech.ts`) still says "coastal corners", so this node shows the one-tile rule instead of the server text.
+  // Net rework & Grand Causeway: keep server text (`tech.ts`) untouched for snapshot stability while showing the exact current rule in the client tooltip.
   const descText = r.id === 'tidebound.fishing_nets'
     ? 'Unlocks Fishing Nets: put a net on one free sea tile next to your coast road or bridge. It fishes only that tile and catches fish tokens on dice rolls. Also lets your Settlements on 3:1 ports be raised to 2:1.'
-    : r.description;
+    : r.id === 'tidebound.grand_causeway'
+      ? 'Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and have at least 1 bridge or rickety bridge on the board.'
+      : r.description;
   return `
     <div class="tp-node st-${mode}" style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;--bc:var(${tile})" tabindex="0" role="button"
          aria-label="${esc(r.name)}${r.owned ? ', researched' : `, ${r.cost} cards`}" ${click}>

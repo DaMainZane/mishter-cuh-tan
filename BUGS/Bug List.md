@@ -1,29 +1,5 @@
 
 ```
-BUG 1
-Saw:        optimization
-Expected:   Optimized big map to reduce lag when moving around the screen
-Actual:     lag spike, stuttering, and framerate issues persist
-Before it:  none
-Repro:      none
-Severity:   Annoying
-Error text: none
-Screenshot: none
-```
-
-```
-BUG 3
-Saw:        Balancing
-Expected:   cheap prices for tech with enough opportunity cost for player to consider
-Actual:     cost of tech globally is too expensive, opportunity cost too high
-Before it:  none
-Repro:      dlc - tidebound
-Severity:   gameplay
-Error text: none
-Screenshot: none
-```
-
-```
 BUG 5
 Saw:        UI
 Expected:   Rework the build interaction UI as follows:
@@ -39,16 +15,4 @@ Repro:      all
 Severity:   wrong visual
 Error text: none
 Screenshot: image 1, 2, and 3 in Coding Project/colonist-custom-catan/BUGS/Image
-```
-
-```
-BUG
-Saw:        gameplay
-Expected:   16 vp for grand causeway when holding longest road with bridge
-Actual:     grand causeway not turning longest road to 16 vp
-Before it:  i unlock grand causeway with longest road, and build a bridge (although worth knowing that the bridge is not on the longest road path, if that is how grand causeway work then we need to update description)
-Repro:      dlc - tidebound
-Severity:   wrong rule
-Error text: none
-Screenshot: none
 ```

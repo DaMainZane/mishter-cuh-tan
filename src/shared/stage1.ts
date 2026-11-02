@@ -524,7 +524,12 @@ export function techCostCards(g: GameState, reg: Registry, pid: Id, tier: 1 | 2 
   const v = techBuildingValue(g, pid);
   const vpToWin = Number(g.rules?.vpToWin) || 10;
   const divisor = Math.max(TECH_COST.divisor, Math.round(0.3 * vpToWin));
-  let cost = Math.max(TECH_COST.floor, tier + offset + Math.ceil(v / divisor));
+  const activeDiscount =
+    (Boolean(g.rules?.dlc?.tidebound) || offset >= 3) &&
+    (placedCount(g, pid, 'settlement') >= 1 || hasTech(g, pid, 'tidebound.harbor_charters'));
+  const effV = activeDiscount ? Math.max(0, v - 2 * TECH_COST.settlement) : v;
+  const effOffset = activeDiscount ? Math.floor(offset * 0.4) : offset;
+  let cost = Math.max(TECH_COST.floor, tier + effOffset + Math.ceil(effV / divisor));
   if (getPlayerTechs(g, pid).length === 0 && isCatchUpEligible(g, reg, pid)) {
     cost = Math.max(TECH_COST.floor, cost - 1);
   }
