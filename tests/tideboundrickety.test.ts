@@ -689,13 +689,8 @@ describe('Tidebound Bug 13 & Bug 14: bridge Edge SVG markup (sturdy vs rickety w
     expect(css).toContain('.piece-zoom-scale');
     expect(boardTs).toContain("'--piece-zoom'");
     expect(boardTs.match(/class="piece-zoom-scale"/g)).toHaveLength(2);
-    expect(boardTs).toContain('tilePathSub');
-    expect(boardTs).toContain('batchedTiles');
-    expect(boardTs).toContain('beginBoardPan');
-    expect(boardTs).toContain('updateBoardPan');
-    expect(boardTs).toContain('commitBoardPan');
-    expect(boardTs).toContain('translate3d(');
   });
 });
+
 
 

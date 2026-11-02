@@ -86,14 +86,10 @@ interface HexGeomCache {
   rawPts: string;
   pathSub: string;
   tilePoly: string;
-  tilePathSub: string;
   innerPoly: string;
 }
 let cachedGeomBoardKey = '';
 let hexGeomCache = new Map<number, HexGeomCache>();
-let isGpuPanning = false;
-let panScreenDx = 0;
-let panScreenDy = 0;
 
 interface RoadConnInfo {
   ownerName: string;
@@ -200,15 +196,6 @@ function insetPoints(h: any, inset: number): string {
   }).join(' ');
 }
 
-function insetPathSub(h: any, inset: number): string {
-  return h.corners.map((c: any, idx: number) => {
-    const dx = c.x - h.x, dy = c.y - h.y;
-    const len = Math.hypot(dx, dy) || 1;
-    const k = Math.max(0, (len - inset) / len);
-    return `${idx === 0 ? 'M' : 'L'}${(h.x + dx * k).toFixed(1)},${(h.y + dy * k).toFixed(1)}`;
-  }).join('') + 'Z';
-}
-
 function ensureHexGeomCache(hexes: any[]): void {
   const first = hexes[0];
   const last = hexes[hexes.length - 1];
@@ -225,7 +212,6 @@ function ensureHexGeomCache(hexes: any[]): void {
       rawPts,
       pathSub,
       tilePoly: insetPoints(h, 5.5),
-      tilePathSub: insetPathSub(h, 5.5),
       innerPoly: insetPoints(h, 7.5)
     });
   }
@@ -596,10 +582,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       terrainHtml += `<path d="${waterPathD}" style="fill:rgba(255,255,255,0.06);stroke:rgba(255,255,255,0.24);stroke-width:1.6;stroke-linejoin:round;pointer-events:none" />`;
     }
 
-    // Batch non-paintable land tile polygons by terrain type into one <path> per terrain type so big maps avoid hundreds of separate <polygon> nodes.
-    const batchedTiles = new Map<string, { d: string; color: string; border: string }>();
-    let glyphHtml = '';
-
     for (const h of hexes) {
       const geom = hexGeomCache.get(h.id)!;
       if (h.type === 'water') {
@@ -618,32 +600,22 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const hasNumber = !isFog && !!h.number;
       const fogAnim = getPieceAnimAttrs(`fog_${h.id}`, now);
       const glyph = hasNumber ? getBoardIconSvg(tileType, 0, -24, 1.45) : getBoardIconSvg(tileType, 0, 0, 1.9);
+      const paintAttrs = canPaintHex
+        ? `data-paintable="1" style="cursor:pointer" onmousedown="onHexInteract(${h.id}, event)" onclick="onHexClick(${h.id}, event)" onmouseenter="onHexEnter(${h.id}, event)"`
+        : '';
 
-      if (canPaintHex) {
-        terrainHtml += `
-          <g data-paintable="1" style="cursor:pointer" onmousedown="onHexInteract(${h.id}, event)" onclick="onHexClick(${h.id}, event)" onmouseenter="onHexEnter(${h.id}, event)">
-            <polygon points="${geom.tilePoly}" style="fill:${meta.color};stroke:${meta.border};stroke-width:4;stroke-linejoin:round" />
-            <g transform="translate(${h.x}, ${h.y})">
-              ${fogAnim.isAnimating ? `<g class="fog-reveal-anim" style="${fogAnim.delayStyle}">${glyph}${hasNumber ? tokenMarkup(h.number) : ''}</g>` : `${glyph}${hasNumber ? tokenMarkup(h.number) : ''}`}
+      terrainHtml += `
+        <g ${paintAttrs}>
+          <polygon points="${geom.tilePoly}" style="fill:${meta.color};stroke:${meta.border};stroke-width:4;stroke-linejoin:round" />
+          <g transform="translate(${h.x}, ${h.y})">
+            <g class="${fogAnim.isAnimating ? 'fog-reveal-anim' : ''}" style="${fogAnim.delayStyle}">
+              ${glyph}
+              ${hasNumber ? tokenMarkup(h.number) : ''}
             </g>
           </g>
-        `;
-      } else {
-        const entry = batchedTiles.get(tileType);
-        if (entry) {
-          entry.d += geom.tilePathSub;
-        } else {
-          batchedTiles.set(tileType, { d: geom.tilePathSub, color: meta.color, border: meta.border });
-        }
-        glyphHtml += fogAnim.isAnimating
-          ? `<g transform="translate(${h.x}, ${h.y})"><g class="fog-reveal-anim" style="${fogAnim.delayStyle}">${glyph}${hasNumber ? tokenMarkup(h.number) : ''}</g></g>`
-          : `<g transform="translate(${h.x}, ${h.y})">${glyph}${hasNumber ? tokenMarkup(h.number) : ''}</g>`;
-      }
+        </g>
+      `;
     }
-    for (const b of batchedTiles.values()) {
-      terrainHtml += `<path d="${b.d}" style="fill:${b.color};stroke:${b.border};stroke-width:4;stroke-linejoin:round" />`;
-    }
-    terrainHtml += glyphHtml;
     layers.terrainLayer.style.pointerEvents = canPaintHex ? 'auto' : 'none';
     layers.terrainLayer.innerHTML = terrainHtml;
   }
@@ -1027,24 +999,21 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
           <g transform="translate(${mx}, ${my})">
             <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">${bridge.body}</g>
           </g>`;
-      } else if (anim.isAnimating) {
+      } else {
         roadRimsHtml += `
           <g transform="translate(${mx}, ${my})">
-            <circle cx="0" cy="0" r="20" class="piece-impact-ring" style="${anim.delayStyle}" />
-            <g class="piece-drop-anim" style="${anim.delayStyle}">
+            ${anim.isAnimating ? `<circle cx="0" cy="0" r="20" class="piece-impact-ring" style="${anim.delayStyle}" />` : ''}
+            <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
               <line class="road-rim-line" x1="${(x1 - mx).toFixed(1)}" y1="${(y1 - my).toFixed(1)}" x2="${(x2 - mx).toFixed(1)}" y2="${(y2 - my).toFixed(1)}" />
             </g>
           </g>`;
 
         roadBodiesHtml += `
           <g transform="translate(${mx}, ${my})">
-            <g class="piece-drop-anim" style="${anim.delayStyle}">
+            <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
               <line class="road-body-line" x1="${(x1 - mx).toFixed(1)}" y1="${(y1 - my).toFixed(1)}" x2="${(x2 - mx).toFixed(1)}" y2="${(y2 - my).toFixed(1)}" style="stroke:${col}" />
             </g>
           </g>`;
-      } else {
-        roadRimsHtml += `<line class="road-rim-line" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" />`;
-        roadBodiesHtml += `<line class="road-body-line" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" style="stroke:${col}" />`;
       }
 
       roadHitsHtml += `
@@ -1171,66 +1140,17 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   }
 }
 
-// Starts a GPU-composited pan gesture so mousemove translates #boardSvg via translate3d without re-rasterizing the SVG viewBox each frame.
-export function beginBoardPan(): void {
-  isGpuPanning = true;
-  panScreenDx = 0;
-  panScreenDy = 0;
-}
-
-// Accumulates screen-space pan delta during mousemove and schedules a GPU-composited translate3d update.
-export function updateBoardPan(dxPx: number, dyPx: number, worldPerPx: number): void {
-  setCamPan(camPanX + dxPx * worldPerPx, camPanY + dyPx * worldPerPx);
-  if (!isGpuPanning) {
-    rerenderBoard();
-    return;
-  }
-  panScreenDx += dxPx;
-  panScreenDy += dyPx;
-  if (cameraRafPending) return;
-  cameraRafPending = true;
-  requestAnimationFrame(() => {
-    cameraRafPending = false;
-    const svg = document.getElementById('boardSvg');
-    if (!svg) return;
-    if (isGpuPanning) {
-      svg.style.transform = `translate3d(${panScreenDx.toFixed(1)}px, ${panScreenDy.toFixed(1)}px, 0)`;
-    } else {
-      svg.style.transform = '';
-      updateCameraViewBox();
-    }
-  });
-}
-
-// Commits any active GPU pan transform back into the SVG viewBox when the drag ends or zoom begins.
-export function commitBoardPan(): void {
-  const wasGpuPanning = isGpuPanning || panScreenDx !== 0 || panScreenDy !== 0;
-  isGpuPanning = false;
-  panScreenDx = 0;
-  panScreenDy = 0;
-  const svg = document.getElementById('boardSvg');
-  if (svg && svg.style.transform) svg.style.transform = '';
-  if (wasGpuPanning) updateCameraViewBox();
-}
-
 // Updates camera viewBox smoothly via requestAnimationFrame on pan/zoom without reconstructing the SVG DOM.
 export function rerenderBoard(): void {
   if (!state || cameraRafPending) return;
   cameraRafPending = true;
   requestAnimationFrame(() => {
     cameraRafPending = false;
-    const svg = document.getElementById('boardSvg');
-    if (svg && svg.style.transform) svg.style.transform = '';
     updateCameraViewBox();
   });
 }
 
 export function resetCamera(): void {
-  isGpuPanning = false;
-  panScreenDx = 0;
-  panScreenDy = 0;
-  const svg = document.getElementById('boardSvg');
-  if (svg && svg.style.transform) svg.style.transform = '';
   setCamZoom(1);
   setCamPan(0, 0);
   updateCameraViewBox();

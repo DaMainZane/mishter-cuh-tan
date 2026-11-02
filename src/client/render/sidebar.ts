@@ -537,9 +537,7 @@ export function renderSidebar(): void {
       p.isBot ? botTag(p) : '',
       isVictim ? '<span class="tag danger">Rob</span>' : '',
       p.discardPending > 0 ? '<span class="tag danger">Discarding</span>' : '',
-      state.longestRoadOwner === p.id
-        ? `<span class="tag accent">${p.stats?.vpBreakdown?.longestRoad === 16 ? 'Longest road · 16 VP' : 'Longest road'}</span>`
-        : '',
+      state.longestRoadOwner === p.id ? '<span class="tag accent">Longest road</span>' : '',
       state.largestArmyOwner === p.id ? '<span class="tag accent">Largest army</span>' : ''
     ].filter(Boolean).join('');
 

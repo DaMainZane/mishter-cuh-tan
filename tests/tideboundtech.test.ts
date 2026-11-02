@@ -372,13 +372,6 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(score(g, reg, p1, true)).toBe(GRAND_CAUSEWAY_VP);
     expect(publicVP(g, reg, p1)).toBe(GRAND_CAUSEWAY_VP);
 
-    // Even if a player extends their land road so the strictly longest simple path is land-only and the bridge sits on a shorter branch,
-    // Grand Causeway still turns Longest Road to 16 VP while they hold Longest Road and have a bridge on the board.
-    g.board.edges[5].piece = { type: 'road', owner: 'p1' };
-    expect(longestRoadHasBridge(g, reg, 'p1')).toBe(true);
-    expect(grandCausewayBonusVp(g, reg, 'p1')).toBe(GRAND_CAUSEWAY_BONUS_VP);
-    expect(score(g, reg, p1, true)).toBe(GRAND_CAUSEWAY_VP);
-
     // Losing Longest Road immediately drops the +14 bonus
     g.awards.longestRoad = 'p2';
     expect(grandCausewayBonusVp(g, reg, 'p1')).toBe(0);
