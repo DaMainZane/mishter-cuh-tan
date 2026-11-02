@@ -25,6 +25,7 @@ function ensurePirateStyles(): void {
     .pirate-badge { fill: var(--token); stroke: var(--ink); stroke-width: 1.6; }
     .pirate-badge-text { fill: var(--token-ink); font-weight: 800; text-anchor: middle; font-size: 12px; }
     .pirate-flee .pirate-face, .pirate-flee .pirate-wood, .pirate-flee .pirate-glyph { opacity: 0.7; }
+    .piece-zoom-scale { transform: scale(var(--piece-zoom, 1)); transform-origin: 0 0; }
     @media (prefers-reduced-motion: reduce) { .pirate-bob, .pirate-ring { animation: none; } }
   `;
   document.head.appendChild(el);
@@ -82,8 +83,10 @@ export function renderPiratesMarkup(
       <g transform="translate(${px.toFixed(1)}, ${py.toFixed(1)}) scale(1.2)" data-pirate-id="${esc(p.id)}"
          ${clickable ? `onclick="clickPirate(${p.hexId})" style="cursor:pointer"` : 'style="pointer-events:none"'}>
         <title>${esc(title)}</title>
-        ${clickable ? `<circle class="pirate-ring" cy="${PIRATE_ICON_CY}" r="${PIRATE_ICON_RADIUS + 5}" />` : ''}
-        ${pirateMarkup(p.strength, fleeing, p.id)}
+        <g class="piece-zoom-scale">
+          ${clickable ? `<circle class="pirate-ring" cy="${PIRATE_ICON_CY}" r="${PIRATE_ICON_RADIUS + 5}" />` : ''}
+          ${pirateMarkup(p.strength, fleeing, p.id)}
+        </g>
       </g>`;
   }
   return html;

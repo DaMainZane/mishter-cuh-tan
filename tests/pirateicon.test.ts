@@ -54,10 +54,11 @@ describe('Bug 6: the pirate icon is a sail with a head glyph', () => {
     expect(first).toContain('>5</text>');
   });
 
-  it('puts the drive-off ring around the bigger badge', () => {
+  it('puts the drive-off ring around the bigger badge and scales with zoom (.piece-zoom-scale)', () => {
     const svg = renderPiratesMarkup([{ id: 'p1', hexId: 0, strength: 1, mode: 'roam' }], [{ id: 0, x: 0, y: 0 }], [0]);
     const r = Number(/class="pirate-ring"[^>]*\sr="([\d.]+)"/.exec(svg)?.[1]);
     expect(r).toBeGreaterThan(PIRATE_ICON_RADIUS);
+    expect(svg).toContain('class="piece-zoom-scale"');
   });
 
   it('is about 1.5x the old ship, which was 34 units wide', () => {

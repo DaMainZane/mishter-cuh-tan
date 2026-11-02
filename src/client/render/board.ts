@@ -150,16 +150,20 @@ export function updateCameraViewBox(): void {
   const baseY = (centerY0 - camPanY) - baseH / 2;
   svg.setAttribute('viewBox', `${baseX.toFixed(1)} ${baseY.toFixed(1)} ${baseW.toFixed(1)} ${baseH.toFixed(1)}`);
 
-  // Scale settlements, cities, and roads up as the camera zooms out (or on larger boards).
-  // Scoped to the vertex/spot and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
+  // Scale settlements, cities, robber, shipwrecks, pirates, and roads up as the camera zooms out (or on larger boards).
+  // Scoped to the vertex/spot, dynamic/wreck/pirate, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
   const zoomFactor = Math.max(camZoom, Math.max(baseW, baseH) / 720);
   const buildingScale = Math.min(2.8, BUILDING_BASE_SCALE * Math.pow(Math.max(1, zoomFactor), 0.62));
   const roadScale = Math.min(2.45, ROAD_BASE_SCALE * Math.pow(Math.max(1, zoomFactor), 0.58));
   if (Math.abs(buildingScale - lastBuildingScale) >= 0.015) {
     lastBuildingScale = buildingScale;
     const bs = buildingScale.toFixed(3);
+    const pz = (buildingScale / BUILDING_BASE_SCALE).toFixed(3);
     for (const id of ['boardVerticesLayer', 'boardPieceSpotsLayer']) {
       document.getElementById(id)?.style.setProperty('--building-scale', bs);
+    }
+    for (const id of ['boardHexDynamicLayer', 'boardWrecksLayer', 'boardPiratesLayer']) {
+      document.getElementById(id)?.style.setProperty('--piece-zoom', pz);
     }
   }
   if (Math.abs(roadScale - lastRoadScale) >= 0.015) {
@@ -287,6 +291,7 @@ function ensureBoardLayers(svg: HTMLElement): {
     wrecksLayer.id = 'boardWrecksLayer';
     fishLayer.after(wrecksLayer);
     lastWrecksHtml = '';
+    lastBuildingScale = -1;
   }
   // Same for the generic piece spots layer (R8.7), which sits above the vertices so its spots can be clicked.
   let pieceSpotsLayer: Element | null = document.getElementById('boardPieceSpotsLayer');
@@ -295,6 +300,7 @@ function ensureBoardLayers(svg: HTMLElement): {
     pieceSpotsLayer.id = 'boardPieceSpotsLayer';
     document.getElementById('boardVerticesLayer')!.after(pieceSpotsLayer);
     lastPieceSpotsHtml = '';
+    lastBuildingScale = -1;
   }
   // Same for the pirates layer (T10).
   let piratesLayer: Element | null = document.getElementById('boardPiratesLayer');
@@ -303,6 +309,7 @@ function ensureBoardLayers(svg: HTMLElement): {
     piratesLayer.id = 'boardPiratesLayer';
     wrecksLayer.after(piratesLayer);
     lastPiratesHtml = '';
+    lastBuildingScale = -1;
   }
   return {
     terrainLayer,
@@ -641,9 +648,11 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     if (hasRobber) {
       hexDynHtml += `
         <g transform="translate(${h.x + ROBBER_DX}, ${h.y + ROBBER_DY})" style="pointer-events:none">
-          ${robberAnim.isAnimating ? `<circle cx="0" cy="0" r="24" class="robber-impact-ring" style="${robberAnim.delayStyle}" />` : ''}
-          <g class="${robberAnim.isAnimating ? 'robber-drop-anim' : ''}" style="${robberAnim.delayStyle}">
-            <g transform="scale(0.85)">${robberMarkup()}</g>
+          <g class="piece-zoom-scale">
+            ${robberAnim.isAnimating ? `<circle cx="0" cy="0" r="24" class="robber-impact-ring" style="${robberAnim.delayStyle}" />` : ''}
+            <g class="${robberAnim.isAnimating ? 'robber-drop-anim' : ''}" style="${robberAnim.delayStyle}">
+              <g transform="scale(0.85)">${robberMarkup()}</g>
+            </g>
           </g>
         </g>`;
     }
@@ -796,9 +805,11 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     wrecksHtml += `
       <g transform="translate(${wx.toFixed(1)}, ${wy.toFixed(1)})" style="pointer-events:none" data-wreck-id="${esc(w.id)}" data-wreck-site="${w.site}">
         <title>${siteLabel} (${w.countdown} round${w.countdown === 1 ? '' : 's'} left — connect a road, bridge, or port to claim)</title>
-        ${spawnEffect}
-        <g class="${animClass}" style="${delayStyle}">
-          <g transform="scale(1.18)">${wreckMarkup(w.site, w.countdown)}</g>
+        <g class="piece-zoom-scale">
+          ${spawnEffect}
+          <g class="${animClass}" style="${delayStyle}">
+            <g transform="scale(1.18)">${wreckMarkup(w.site, w.countdown)}</g>
+          </g>
         </g>
       </g>`;
   }

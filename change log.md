@@ -1,5 +1,13 @@
 # Change Log
 
+## 2026-11-02 (Pass 108: Scale robber, shipwrecks and pirates when zooming out; headers, index, typecheck and tests passed)
+### Fixed
+- **Zoom-out scaling for robber, shipwrecks and pirates (`src/client/render/board.ts`, `src/client/render/pirates.ts`, `src/client/styles.css`)**: settlements, cities and roads grew as the camera zoomed out or on larger boards (`buildingScale` / `roadScale`), while the robber, shipwrecks and pirates stayed at fixed board-unit sizes and shrank when zoomed out. `updateCameraViewBox` now sets `--piece-zoom` (`buildingScale / BUILDING_BASE_SCALE`, 1.0 at normal zoom and matching the settlement/city growth curve when zoomed out) on `#boardHexDynamicLayer`, `#boardWrecksLayer` and `#boardPiratesLayer` (staying off `#boardTerrainLayer`), and wraps the robber, shipwreck and pirate groups in `<g class="piece-zoom-scale">` (`transform: scale(var(--piece-zoom, 1)); transform-origin: 0 0`).
+### Tests
+- `tests/pirateicon.test.ts`, `tests/tideboundrickety.test.ts`.
+### Not verified
+- Not seen in the game: visual crowding when a tile holds both a fish icon and a zoomed-out pirate or sea wreck on a radius-20 map.
+
 ## 2026-11-02 (Pass 107: Bug List — fishing net icon rework; NOT run, no shell)
 ### Fixed
 - **Fishing net icon (`src/client/icons.ts`, `src/client/pieceModel.ts`, `src/client/render/board.ts`)**: a net was a tiny piece on the settlement spot, not on the water. A net fishes every sea tile at its vertex, so it is now drawn over those tiles: new `netTileMarkup(hexId, corners, cx, cy, col)` draws a rope border pulled in from the tile edge, a diamond mesh clipped to it (`net-clip-<hexId>`) and one float per corner in the owner's colour, flat with the piece rim, `pointer-events:none`. New pure `netSeaTiles(vertices, hexes)` picks the visible `water` tiles at net vertices (a tile once, for the first net by vertex order) and lists the `bare` net vertices that have no tile to draw on. `board.ts` has a new `boardNetsLayer` between the overlay and the fish icons (dirty-checked like the others, added to an old open board too); the vertex piece is no longer drawn for a net that shows on a tile, and stays for a `bare` one so a net never disappears.

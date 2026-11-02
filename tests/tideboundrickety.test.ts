@@ -686,6 +686,9 @@ describe('Tidebound Bug 13 & Bug 14: bridge Edge SVG markup (sturdy vs rickety w
     expect(boardTs).not.toContain("svg.style.setProperty('--road-scale'");
     expect(boardTs).toContain("lastVerticesHtml");
     expect(boardTs).toContain("lastRoadSpotsHtml");
+    expect(css).toContain('.piece-zoom-scale');
+    expect(boardTs).toContain("'--piece-zoom'");
+    expect(boardTs.match(/class="piece-zoom-scale"/g)).toHaveLength(2);
   });
 });
 
