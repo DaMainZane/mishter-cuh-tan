@@ -328,6 +328,8 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
  * `tests/tideboundbots.test.ts` checks that they still match the real constants.
  */
 export const BOT_NET_PIECE = 'net';
+/** The action that puts a net on a sea tile (net rework: a net is `hex.ext.net`, no longer a piece; `BOT_NET_PIECE` is its key on the tile). */
+export const BOT_PLACE_NET_ACTION = 'place_net';
 export const BOT_FEED_SEA_ACTION = 'feed_sea';
 export const BOT_UPGRADE_HARBOR_ACTION = 'upgrade_harbor';
 export const BOT_WRECK_MARKER = 'wreck';
@@ -372,7 +374,7 @@ export const tideboundTechBotGoal: BotGoalDef = {
         const hasPortSettlement = g.board.vertices.some(
           v => v.piece?.owner === pid && v.piece.type === SETTLEMENT && v.port && reg.ports.get(v.port)?.resource === null
         );
-        const netBonus = reg.pieces.has(BOT_NET_PIECE) ? 16 + (portTrader ? 4 : 0) : 12;
+        const netBonus = reg.actions.has(BOT_PLACE_NET_ACTION) ? 16 + (portTrader ? 4 : 0) : 12;
         return netBonus + (hasPortSettlement ? 4 : 0);
       }
       case TECH_SALVAGE_CREW: {
@@ -380,8 +382,8 @@ export const tideboundTechBotGoal: BotGoalDef = {
         return 14 + (wrecksOut > 0 ? 6 : 0) + (bridgeEdgeCount(g, pid) > 0 ? 2 : 0);
       }
       case TECH_NET_WORKS: {
-        if (!reg.pieces.has(BOT_NET_PIECE)) return 0;
-        const myNets = g.board.vertices.filter(v => v.piece?.owner === pid && v.piece.type === BOT_NET_PIECE).length;
+        if (!reg.actions.has(BOT_PLACE_NET_ACTION)) return 0;
+        const myNets = g.board.hexes.filter(h => h.ext?.[BOT_NET_PIECE]?.owner === pid).length;
         return 16 + Math.min(6, myNets * 3);
       }
       case TECH_PIRATE_HUNTER: {

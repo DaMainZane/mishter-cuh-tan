@@ -64,3 +64,15 @@ Severity:   wrong rule
 Error text: none
 Screenshot: image 8 and 9 (8 is how it supposed to be, and 9 is reference image for design) in Coding Project/colonist-custom-catan/BUGS/Image
 ```
+
+```
+BUG
+Saw:        gameplay
+Expected:   16 vp for grand causeway when holding longest road with bridge
+Actual:     grand causeway not turning longest road to 16 vp
+Before it:  i unlock grand causeway with longest road, and build a bridge (although worth knowing that the bridge is not on the longest road path, if that is how grand causeway work then we need to update description)
+Repro:      dlc - tidebound
+Severity:   wrong rule
+Error text: none
+Screenshot: none
+```

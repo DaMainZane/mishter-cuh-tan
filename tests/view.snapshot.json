@@ -1006,12 +1006,6 @@
    "board": {
     "buildings": [
      {
-      "id": 28,
-      "owner": "b",
-      "port": null,
-      "type": "net"
-     },
-     {
       "id": 53,
       "owner": "b",
       "port": "3:1",
@@ -1256,8 +1250,7 @@
       "wheat": 1
      },
      "feedSpots": [
-      60,
-      73
+      60
      ],
      "freeRoads": 0,
      "goldPending": 0,
@@ -1274,9 +1267,16 @@
      "knightsPlayed": 0,
      "longestRoadLength": 0,
      "name": "Bob",
+     "netCost": {
+      "sheep": 1,
+      "wood": 2
+     },
      "netSpots": [
-      2,
-      3
+      27,
+      28
+     ],
+     "netTiles": [
+      60
      ],
      "netsLeft": 3,
      "newDevCards": [],
@@ -1289,10 +1289,6 @@
       "city": {
        "ore": 3,
        "wheat": 2
-      },
-      "net": {
-       "sheep": 1,
-       "wood": 2
       },
       "rickety_bridge": {
        "wood": 1
@@ -1725,12 +1721,6 @@
    "board": {
     "buildings": [
      {
-      "id": 28,
-      "owner": "b",
-      "port": null,
-      "type": "net"
-     },
-     {
       "id": 53,
       "owner": "b",
       "port": "3:1",
@@ -1982,6 +1972,9 @@
      "knightsPlayed": 0,
      "longestRoadLength": 0,
      "name": "Bob",
+     "netTiles": [
+      60
+     ],
      "netsLeft": 3,
      "pieceCosts": {
       "bridge": {
@@ -1992,10 +1985,6 @@
       "city": {
        "ore": 3,
        "wheat": 2
-      },
-      "net": {
-       "sheep": 1,
-       "wood": 2
       },
       "rickety_bridge": {
        "wood": 1
@@ -2418,12 +2407,6 @@
    "board": {
     "buildings": [
      {
-      "id": 28,
-      "owner": "b",
-      "port": null,
-      "type": "net"
-     },
-     {
       "id": 53,
       "owner": "b",
       "port": "3:1",
@@ -2676,6 +2659,9 @@
      "knightsPlayed": 0,
      "longestRoadLength": 0,
      "name": "Bob",
+     "netTiles": [
+      60
+     ],
      "netsLeft": 3,
      "newDevCards": [],
      "pieceCosts": {
@@ -2687,10 +2673,6 @@
       "city": {
        "ore": 3,
        "wheat": 2
-      },
-      "net": {
-       "sheep": 1,
-       "wood": 2
       },
       "rickety_bridge": {
        "wood": 1

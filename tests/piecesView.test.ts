@@ -1,12 +1,12 @@
 // MODULE: tests for generic per-player piece and action view data (R8.6: base.pieces_view in packs/base/piecesView.ts) | USED BY: npm test
 import { describe, expect, it } from 'vitest';
 import { allPacks } from '../src/packs';
-import { pieceCost, validateBuild } from '../src/packs/base/building';
+import { validateBuild } from '../src/packs/base/building';
 import { CITY, GENERIC_PORT } from '../src/packs/base/constants';
 import {
   FEED_SEA,
   FEED_SEA_COST,
-  NET,
+  PLACE_NET,
   RICKETY,
   TECH_FISHING_NETS,
   TECH_HARBOR_MASTER,
@@ -14,6 +14,7 @@ import {
   UPGRADE_HARBOR,
   harborUpgradeCost,
   isOceanEdge,
+  netPrice,
   seaHexIdsAt,
   techGate
 } from '../src/packs/tidebound';
@@ -46,13 +47,14 @@ function giveTech(g: any, pid: string, techId: string): void {
   g.ext.core.techs[pid] = [...new Set([...(g.ext.core.techs[pid] || []), techId])];
 }
 
-/** Attaches test `visual` objects (and action `available`/`price` fallbacks if not yet on the action def) to `net`, `rickety_bridge`, `feed_sea`, `upgrade_harbor`. */
+/** Attaches test `visual` objects (and action `available`/`price` fallbacks if not yet on the action def) to `place_net`, `rickety_bridge`, `feed_sea`, `upgrade_harbor`. */
 function attachVisuals(reg: Registry): void {
-  const netDef = reg.pieces.get(NET);
+  // A net is an action on a sea tile (slot 'hex'), like feed_sea.
+  const netDef = reg.actions.get(PLACE_NET);
   if (netDef) {
-    reg.pieces.set(NET, {
+    reg.actions.set(PLACE_NET, {
       ...netDef,
-      visual: { slot: 'vertex', shape: '<g class="test-net"/>', button: { label: 'Net', icon: 'net', order: 20 } }
+      visual: { slot: 'hex', spotKey: 'hexId', button: { label: 'Net', icon: 'net', order: 20 } }
     } as any);
   }
 
@@ -113,7 +115,7 @@ function makeScene(rules: Record<string, any> = TIDE_RULES, techs: string[] = AL
   const bob = g.players[1];
   bob.resources = { wood: 5, brick: 5, sheep: 5, wheat: 5, ore: 5 };
 
-  if (reg.pieces.has(NET)) {
+  if (reg.actions.has(PLACE_NET)) {
     const coast: number[] = g.board.vertices
       .filter((v: any) => v.hexIds.length > 0 && seaHexIdsAt(g, reg, v.id).length > 0)
       .map((v: any) => v.id);
@@ -124,9 +126,8 @@ function makeScene(rules: Record<string, any> = TIDE_RULES, techs: string[] = AL
     const roadEdge = g.board.vertices[roadV].edgeIds.find((e: number) => g.board.edges[e].hexIds.length > 0)!;
     g.board.edges[roadEdge].piece = { type: 'road', owner: 'b' };
 
-    g.board.vertices[netV].piece = { type: NET, owner: 'b' };
-    bob.pieces[NET] = (bob.pieces[NET] ?? 0) - 1;
     const ground = seaHexIdsAt(g, reg, netV)[0];
+    g.board.hexes[ground].ext.net = { owner: 'b' };
     g.board.hexes[ground].ext.fish = 2;
 
     g.board.vertices[harborV].port = GENERIC_PORT;
@@ -170,7 +171,7 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
     expect(tideNoVis.pieces).toBeUndefined();
   });
 
-  it('2. Parity: for net, feed_sea and upgrade_harbor, pieces[id].spots equals legacy netSpots, feedSpots, harborSpots', () => {
+  it('2. Parity: for place_net, feed_sea and upgrade_harbor, pieces[id].spots equals legacy netSpots, feedSpots, harborSpots', () => {
     const { g, reg } = makeScene(TIDE_RULES, ALL_TEST_TECHS, true);
     const bob = g.players[1];
     const view = mergeViewPlayer(g, reg, bob, { self: true, over: false, spectator: false });
@@ -181,13 +182,14 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
     expect(view.harborSpots.length).toBeGreaterThan(0);
 
     const sortNum = (arr: number[]) => [...arr].sort((a, b) => a - b);
-    expect(sortNum(view.pieces[NET].spots)).toEqual(sortNum(view.netSpots));
+    expect(sortNum(view.pieces[PLACE_NET].spots)).toEqual(sortNum(view.netSpots));
     expect(sortNum(view.pieces[FEED_SEA].spots)).toEqual(sortNum(view.feedSpots));
     expect(sortNum(view.pieces[UPGRADE_HARBOR].spots)).toEqual(sortNum(view.harborSpots));
 
     // Cost and supply parity with legacy fields.
-    expect(view.pieces[NET].left).toBe(view.netsLeft);
-    expect(view.pieces[NET].cost).toEqual(pieceCost(g, bob, reg.pieces.get(NET)!, reg));
+    // A net is an action now, so `left` is null; the supply stays in `netsLeft` until the build UI rework (bug 5) reads it from here.
+    expect(view.pieces[PLACE_NET].left).toBeNull();
+    expect(view.pieces[PLACE_NET].cost).toEqual(netPrice(g, reg, bob));
     expect(view.pieces[FEED_SEA].cost).toEqual(view.feedCost);
     expect(view.pieces[UPGRADE_HARBOR].cost).toEqual(view.harborCost);
   });
@@ -226,19 +228,19 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
       spectator: false
     });
     expect(lockedView.pieces).toEqual({});
-    expect(NET in lockedView.pieces).toBe(false);
+    expect(PLACE_NET in lockedView.pieces).toBe(false);
     expect(RICKETY in lockedView.pieces).toBe(false);
     expect(FEED_SEA in lockedView.pieces).toBe(false);
     expect(UPGRADE_HARBOR in lockedView.pieces).toBe(false);
 
-    // Partial unlock: only Fishing nets owned -> only `net` is present.
+    // Partial unlock: only Fishing nets owned -> only `place_net` is present.
     const netOnly = makeScene(TIDE_RULES, [TECH_FISHING_NETS], true);
     const netOnlyView = mergeViewPlayer(netOnly.g, netOnly.reg, netOnly.g.players[1], {
       self: true,
       over: false,
       spectator: false
     });
-    expect(Object.keys(netOnlyView.pieces)).toEqual([NET]);
+    expect(Object.keys(netOnlyView.pieces)).toEqual([PLACE_NET]);
 
     // (b) With all techs unlocked: `left` is a number for pieces and `null` for actions.
     const { g, reg } = makeScene(TIDE_RULES, ALL_TEST_TECHS, true);
@@ -247,7 +249,7 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
     for (const t of ALL_TEST_TECHS) giveTech(g, 'a', t);
 
     const selfView = mergeViewPlayer(g, reg, bob, { self: true, over: false, spectator: false });
-    expect(typeof selfView.pieces[NET].left).toBe('number');
+    expect(selfView.pieces[PLACE_NET].left).toBeNull();
     expect(typeof selfView.pieces[RICKETY].left).toBe('number');
     expect(selfView.pieces[FEED_SEA].left).toBeNull();
     expect(selfView.pieces[UPGRADE_HARBOR].left).toBeNull();
@@ -260,39 +262,39 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
 
     // (c) Other player viewing Bob: left and cost present, spots is null.
     const otherView = mergeViewPlayer(g, reg, bob, { self: false, over: false, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(otherView.pieces[id].spots, `other:${id}`).toBeNull();
       expect(otherView.pieces[id].cost, `other:${id}.cost`).toBeDefined();
     }
 
     // (d) Spectator viewing Bob: spots is null.
     const specView = mergeViewPlayer(g, reg, bob, { self: false, over: false, spectator: true });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(specView.pieces[id].spots, `spectator:${id}`).toBeNull();
     }
 
     // (e) Off-turn player viewing themselves (Alice while it is Bob's turn): spots is null.
     const offTurnAlice = mergeViewPlayer(g, reg, alice, { self: true, over: false, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(offTurnAlice.pieces[id].spots, `offTurnAlice:${id}`).toBeNull();
     }
 
     // Off-phase (Bob during roll phase): spots is null.
     g.phase = 'roll';
     const rollView = mergeViewPlayer(g, reg, bob, { self: true, over: false, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(rollView.pieces[id].spots, `rollPhase:${id}`).toBeNull();
     }
     g.phase = 'main';
 
     // (f) Game over (`who.over: true` or `g.phase = 'gameover'`): spots is null.
     const overWhoView = mergeViewPlayer(g, reg, bob, { self: true, over: true, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(overWhoView.pieces[id].spots, `overWho:${id}`).toBeNull();
     }
     g.phase = 'gameover';
     const overPhaseView = mergeViewPlayer(g, reg, bob, { self: true, over: false, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(overPhaseView.pieces[id].spots, `overPhase:${id}`).toBeNull();
     }
     g.phase = 'main';
@@ -300,7 +302,7 @@ describe('R8.6: generic per-player piece data (base.pieces_view)', () => {
     // (g) Cannot pay on your own main-phase turn: spots is [].
     bob.resources = { wood: 0, brick: 0, sheep: 0, wheat: 0, ore: 0 };
     const brokeView = mergeViewPlayer(g, reg, bob, { self: true, over: false, spectator: false });
-    for (const id of [NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
+    for (const id of [PLACE_NET, RICKETY, FEED_SEA, UPGRADE_HARBOR]) {
       expect(brokeView.pieces[id].spots, `broke:${id}`).toEqual([]);
     }
   });

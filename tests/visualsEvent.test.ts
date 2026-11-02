@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { allPacks } from '../src/packs';
+import { PLACE_NET } from '../src/packs/tidebound';
 import { broadcastRoom, setIo } from '../src/server/net';
 import { clearBotTimers, createRoom, rooms } from '../src/server/rooms';
 import { defaultSettings, mapRegistryFor, visualToggles } from '../src/server/runtime';
@@ -7,7 +8,7 @@ import { buildTopology, createGame, manifestProblems, registryFor } from '../src
 import type { PieceVisual } from '../src/shared';
 
 // R8.4: the `visuals` event. `broadcastRoom` sends each socket the manifest before its `gameState`, keyed by the addon set, in the lobby and in a game.
-// The shipped packs register no visual yet, so the real manifest is empty; one test puts a visual on the real `net` piece (and puts it back) to see content travel.
+// The shipped packs register no visual yet, so the real manifest is empty; one test puts a visual on the real `place_net` action (and puts it back) to see content travel.
 // A fake io records every send in order: `sock.emit` (what `syncVisuals` uses) and `io.to(id).emit` (what `gameState` uses).
 
 const TIDE = { dlc: { tidebound: true }, techTreeOn: true };
@@ -173,31 +174,32 @@ describe('visuals event (R8.4)', () => {
     expect(visualsTo(log, 'b')[0].data.key).toBe(visualsTo(log, 'a')[0].data.key);
   });
 
-  it('carries real content when a def has a visual (the real net piece, put back afterwards)', () => {
+  it('carries real content when a def has a visual (the real place_net action, put back afterwards)', () => {
     const room = gameRoom(TIDE);
     const reg = mapRegistryFor(visualToggles(room));
-    const net = reg.pieces.get('net');
+    // A net is an action on a sea tile now, so it travels as an `action` entry (slot 'hex', spotKey 'hexId') and has no shape.
+    const net = reg.actions.get(PLACE_NET);
     expect(net).toBeDefined();
     const visual: PieceVisual = {
-      slot: 'vertex',
+      slot: 'hex',
+      spotKey: 'hexId',
       button: { label: 'Net', icon: 'net', order: 20 },
-      hints: { noSupply: 'No nets left.', cannotAfford: 'Cannot pay.', noSpots: 'No spot.' },
-      shape: '<path d="M-8,8 L0,-10 L8,8 Z" fill="{color}"/>'
+      hints: { noSupply: 'No nets left.', cannotAfford: 'Cannot pay.', noSpots: 'No spot.' }
     };
-    reg.pieces.set('net', { ...net!, visual });
+    reg.actions.set(PLACE_NET, { ...net!, visual });
     try {
       const { io, log } = fakeIo(['a', 'b']);
       setIo(io);
       broadcastRoom(room);
       const m = visualsTo(log, 'a')[0].data.manifest;
       expect(m.pieces).toHaveLength(1);
-      expect(m.pieces[0]).toMatchObject({ id: 'net', kind: 'piece', slot: 'vertex', button: { label: 'Net' } });
+      expect(m.pieces[0]).toMatchObject({ id: PLACE_NET, kind: 'action', slot: 'hex', spotKey: 'hexId', button: { label: 'Net' } });
       expect(JSON.parse(JSON.stringify(m))).toEqual(m);
       expect(manifestProblems(m)).toEqual([]);
       // Everyone in the game gets the same manifest.
       expect(visualsTo(log, 'b')[0].data).toEqual(visualsTo(log, 'a')[0].data);
     } finally {
-      reg.pieces.set('net', net!);
+      reg.actions.set(PLACE_NET, net!);
     }
   });
 });

@@ -236,38 +236,6 @@ export function portRaiseSpots(harbor: TechActionsView['harbor'] | undefined, my
     .map(p => ({ vertexId: p.vertexId, cost: harbor.cost, affordable: harbor.affordable }));
 }
 
-/** One sea tile covered by a player's fishing net. */
-export interface NetTile {
-  hexId: number;
-  owner: string;
-}
-
-/**
- * The sea tiles to draw a net on (fishing net bug). A net is a vertex piece that fishes every sea tile at its vertex, so each visible `water` tile at a net
- * vertex gets a net. A tile is listed once, for the first net (by vertex order) that covers it. `bare` lists the net vertices with no tile to draw on
- * (the sea tile is hidden by fog, or not `water`), so the caller keeps their small vertex piece instead of making the net disappear.
- */
-export function netSeaTiles(
-  vertices: readonly { id: number; hexIds: readonly number[]; building?: { type: string; owner: string } | null }[],
-  hexes: readonly { type: string; fog?: boolean }[]
-): { tiles: NetTile[]; bare: number[] } {
-  const owners = new Map<number, string>();
-  const bare: number[] = [];
-  for (const v of vertices) {
-    if (v.building?.type !== 'net') continue;
-    let drew = false;
-    for (const hexId of v.hexIds) {
-      const h = hexes[hexId];
-      if (!h || h.type !== 'water' || h.fog) continue;
-      drew = true;
-      if (!owners.has(hexId)) owners.set(hexId, v.building.owner);
-    }
-    if (!drew) bare.push(v.id);
-  }
-  const tiles = [...owners.entries()].sort((a, b) => a[0] - b[0]).map(([hexId, owner]) => ({ hexId, owner }));
-  return { tiles, bare };
-}
-
 function isEdgeSlot(e: ManifestEntry): boolean {
   return e.slot === 'edge' || e.slot === 'edge:ocean';
 }

@@ -31,15 +31,17 @@ export function renderRecipeStripHtml(recipeKey: RecipeKey, me: any): string {
     recipeKey !== 'feed' &&
     recipeKey !== 'harbor' &&
     isClientPieceDoubleCost(recipeKey, me?.id || socket.id);
-  // Feeding the sea and building a harbor are actions, not pieces: their prices come as `feedCost` and `harborCost`.
+  // Feeding the sea, building a harbor and putting a net on a tile are actions, not pieces: their prices come as `feedCost`, `harborCost` and `netCost`.
   const customCost =
     recipeKey === 'feed'
       ? me?.feedCost
       : recipeKey === 'harbor'
         ? me?.harborCost
-        : recipeKey !== 'dev'
-          ? me?.pieceCosts?.[recipeKey]
-          : null;
+        : recipeKey === 'net'
+          ? me?.netCost
+          : recipeKey !== 'dev'
+            ? me?.pieceCosts?.[recipeKey]
+            : null;
   const counts: Record<string, number> = {};
   const add = (r: string, n: number): void => {
     counts[r] = (counts[r] || 0) + n;

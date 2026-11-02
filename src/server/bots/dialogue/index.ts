@@ -138,9 +138,13 @@ export function emitBotDialogue(room: Room, actorId: string, actionType: string,
             if (countVertices(g, bot.id, SETTLEMENT) + countVertices(g, bot.id, CITY) >= 3) say(bot, 'settlement');
           } else if (d.piece === ROAD && countEdges(g, bot.id, ROAD) >= 3) {
             say(bot, 'road');
-          } else if (d.piece === 'net') {
-            say(bot, 'netBuilt');
           }
+          break;
+        }
+
+        case 'netPlaced': {
+          // A net is a tile action (`place_net`), so it has its own event instead of `built`.
+          say(botById(d.playerId), 'netBuilt');
           break;
         }
 

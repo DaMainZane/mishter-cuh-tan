@@ -1,7 +1,6 @@
 // MODULE: unit tests for T11 (Tidebound Tech Nodes: T11a fork layout & cost divisor, T11b techGate, T11c nodes 1-3, T11d nodes 4-6, T11e nodes 7-9, T11f demolish_bridge, Grand Causeway & Harbor Empire)
 import { describe, expect, it } from 'vitest';
 import { allPacks } from '../src/packs';
-import { pieceCost } from '../src/packs/base/building';
 import { tradeRatios } from '../src/packs/base/trading';
 import {
   buildTopology,
@@ -32,8 +31,9 @@ import {
   grandCausewayBonusVp,
   harborLimitFor,
   longestRoadHasBridge,
-  NET,
+  netPrice,
   pirateKnightsNeeded,
+  PLACE_NET,
   RICKETY,
   spawnPirate,
   spawnWreckAt,
@@ -223,7 +223,7 @@ describe('T11c — Nodes 1–3 (Harbor Charters, Rickety Bridges, Fishing Nets)'
     expect(checkAction(g, reg, { type: UPGRADE_BRIDGE, playerId: 'p1', payload: { edgeId: 6 } })).toBeNull();
   });
 
-  it('gates net build by tidebound.fishing_nets and lets upgrade_port raise a 3:1 port with a settlement', () => {
+  it('gates place_net by tidebound.fishing_nets and lets upgrade_port raise a 3:1 port with a settlement', () => {
     const { g, reg } = makeMainGame(true);
     const p1 = g.players[0];
     p1.resources = { wood: 10, brick: 10, sheep: 10, wheat: 10, ore: 10 };
@@ -231,8 +231,8 @@ describe('T11c — Nodes 1–3 (Harbor Charters, Rickety Bridges, Fishing Nets)'
     g.board.vertices[0].piece = { type: 'settlement', owner: 'p1' };
     g.board.edges[0].piece = { type: 'road', owner: 'p1' };
 
-    // Net build on coastal non-port vertex 1 (connected via edge 0) is blocked before Fishing Nets
-    expect(checkAction(g, reg, { type: 'build', playerId: 'p1', payload: { piece: NET, loc: 1 } })).toBeTruthy();
+    // A net on the sea tile (hex 1) beside the coast road on edge 0 is blocked before Fishing Nets
+    expect(checkAction(g, reg, { type: PLACE_NET, playerId: 'p1', payload: { hexId: 1 } })).toBeTruthy();
 
     // With Harbor Charters alone, upgrade_port requires a city on vertex 0 (settlement is rejected)
     giveTech(g, 'p1', TECH_HARBOR_CHARTERS);
@@ -240,9 +240,9 @@ describe('T11c — Nodes 1–3 (Harbor Charters, Rickety Bridges, Fishing Nets)'
       'A harbor upgrade needs your own city'
     );
 
-    // Research Fishing Nets: now both net build AND settlement 3:1->2:1 port upgrade are legal!
+    // Research Fishing Nets: now both the net and the settlement 3:1->2:1 port upgrade are legal!
     giveTech(g, 'p1', TECH_FISHING_NETS);
-    expect(checkAction(g, reg, { type: 'build', playerId: 'p1', payload: { piece: NET, loc: 1 } })).toBeNull();
+    expect(checkAction(g, reg, { type: PLACE_NET, playerId: 'p1', payload: { hexId: 1 } })).toBeNull();
     expect(checkAction(g, reg, { type: 'upgrade_port', playerId: 'p1', payload: { vertexId: 0 } })).toBeNull();
 
     dispatch(g, reg, { type: 'upgrade_port', playerId: 'p1', payload: { vertexId: 0 } });
@@ -268,11 +268,11 @@ describe('T11d — Nodes 4–6 (Salvage Crew, Net Works, Pirate Hunter)', () => 
   it('Net Works reduces net cost by 1 wood (2 wood + 1 sheep -> 1 wood + 1 sheep) and boosts catch rates', () => {
     const { g, reg } = makeMainGame(true);
     const p1 = g.players[0];
-    const netDef = reg.pieces.get(NET)!;
-    expect(pieceCost(g, p1, netDef, reg)).toEqual({ wood: 2, sheep: 1 });
+    // A net is a tile action now, not a piece: its price is `netPrice`, which runs the cost modifiers.
+    expect(netPrice(g, reg, p1)).toEqual({ wood: 2, sheep: 1 });
 
     giveTech(g, 'p1', TECH_NET_WORKS);
-    expect(pieceCost(g, p1, netDef, reg)).toEqual({ wood: 1, sheep: 1 });
+    expect(netPrice(g, reg, p1)).toEqual({ wood: 1, sheep: 1 });
   });
 
   it('Pirate Hunter reduces knights needed by 2 (min 1) and increases pirate loot by +50%', () => {
@@ -304,7 +304,7 @@ describe('T11e — Nodes 7–9 registration & Harbor Master gating', () => {
     const p1 = g.players[0];
     p1.resources = { wood: 10, brick: 10, sheep: 10, wheat: 10, ore: 10 };
     g.board.vertices[0].piece = { type: 'city', owner: 'p1' };
-    g.board.vertices[1].piece = { type: NET, owner: 'p1' };
+    g.board.hexes[1].ext.net = { owner: 'p1' };
 
     // Both upgrade_harbor and feed_sea are blocked before Harbor Master
     expect(checkAction(g, reg, { type: UPGRADE_HARBOR, playerId: 'p1', payload: { vertexId: 0 } })).toBeTruthy();

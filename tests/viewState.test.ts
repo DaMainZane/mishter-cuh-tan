@@ -4,7 +4,6 @@ import { allPacks } from '../src/packs';
 import { CITY, GENERIC_PORT } from '../src/packs/base/constants';
 import {
   BRIDGE,
-  NET,
   TECH_FISHING_NETS,
   TECH_GRAND_CAUSEWAY,
   TECH_HARBOR_MASTER,
@@ -86,7 +85,7 @@ function giveTech(g: any, pid: string, techId: string): void {
   g.ext.core.techs[pid] = [...new Set([...(g.ext.core.techs[pid] || []), techId])];
 }
 
-/** Tidebound with every field filled in for Bob: a net, a fishing ground, a harbor, a wreck, a pirate, a flood, a warning, a bridge on Longest Road. */
+/** Tidebound with every field filled in for Bob: a net on a sea tile, a fishing ground, a harbor, a wreck, a pirate, a flood, a warning, a bridge on Longest Road. */
 function tideboundScene() {
   const { g, reg, ctx } = makeGame(TIDE_RULES);
   const bob = g.players[1];
@@ -105,9 +104,9 @@ function tideboundScene() {
   const roadEdge = g.board.vertices[roadV].edgeIds.find((e: number) => g.board.edges[e].hexIds.length > 0)!;
   g.board.edges[roadEdge].piece = { type: 'road', owner: 'b' };
 
-  g.board.vertices[netV].piece = { type: NET, owner: 'b' };
-  bob.pieces[NET] = (bob.pieces[NET] ?? 0) - 1;
+  // The net sits on one sea tile (`hex.ext.net`) and fishes only that tile.
   const ground = seaHexIdsAt(g, reg, netV)[0];
+  g.board.hexes[ground].ext.net = { owner: 'b' };
   g.board.hexes[ground].ext.fish = 2;
 
   g.board.vertices[harborV].port = GENERIC_PORT;
@@ -259,18 +258,16 @@ describe('R7a.6: the lobby state', () => {
 describe('R7a.6: tech gates (Tidebound on, tech tree on)', () => {
   it('hides the gated fields and pieces until the tech is owned', () => {
     const locked = playerOf(viewsFor(lightScene(TIDE_RULES, []).g).active, 'b');
-    for (const k of ['netsLeft', 'netSpots', 'feedCost', 'feedSpots', 'harborCost', 'harborSpots', 'harborsLeft', 'bridgeUpgradeCost']) {
+    for (const k of ['netsLeft', 'netSpots', 'netCost', 'feedCost', 'feedSpots', 'harborCost', 'harborSpots', 'harborsLeft', 'bridgeUpgradeCost']) {
       expect(locked[k], k).toBeUndefined();
     }
-    expect(locked.pieceCosts[NET]).toBeUndefined();
     expect(locked.pieceCosts.rickety_bridge).toBeUndefined();
 
     // Control: the same game with the techs owned shows them (so the checks above are not vacuous).
     const open = playerOf(viewsFor(lightScene(TIDE_RULES, ALL_TECHS).g).active, 'b');
-    for (const k of ['netsLeft', 'netSpots', 'feedCost', 'harborCost', 'harborSpots', 'harborsLeft', 'bridgeUpgradeCost']) {
+    for (const k of ['netsLeft', 'netSpots', 'netCost', 'feedCost', 'harborCost', 'harborSpots', 'harborsLeft', 'bridgeUpgradeCost']) {
       expect(open[k], k).toBeDefined();
     }
-    expect(open.pieceCosts[NET]).toBeDefined();
     expect(open.pieceCosts.rickety_bridge).toBeDefined();
   });
 });
@@ -278,7 +275,7 @@ describe('R7a.6: tech gates (Tidebound on, tech tree on)', () => {
 // One addon off, the rest of Tidebound on, every tech owned. `control` is a field of another addon that must still be sent.
 // Rickety bridges depend on Bridges, so Bridges off takes both away; Tides off may also block addons that depend on it, which is fine here.
 const ADDON_OFF_CASES: { addon: string; pub: string[]; player: string[]; pieces: string[]; control: string }[] = [
-  { addon: 'tidebound.fishing', pub: ['fishIcons'], player: ['netsLeft', 'netSpots', 'feedCost', 'feedSpots'], pieces: [NET], control: 'harborsLeft' },
+  { addon: 'tidebound.fishing', pub: ['fishIcons'], player: ['netsLeft', 'netSpots', 'netCost', 'feedCost', 'feedSpots'], pieces: [], control: 'harborsLeft' },
   { addon: 'tidebound.harbor', pub: [], player: ['harborCost', 'harborSpots', 'harborsLeft', 'harborTradesLeft'], pieces: [], control: 'netsLeft' },
   { addon: 'tidebound.wrecks', pub: ['wrecks'], player: [], pieces: [], control: 'netsLeft' },
   { addon: 'tidebound.pirates', pub: ['pirates'], player: ['pirateDrives'], pieces: [], control: 'netsLeft' },
@@ -326,6 +323,7 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       // Bob's own fields, on his turn.
       const bob = playerOf(active, 'b');
       expect(bob.netsLeft).toBeDefined();
+      expect(bob.netCost).toEqual({ wood: 2, sheep: 1 });
       expect(bob.netSpots.length).toBeGreaterThan(0);
       expect(bob.feedCost).toBeDefined();
       expect(bob.feedSpots.length).toBeGreaterThan(0);
@@ -336,12 +334,16 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       expect(bob.canDemolishBridge).toBe(true);
       expect(bob.pirateDrives).toBeDefined();
       expect(bob.bridgeUpgradeCost).toBeDefined();
-      expect(bob.pieceCosts.net).toBeDefined();
+      // A net is a tile action now: its tile is public (`netTiles`), and it is no longer in `pieceCosts` (the net price comes with the build UI rework, bug 5).
+      expect(bob.netTiles.length).toBe(1);
+      expect(bob.pieceCosts.net).toBeUndefined();
       expect(bob.pieceCosts.rickety_bridge).toBeDefined();
       expect(bob.stats.vpBreakdown.longestRoad).toBe(16);
 
       // Only the owner gets the spot lists.
+      expect(playerOf(other, 'b').netTiles).toEqual(bob.netTiles);
       expect(playerOf(other, 'b').netSpots).toBeUndefined();
+      expect(playerOf(other, 'b').netCost).toBeUndefined();
       expect(playerOf(other, 'b').feedSpots).toBeUndefined();
       expect(playerOf(other, 'b').bridgeUpgradeCost).toBeUndefined();
     } finally {
@@ -372,7 +374,8 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
           expect(p.harborSpots).toBeUndefined();
           expect(p.pirateDrives).toBeUndefined();
           expect(p.bridgeUpgradeCost).toBeUndefined();
-          expect(p.pieceCosts.net).toBeUndefined();
+          expect(p.netTiles).toBeUndefined();
+          expect(p.netCost).toBeUndefined();
           expect(p.pieceCosts.rickety_bridge).toBeUndefined();
         }
       }

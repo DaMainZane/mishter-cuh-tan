@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   badgeFor, buttonHtml, buttonModels, buttonVisible, canPay, edgeShapeMarkup, entriesAtSpot, fillShape, iconHtml, isSafeCss, isSafeFragment, modeHint, modeOf,
-  COST_STACK_MAX, costStackHtml, modelForMode, netSeaTiles, offeredEntries, placedEntry, portRaiseSpots, recipeCostFor, recipeStripHtml, spotMarkup, spotsForMode, stackSizes, vertexShapeMarkup, withRim
+  COST_STACK_MAX, costStackHtml, modelForMode, offeredEntries, placedEntry, portRaiseSpots, recipeCostFor, recipeStripHtml, spotMarkup, spotsForMode, stackSizes, vertexShapeMarkup, withRim
 } from '../src/client/pieceModel';
 import { netTileMarkup } from '../src/client/icons';
 import type { BoardGeom, PieceViewer } from '../src/client/pieceModel';
@@ -441,39 +441,7 @@ describe('portRaiseSpots (Harbor charters hotspots)', () => {
   });
 });
 
-// FISHING NET BUG: a net was a tiny piece on the settlement spot; it is now drawn over the sea tile(s) it fishes (a rope-and-float mesh).
-describe('netSeaTiles (which sea tiles show a net)', () => {
-  const hexes = [{ type: 'wood' }, { type: 'water' }, { type: 'water' }, { type: 'water', fog: true }];
-  const net = (owner: string) => ({ type: 'net', owner });
-
-  it('gives every sea tile at a net vertex to its owner and skips land tiles', () => {
-    const vertices = [{ id: 0, hexIds: [0, 1, 2], building: net('a') }];
-    expect(netSeaTiles(vertices, hexes)).toEqual({ tiles: [{ hexId: 1, owner: 'a' }, { hexId: 2, owner: 'a' }], bare: [] });
-  });
-
-  it('draws a tile once: the first net (by vertex order) keeps it', () => {
-    const vertices = [
-      { id: 0, hexIds: [0, 1], building: net('a') },
-      { id: 1, hexIds: [0, 1, 2], building: net('b') }
-    ];
-    expect(netSeaTiles(vertices, hexes).tiles).toEqual([{ hexId: 1, owner: 'a' }, { hexId: 2, owner: 'b' }]);
-  });
-
-  it('ignores other buildings and empty vertices', () => {
-    const vertices = [
-      { id: 0, hexIds: [0, 1], building: { type: 'city', owner: 'a' } },
-      { id: 1, hexIds: [0, 1, 2], building: null },
-      { id: 2, hexIds: [0, 1, 2] }
-    ];
-    expect(netSeaTiles(vertices, hexes)).toEqual({ tiles: [], bare: [] });
-  });
-
-  it('lists a net with no drawable sea tile (hidden fog, land only) as bare, so its vertex piece stays visible', () => {
-    const vertices = [{ id: 4, hexIds: [0, 3], building: net('a') }];
-    expect(netSeaTiles(vertices, hexes)).toEqual({ tiles: [], bare: [4] });
-  });
-});
-
+// FISHING NET REWORK: a net sits on one sea tile and is drawn over that tile (a rope-and-float mesh). The tile ids come from the server (`netTiles`), so there is no client-side tile picking to test.
 describe('netTileMarkup (the net over a sea tile)', () => {
   const R = 60;
   const corners = Array.from({ length: 6 }, (_, i) => {

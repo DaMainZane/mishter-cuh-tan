@@ -249,15 +249,6 @@ export function cityMarkup(col: string): string {
   ], 3.8);
 }
 
-// Tidebound fishing net: a post with a mesh diamond in the owner's color. Smaller than a settlement and clearly not a roof, so the two are never mixed up.
-export function netMarkup(col: string): string {
-  const mesh = `<path d="M-5.25,-8 L5.25,2 M5.25,-8 L-5.25,2" style="fill:none;stroke:var(--piece-rim);stroke-width:1.6;stroke-linecap:round"/>`;
-  return rimmedLayers([
-    { d: 'M-1.6,-3 H1.6 V11 H-1.6 Z', fill: shade(col, 0.7) },
-    { d: 'M0,-13 L10.5,-3 L0,7 L-10.5,-3 Z', fill: col }
-  ], 3.4) + mesh;
-}
-
 /**
  * Tidebound fishing net drawn over the sea tile it fishes (fishing net bug): a rope border pulled in from the tile edge, a diamond mesh clipped to that border,
  * and one float per corner in the owner's color. Flat and matte like the other pieces (no gradients); the rope and mesh read the `--pier` tokens, the border has

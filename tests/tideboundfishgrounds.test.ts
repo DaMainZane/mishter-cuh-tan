@@ -5,7 +5,6 @@ import {
   FEED_SEA_COST,
   FISH,
   FISH_ICON_MULTIPLIER,
-  NET,
   NET_BOOSTED_CHANCE,
   NET_CATCH_CHANCE,
   feedSpotsView,
@@ -91,8 +90,9 @@ function setFish(m: M, id: number, n: number | undefined): void {
   else hex.ext.fish = n;
 }
 
-function putNet(m: M, vertexId: number, owner = 'a'): void {
-  m.g.board.vertices[vertexId].piece = { type: NET, owner };
+/** A net sits on one sea tile (`hex.ext.net`), no longer on a vertex. */
+function putNet(m: M, hexId: number, owner = 'a'): void {
+  m.g.board.hexes[hexId].ext.net = { owner };
 }
 
 /** One roll the way the roll action does it (it adds one to `diceStats` first). True when `owner` got a fish. */
@@ -139,15 +139,15 @@ describe('T7c fish icon boosts', () => {
     expect(NET_BOOSTED_CHANCE).toBeCloseTo(1 / 3);
   });
 
-  it('a net next to a full icon catches earlier than the same net without one, on the same seed', () => {
+  it('a net on a full icon catches earlier than the same net without one, on the same seed', () => {
     let earlier = 0;
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
       const bare = makeGame(on, seed);
       const boosted = makeGame(on, seed);
-      const v = cornerOf(bare);
-      putNet(bare, v);
-      putNet(boosted, v);
-      for (const id of seaHexIdsAt(boosted.g, boosted.reg, v)) setFish(boosted, id, FISH_BOOSTS);
+      const tile = seaHexIdsAt(bare.g, bare.reg, cornerOf(bare))[0];
+      putNet(bare, tile);
+      putNet(boosted, tile);
+      setFish(boosted, tile, FISH_BOOSTS);
       const a = firstCatch(bare, 400);
       const b = firstCatch(boosted, 400);
       expect(a).toBeGreaterThan(0);
@@ -159,11 +159,11 @@ describe('T7c fish icon boosts', () => {
     expect(earlier).toBeGreaterThan(0);
   });
 
-  it('each boosted catch uses up one boost of the richest tile, and the icon stays at 0', () => {
+  it('each boosted catch uses up one boost of the tile under the net, and the icon stays at 0', () => {
     const m = makeGame();
     const v = cornerOf(m);
-    putNet(m, v);
     const [lo, hi] = seaHexIdsAt(m.g, m.reg, v);
+    putNet(m, lo);
     setFish(m, lo, FISH_BOOSTS);
     setFish(m, hi, undefined);
     for (let i = 0; i < 3000; i++) rollOnce(m);
@@ -177,33 +177,24 @@ describe('T7c fish icon boosts', () => {
     expect(getWildTokens(m.g, 'a', FISH)).toBeLessThan(600);
   });
 
-  it('the first catch takes a boost from the richer tile, and from the lowest id on a tie', () => {
-    const rich = makeGame();
-    const v = cornerOf(rich);
-    putNet(rich, v);
-    const [lo, hi] = seaHexIdsAt(rich.g, rich.reg, v);
-    setFish(rich, lo, 2);
-    setFish(rich, hi, 3);
-    expect(firstCatch(rich, 600)).toBeGreaterThan(0);
-    expect(fishLeft(rich.g.board.hexes[lo])).toBe(2);
-    expect(fishLeft(rich.g.board.hexes[hi])).toBe(2);
-
-    const tie = makeGame();
-    putNet(tie, cornerOf(tie));
-    setFish(tie, lo, 2);
-    setFish(tie, hi, 2);
-    expect(firstCatch(tie, 600)).toBeGreaterThan(0);
-    expect(fishLeft(tie.g.board.hexes[lo])).toBe(1);
-    expect(fishLeft(tie.g.board.hexes[hi])).toBe(2);
+  it('the first catch takes a boost from the tile under the net, and none from a richer neighbour', () => {
+    const m = makeGame();
+    const [lo, hi] = seaHexIdsAt(m.g, m.reg, cornerOf(m));
+    putNet(m, lo);
+    setFish(m, lo, 2);
+    setFish(m, hi, 3);
+    expect(firstCatch(m, 600)).toBeGreaterThan(0);
+    expect(fishLeft(m.g.board.hexes[lo])).toBe(1);
+    expect(fishLeft(m.g.board.hexes[hi])).toBe(3);
   });
 
   it('an icon that ran out (0) gives no boost, and never draws from `g.rng`', () => {
     const m = makeGame();
-    const v = cornerOf(m);
-    putNet(m, v);
-    for (const id of seaHexIdsAt(m.g, m.reg, v)) setFish(m, id, 0);
+    const tile = seaHexIdsAt(m.g, m.reg, cornerOf(m))[0];
+    putNet(m, tile);
+    setFish(m, tile, 0);
     const bare = makeGame();
-    putNet(bare, v);
+    putNet(bare, tile);
     const rngBefore = m.g.rng.s;
     expect(firstCatch(m, 600)).toBe(firstCatch(bare, 600));
     expect(m.g.rng.s).toBe(rngBefore);
@@ -295,12 +286,12 @@ describe('T7d tide replenish', () => {
 });
 
 describe('T7e feed the sea', () => {
-  /** Player a has a net on the corner, 1 wheat, and it is their main phase. */
+  /** Player a has a net on the first of the two sea tiles at the corner (`sea[0]`; `sea[1]` has none), 1 wheat, and it is their main phase. */
   function ready(rules: Record<string, any> = on) {
     const m = makeGame(rules);
     const v = cornerOf(m);
-    putNet(m, v);
     const sea = seaHexIdsAt(m.g, m.reg, v);
+    putNet(m, sea[0]);
     player(m.g, 'a').resources.wheat = 1;
     return { ...m, v, sea, a: player(m.g, 'a') };
   }
@@ -317,23 +308,21 @@ describe('T7e feed the sea', () => {
     }
   });
 
-  it('lists the sea next to your own nets that is not full (no icon counts as empty)', () => {
+  it('lists the tile under your own net that is not full (no icon counts as empty), and never a neighbour', () => {
     const m = ready();
-    expect(netSeaHexIds(m.g, m.reg, 'a')).toEqual(m.sea);
+    expect(netSeaHexIds(m.g, m.reg, 'a')).toEqual([m.sea[0]]);
     expect(netSeaHexIds(m.g, m.reg, 'b')).toEqual([]);
-    expect(feedableHexIds(m.g, m.reg, 'a')).toEqual(m.sea);
+    expect(feedableHexIds(m.g, m.reg, 'a')).toEqual([m.sea[0]]);
+    setFish(m, m.sea[0], 0);
+    expect(feedableHexIds(m.g, m.reg, 'a')).toEqual([m.sea[0]]);
     setFish(m, m.sea[0], FISH_BOOSTS);
-    expect(feedableHexIds(m.g, m.reg, 'a')).toEqual([m.sea[1]]);
-    setFish(m, m.sea[1], 0);
-    expect(feedableHexIds(m.g, m.reg, 'a')).toEqual([m.sea[1]]);
-    setFish(m, m.sea[1], FISH_BOOSTS);
     expect(feedableHexIds(m.g, m.reg, 'a')).toEqual([]);
   });
 
-  it('leaves out fogged sea tiles', () => {
+  it('leaves out a fogged sea tile', () => {
     const m = ready();
     m.g.board.hexes[m.sea[0]].ext.hidden = true;
-    expect(netSeaHexIds(m.g, m.reg, 'a')).toEqual([m.sea[1]]);
+    expect(netSeaHexIds(m.g, m.reg, 'a')).toEqual([]);
   });
 
   it('fills an empty ground, takes the wheat into the bank and counts the feed', () => {
@@ -354,9 +343,9 @@ describe('T7e feed the sea', () => {
     expect(fishLeft(m.g.board.hexes[m.sea[0]])).toBe(FISH_BOOSTS);
 
     m.a.resources.wheat = 1;
-    setFish(m, m.sea[1], 1);
-    expect(feed(m, m.sea[1]).ok).toBe(true);
-    expect(fishLeft(m.g.board.hexes[m.sea[1]])).toBe(FISH_BOOSTS);
+    setFish(m, m.sea[0], 1);
+    expect(feed(m, m.sea[0]).ok).toBe(true);
+    expect(fishLeft(m.g.board.hexes[m.sea[0]])).toBe(FISH_BOOSTS);
   });
 
   it('refuses without the wheat, on a full ground, away from your nets, on land, and a refusal changes nothing', () => {
@@ -369,11 +358,16 @@ describe('T7e feed the sea', () => {
     expect(poor.error).toContain('WHEAT');
     m.a.resources.wheat = 1;
 
-    setFish(m, m.sea[1], FISH_BOOSTS);
-    const full = feed(m, m.sea[1]);
+    setFish(m, m.sea[0], FISH_BOOSTS);
+    const full = feed(m, m.sea[0]);
     expect(full.ok).toBe(false);
     expect(full.error).toContain('full');
+    setFish(m, m.sea[0], 1);
 
+    // The neighbouring tile at the same corner has no net on it, and the net fishes only its own tile.
+    const next = feed(m, m.sea[1]);
+    expect(next.ok).toBe(false);
+    expect(next.error).toContain('net');
     const far = ringIds(m).find(id => !m.sea.includes(id))!;
     expect(feed(m, far).ok).toBe(false);
     expect(feed(m, m.sea[0], 'b').ok).toBe(false);
@@ -392,8 +386,9 @@ describe('T7e feed the sea', () => {
     const m = ready();
     m.g.board.hexes[m.sea[0]].ext.river = true;
     expect(feed(m, m.sea[0]).ok).toBe(false);
-    m.g.board.hexes[m.sea[1]].ext.hidden = true;
-    expect(feed(m, m.sea[1]).ok).toBe(false);
+    delete m.g.board.hexes[m.sea[0]].ext.river;
+    m.g.board.hexes[m.sea[0]].ext.hidden = true;
+    expect(feed(m, m.sea[0]).ok).toBe(false);
   });
 
   it('is a main-phase action only', () => {
@@ -407,7 +402,7 @@ describe('T7e feed the sea', () => {
   it('is in the legal action list for each ground you could feed, and only when you can pay', () => {
     const m = ready();
     const hexIds = () => legalActions(m.g, m.reg, 'a').filter(x => x.type === FEED_SEA).map(x => x.payload.hexId).sort((a: number, b: number) => a - b);
-    expect(hexIds()).toEqual(m.sea);
+    expect(hexIds()).toEqual([m.sea[0]]);
     m.a.resources.wheat = 0;
     expect(hexIds()).toEqual([]);
   });
@@ -440,15 +435,15 @@ describe('what the client is sent', () => {
   it('feedSpotsView: undefined off your turn or outside the main phase, [] when you cannot pay or have no ground, the list otherwise', () => {
     const m = makeGame();
     const v = cornerOf(m);
-    putNet(m, v);
     const sea = seaHexIdsAt(m.g, m.reg, v);
+    putNet(m, sea[0]);
     const a = player(m.g, 'a');
     const b = player(m.g, 'b');
 
     a.resources.wheat = 0;
     expect(feedSpotsView(m.g, m.reg, a)).toEqual([]);
     a.resources.wheat = 1;
-    expect(feedSpotsView(m.g, m.reg, a)).toEqual(sea);
+    expect(feedSpotsView(m.g, m.reg, a)).toEqual([sea[0]]);
     expect(feedSpotsView(m.g, m.reg, b)).toBeUndefined();
 
     m.g.phase = 'roll';
@@ -467,8 +462,8 @@ describe('the bot', () => {
   function botReady(wheat: number, others: number) {
     const m = makeGame();
     const v = cornerOf(m);
-    putNet(m, v);
     const sea = seaHexIdsAt(m.g, m.reg, v);
+    putNet(m, sea[0]);
     const a = player(m.g, 'a');
     for (const r of Object.keys(a.resources)) a.resources[r] = 0;
     a.resources.wheat = wheat;

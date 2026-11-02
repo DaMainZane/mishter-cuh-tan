@@ -313,7 +313,7 @@ describe('T13c: Port and net placement in vertex scoring & bot goals', () => {
     expect(harborGoal!.priority).toBeGreaterThanOrEqual(80);
   });
 
-  it('scores net placement and feed_sea higher when multiple nets or Net Works are active', () => {
+  it('scores feed_sea by the ground under the net: an empty ground 12, no icon 10, boosts left 0', () => {
     const { g, reg } = makeTideboundGame(1307, { techTreeOn: true });
     const ctx = makeCtx(g, reg);
     for (const v of g.board.vertices) {
@@ -321,20 +321,21 @@ describe('T13c: Port and net placement in vertex scoring & bot goals', () => {
       v.port = null;
     }
 
+    // One net sits on one sea tile and fishes only that tile, so a tile can no longer hold two nets: the score depends on the ground itself.
     const seaHex = g.board.hexes.find(h => !reg.tiles.get(h.type)?.land && verticesOfHex(g, reg, h.id).length >= 2)!;
-    seaHex.ext = { ...seaHex.ext, fish: 0 };
-    const nonPortVs = verticesOfHex(g, reg, seaHex.id);
-    g.board.vertices[nonPortVs[0]].piece = { type: NET, owner: 'p1' };
+    seaHex.ext = { ...seaHex.ext, fish: 0, net: { owner: 'p1' } };
     grantTech(g, 'p1', TECH_HARBOR_MASTER);
     g.players[0].resources = { wood: 3, brick: 3, sheep: 4, wheat: 4, ore: 3 };
     grantWildToken(ctx, 'p1', FISH, 2);
 
-    const oneNetFeedScore = fishBotGoal.actionScore!(ctx, 'p1', { type: FEED_SEA, payload: { hexId: seaHex.id } });
-    expect(oneNetFeedScore).toBeGreaterThan(0);
+    const feedScore = () => fishBotGoal.actionScore!(ctx, 'p1', { type: FEED_SEA, payload: { hexId: seaHex.id } });
+    expect(feedScore()).toBe(12);
 
-    g.board.vertices[nonPortVs[1]].piece = { type: NET, owner: 'p1' };
-    const twoNetFeedScore = fishBotGoal.actionScore!(ctx, 'p1', { type: FEED_SEA, payload: { hexId: seaHex.id } });
-    expect(twoNetFeedScore).toBeGreaterThan(oneNetFeedScore);
+    delete seaHex.ext.fish;
+    expect(feedScore()).toBe(10);
+
+    seaHex.ext.fish = 2;
+    expect(feedScore()).toBe(0);
   });
 });
 
@@ -502,7 +503,7 @@ describe('T13f: Public-info-only Tidebound dialogue lines', () => {
       { action: 'roll', ev: { type: 'pirateRobbed', data: { id: 'pir1', hexId: 0, vertexId: 0, victimId: 'p1', amount: 2 } } },
       { action: 'drive_off_pirate', ev: { type: 'pirateDriven', data: { id: 'pir1', hexId: 0, playerId: 'p1', resource: 'brick', amount: 3 } } },
       { action: 'upgrade_harbor', ev: { type: 'portUpgraded', data: { playerId: 'p1', vertexId: 0, level: 2 } } },
-      { action: 'build', ev: { type: 'built', data: { playerId: 'p1', piece: 'net', loc: 0 } } },
+      { action: 'place_net', ev: { type: 'netPlaced', data: { playerId: 'p1', hexId: 0, doubleCost: false } } },
       { action: 'roll', ev: { type: 'pieceBroken', data: { target: 'edge', loc: 0, piece: 'rickety_bridge', ownerId: 'p1' } } },
       { action: 'roll', ev: { type: 'tideChanged', data: { round: 4, spring: false, risen: [landHex.id], fell: [] } } },
       { action: 'roll', ev: { type: 'risingSeaDrowned', data: { hexId: landHex.id, round: 5 } } }

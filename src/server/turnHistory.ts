@@ -413,6 +413,18 @@ export function recordTurnHistory(
         break;
       }
 
+      case 'netPlaced': {
+        turnSummary.actions.push({
+          category: 'build',
+          icon: 'net',
+          piece: 'net',
+          badge: 'Net',
+          text: d.doubleCost ? 'Placed Fishing Net (2× cost)' : 'Placed Fishing Net',
+          timestamp: now
+        });
+        break;
+      }
+
       case 'seaFed': {
         turnSummary.actions.push({
           category: 'produce',

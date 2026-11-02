@@ -478,12 +478,12 @@ export function toggleVictoryMapInspect(hide: boolean): void {
 export function setBuildMode(mode: string): void {
   const turningOn = buildMode !== mode;
   setBuildModeValue(turningOn ? mode : null);
-  // Net mode draws only the vertices the server listed, so say why when there is nothing to click.
+  // Net mode draws only the sea tiles the server listed, so say why when there is nothing to click.
   if (turningOn && mode === 'net' && state) {
     const me = state.players.find(p => p.id === socket.id);
     if (me && !(me.netsLeft ?? 0)) showToast('You have no nets left.');
     else if (me && !canClientAffordPiece(me, 'net')) showToast('Not enough resources for a net.');
-    else if (me && !me.netSpots?.length) showToast('A fishing net is a coastal tile modification: build a settlement or city on the coastal tile and connect a road or bridge first (not on a port).');
+    else if (me && !me.netSpots?.length) showToast('A net goes on a free sea tile that touches a coast corner next to your road or bridge: build one there first (a tile holds one net).');
   }
   // Feed mode draws only the sea tiles the server listed (next to one of your nets, not full).
   if (turningOn && mode === 'feed' && state) {

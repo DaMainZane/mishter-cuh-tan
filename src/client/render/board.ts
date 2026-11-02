@@ -2,7 +2,7 @@
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
-import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netMarkup, netTileMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, wreckMarkup, hexIconLayout } from '../icons';
+import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netTileMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, wreckMarkup, hexIconLayout } from '../icons';
 import {
   playTone,
   playPlaceRoadSound,
@@ -30,7 +30,7 @@ import { esc } from '../util';
 import { openBridgePicker } from './bridgepicker';
 import { renderPiratesMarkup } from './pirates';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
-import { netSeaTiles, portRaiseSpots } from '../pieceModel';
+import { portRaiseSpots } from '../pieceModel';
 
 const knownRoads = new Set<number>();
 const knownRoadPieces = new Map<number, { owner: string; pieceType: string }>();
@@ -38,6 +38,8 @@ const collapsingBridges = new Map<number, { owner: string; pieceType: string; st
 const COLLAPSE_ANIM_MS = 620;
 const knownBuildings = new Map<number, string>();
 const knownFogHexes = new Set<number>();
+// Sea tiles that already carry a net, so a new one plays its placing sound once.
+const knownNetTiles = new Set<number>();
 const knownWrecks = new Set<string>();
 const WRECK_ANIM_MS = 760;
 let knownRobberHexId: number | null = null;
@@ -421,6 +423,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     collapsingBridges.clear();
     knownBuildings.clear();
     knownFogHexes.clear();
+    knownNetTiles.clear();
     knownWrecks.clear();
     pieceAnimTimestamps.clear();
     roadAnalysisCache.clear();
@@ -522,7 +525,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
           if (v.building.type === 'city' && !playedCitySfx) {
             playedCitySfx = true;
             playPlaceCitySound();
-          } else if ((v.building.type === 'settlement' || v.building.type === 'net' || hasPlacedShape(v.building.type)) && !playedSettleSfx) {
+          } else if ((v.building.type === 'settlement' || hasPlacedShape(v.building.type)) && !playedSettleSfx) {
             playedSettleSfx = true;
             playPlaceSettlementSound();
           }
@@ -645,6 +648,20 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
         </g>`;
     }
   }
+  // Fishing nets: in net mode the sea tiles the server listed (`netSpots`, hex ids) are drawn as clickable tiles; a click puts the net on that tile.
+  const netSpotSet = isMyTurn && buildMode === 'net' && state.phase === 'MAIN' && me && (me.netsLeft ?? 0) > 0 && canClientAffordPiece(me, 'net')
+    ? new Set<number>(me.netSpots ?? [])
+    : null;
+  if (netSpotSet) {
+    for (const id of [...netSpotSet].sort((a, b) => a - b)) {
+      const geom = hexGeomCache.get(id);
+      if (!geom) continue;
+      hexDynHtml += `
+        <g onclick="clickNetSpot(${id})" style="cursor:pointer">
+          <polygon points="${geom.innerPoly}" style="fill:var(--accent);fill-opacity:0.16;stroke:var(--accent);stroke-width:3;stroke-dasharray:9 6;stroke-linejoin:round" />
+        </g>`;
+    }
+  }
   if (hexDynHtml !== lastHexDynamicHtml) {
     lastHexDynamicHtml = hexDynHtml;
     layers.hexDynamicLayer.innerHTML = hexDynHtml;
@@ -659,15 +676,24 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.overlayLayer.innerHTML = overlayHtml;
   }
 
-  // Fishing nets (fishing net bug): a net covers the sea tile(s) at its vertex, so it is drawn there, under the fish icons. A net with no tile to show on keeps its small vertex piece.
-  const netInfo = netSeaTiles(vertices, hexes);
-  const bareNetVertices = new Set<number>(netInfo.bare);
+  // Fishing nets: a net sits on one sea tile and fishes only that tile, so it is drawn over that tile, under the fish icons. The tiles are public (`netTiles` of every player).
   let netsHtml = '';
-  for (const t of netInfo.tiles) {
-    const h = hexes[t.hexId];
-    const netCol = state.players.find(p => p.id === t.owner)?.color || '#888';
-    netsHtml += netTileMarkup(h.id, h.corners, h.x, h.y, netCol);
+  let newNetTile = false;
+  const seenNetTiles = new Set<number>();
+  for (const p of state.players) {
+    for (const hexId of p.netTiles ?? []) {
+      const h = hexes[hexId];
+      if (!h || h.fog) continue;
+      seenNetTiles.add(hexId);
+      if (!knownNetTiles.has(hexId)) {
+        knownNetTiles.add(hexId);
+        newNetTile = true;
+      }
+      netsHtml += netTileMarkup(h.id, h.corners, h.x, h.y, p.color || '#888');
+    }
   }
+  for (const id of [...knownNetTiles]) if (!seenNetTiles.has(id)) knownNetTiles.delete(id);
+  if (newNetTile && state.status !== 'LOBBY') playPlaceSettlementSound();
   if (netsHtml !== lastNetsHtml) {
     lastNetsHtml = netsHtml;
     layers.netsLayer.innerHTML = netsHtml;
@@ -1033,10 +1059,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   const robberVictimSet = new Set<string>(state.robberVictims || []);
   let verticesHtml = '';
   const canAffordCity = me ? canClientAffordPiece(me, 'city') : false;
-  // Fishing nets (T7b2): in net mode the server's list of legal vertices is drawn instead of the settlement spots.
-  const netSpotSet = isMyTurn && buildMode === 'net' && state.phase === 'MAIN' && me && (me.netsLeft ?? 0) > 0 && canClientAffordPiece(me, 'net')
-    ? new Set<number>(me.netSpots ?? [])
-    : null;
   // Harbors (T8a): in harbor mode the player's upgradable port cities get a clickable upgrade ring.
   const harborSpotSet = isMyTurn && buildMode === 'harbor' && state.phase === 'MAIN' && me && canClientAffordHarbor(me)
     ? new Set<number>(me.harborSpots ?? [])
@@ -1046,8 +1068,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     ? new Set<number>(portRaiseSpots(state.techActions?.harbor, true).filter(s => s.affordable).map(s => s.vertexId))
     : null;
   for (const v of vertices) {
-    // A net that shows on a sea tile (nets layer) is not drawn on its vertex.
-    if (v.building?.type === 'net' && !bareNetVertices.has(v.id)) continue;
     if (v.building) {
       const owner = state.players.find(p => p.id === v.building.owner);
       const col = owner?.color || '#888';
@@ -1057,7 +1077,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const canRobThisBuilding = isMyTurn && state.phase === 'ROBBER_STEAL' &&
         v.hexIds.includes(robberHexId) && robberVictimSet.has(v.building.owner);
       const isCity = v.building.type === 'city';
-      const isNet = v.building.type === 'net';
       const canHarbor = isCity && Boolean(harborSpotSet?.has(v.id));
       const canRaise = !canHarbor && !canUpgrade && Boolean(raiseSet?.has(v.id));
       const isClickable = canUpgrade || canRobThisBuilding || canHarbor;
@@ -1079,21 +1098,14 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
             ${canRobThisBuilding ? `<circle r="${ringR}" class="target-ring rob" />` : ''}
             ${((!isCity && canUpgrade) || canHarbor || canRaise) && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade" />` : ''}
             <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
-              ${placedVertexMarkup(v.building.type, col) ?? (isCity ? cityMarkup(col) : isNet ? netMarkup(col) : settlementMarkup(col))}
+              ${placedVertexMarkup(v.building.type, col) ?? (isCity ? cityMarkup(col) : settlementMarkup(col))}
             </g>
           </g>
         </g>
       `;
     } else if (isMyTurn && (buildMode === 'net' || buildMode === 'feed' || buildMode === 'harbor' || isPieceMode(buildMode))) {
-      // Net mode: only the vertices the server listed, and no settlement spots (a net spot can also be a settlement spot). Feed/harbor mode draw no empty-vertex spots.
-      if (netSpotSet?.has(v.id)) {
-        verticesHtml += `
-        <g onclick="clickNetSpot(${v.id})" style="cursor:pointer">
-          <circle cx="${v.x}" cy="${v.y}" r="20" fill="transparent" />
-          <g transform="translate(${v.x}, ${v.y})"><g class="building-zoom-scale"><path class="net-spot" d="M0,-12 L10,-1 L0,10 L-10,-1 Z" /></g></g>
-        </g>
-      `;
-      }
+      // Net, feed and harbor mode draw no empty-vertex spots: a net and the feed pick sea tiles (drawn on the hex layer), so no settlement spots here either.
+      continue;
     } else if (isMyTurn && canClientPlaceSettlement(v, me)) {
       verticesHtml += `
         <g onclick="clickVertex(${v.id})" style="cursor:pointer">
@@ -1348,6 +1360,8 @@ const CLIENT_BASE_PIECE_LIMITS: Record<ClientPieceKey, number> = {
 
 export function countClientActivePieces(ownerId: string, piece: ClientPieceKey): number {
   if (!state?.board) return 0;
+  // A net sits on a sea tile, so it is counted from the tiles the server lists for that player (public `netTiles`), not from vertex pieces.
+  if (piece === 'net') return state.players?.find(p => p.id === ownerId)?.netTiles?.length ?? 0;
   // Bridges and rickety bridges share one pool (and one 2x threshold), so each counts both kinds.
   const pool = piece === 'bridge' || piece === 'rickety_bridge';
   if (piece === 'road' || pool) {
@@ -1369,14 +1383,7 @@ export function countClientActivePieces(ownerId: string, piece: ClientPieceKey):
 
 export function isClientPieceDoubleCost(piece: ClientPieceKey, ownerId: string = socket.id || ''): boolean {
   if (!ownerId || !state?.board) return false;
-  if (piece === 'net') {
-    // The net supply scales with the board and the VP target, so the fixed 4 above is only a fallback: trust the price the server sent.
-    const sent = state.players?.find(p => p.id === ownerId)?.pieceCosts?.net;
-    if (sent) {
-      const total = (c: Record<string, number>) => Object.values(c).reduce((a, n) => a + (Number(n) || 0), 0);
-      return total(sent) >= 2 * total(CLIENT_BASE_PIECE_COSTS.net);
-    }
-  }
+  // For a net the 2x price starts at 4 placed nets on every board (the server's NET_BASE_LIMIT); only the supply scales with the board.
   return countClientActivePieces(ownerId, piece) >= CLIENT_BASE_PIECE_LIMITS[piece];
 }
 
@@ -1391,7 +1398,8 @@ const CLIENT_BASE_PIECE_COSTS: Record<ClientPieceKey, Record<string, number>> = 
 
 export function getClientPieceCost(piece: ClientPieceKey, ownerId: string = socket.id || ''): Record<string, number> {
   const player = state?.players?.find(p => p.id === ownerId);
-  const srvCost = player?.pieceCosts?.[piece];
+  // A net is a tile action, so its price comes as `netCost`; every other piece is in `pieceCosts`.
+  const srvCost = piece === 'net' ? player?.netCost : player?.pieceCosts?.[piece];
   if (srvCost && typeof srvCost === 'object') return srvCost;
   const mult = isClientPieceDoubleCost(piece, ownerId) ? 2 : 1;
   const base = CLIENT_BASE_PIECE_COSTS[piece];
@@ -1484,10 +1492,11 @@ export function clickVertex(vertexId: number): void {
   socket.emit('clickVertex', { code: state.code, vertexId });
 }
 
-/** Tidebound T7b2: build a fishing net on this vertex (only offered in net mode, from the server's list of legal vertices). */
-export function clickNetSpot(vertexId: number): void {
+/** Tidebound T7b1: put a fishing net on this sea tile (only offered in net mode, from the server's list of legal tiles). */
+export function clickNetSpot(hexId: number): void {
   setBuildModeValue(null);
-  socket.emit('place', { code: state.code, piece: 'net', loc: vertexId });
+  playTone(640, 0.08);
+  socket.emit('act', { code: state.code, type: 'place_net', payload: { hexId } });
 }
 
 /** Tidebound T7e: pay to fill the fishing ground on this sea tile (only offered in feed mode, from the server's list of tiles next to your nets). */

@@ -375,8 +375,9 @@ function nodeHtml(p: Placed, canAct: boolean, hand: Resources | undefined): stri
         ? 'Research on your turn'
         : r.reason || 'Not available yet';
   const click = mode === 'can' ? `onclick="researchTechClick('${esc(r.id)}')"` : '';
+  // Net rework: the server text (`tech.ts`) still says "coastal corners", so this node shows the one-tile rule instead of the server text.
   const descText = r.id === 'tidebound.fishing_nets'
-    ? `${r.description} (Requires a Settlement or City first, connected by road/bridge; acts as a coastal tile modification.)`
+    ? 'Unlocks Fishing Nets: put a net on one free sea tile next to your coast road or bridge. It fishes only that tile and catches fish tokens on dice rolls. Also lets your Settlements on 3:1 ports be raised to 2:1.'
     : r.description;
   return `
     <div class="tp-node st-${mode}" style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;--bc:var(${tile})" tabindex="0" role="button"

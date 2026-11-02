@@ -32,8 +32,12 @@ export interface PlayerView {
   bridgesLeft?: number;
   /** Fishing nets left in your supply (Tidebound). Undefined unless nets are in the game. */
   netsLeft?: number;
-  /** Vertices where you could put a net right now. Only sent to you, on your main-phase turn, and only when nets are in the game. */
+  /** Sea tile ids (hex ids) where you could put a net right now. Only sent to you, on your main-phase turn, and only when nets are in the game. */
   netSpots?: number[];
+  /** Sea tile ids that carry this player's nets (a net sits on one tile and fishes only that tile). Public; undefined when none are placed. */
+  netTiles?: number[];
+  /** Your price for the next net, with the 2x above 4 nets and Net works already applied (a net is a tile action, not in `pieceCosts`). Only sent to you, and only when nets are unlocked. */
+  netCost?: Resources;
   /** Your price to feed the sea (Tidebound T7e). Only sent to you, and only when feeding is in the game. */
   feedCost?: Resources;
   /** Sea tile ids you could feed right now (next to a net of yours, not full). Only sent to you on your main-phase turn; `[]` when you cannot pay. */

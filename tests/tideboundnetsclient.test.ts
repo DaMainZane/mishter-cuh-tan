@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { allPacks } from '../src/packs';
 import {
-  NET,
   NET_BOT_MAX,
+  PLACE_NET,
   canPlaceNet,
+  isSeaHex,
   netBotGoal,
+  netLimit,
+  netSpotHexIds,
   netSpotsView,
+  netViewData,
+  netsOf,
   seaHexIdsAt
 } from '../src/packs/tidebound/fishing';
 import { chooseBotAction } from '../src/server/bots/brain';
@@ -19,9 +24,9 @@ import {
   registryFor
 } from '../src/shared';
 
-// T7b2: what the client needs for fishing nets. The server lists the vertices a net could go on (`netSpotsView`, sent as `netSpots` to the
-// player whose main-phase turn it is), a net never goes on a port vertex (`ratioFor` gives a port to ANY piece on it, so a cheap net there would
-// be a port without a settlement), and a bot builds a few nets as a side build (`netBotGoal`).
+// T7b2 (net rework): what the client needs for fishing nets. The server lists the sea TILES a net could go on (`netSpotsView`, sent as `netSpots`
+// to the player whose main-phase turn it is), the tiles that carry a player's nets are public (`netTiles`), a net takes no vertex (so a port
+// vertex no longer blocks it), and a bot builds a few nets as a side build (`netBotGoal`, action `place_net`).
 
 const on = { dlc: { tidebound: true } };
 const fishOff = { dlc: { tidebound: true }, addons: { 'tidebound.fishing': false } };
@@ -68,8 +73,8 @@ const player = (g: M['g'], id: string) => g.players.find(p => p.id === id)!;
 
 /** Ids of the vertices that touch land and sea, ascending. */
 const coastIds = (m: M): number[] => m.g.board.vertices.filter(v => v.hexIds.length > 0 && seaHexIdsAt(m.g, m.reg, v.id).length > 0).map(v => v.id);
-/** Ids of the vertices with only land around them. */
-const inlandIds = (m: M): number[] => m.g.board.vertices.filter(v => v.hexIds.length === 3 && seaHexIdsAt(m.g, m.reg, v.id).length === 0).map(v => v.id);
+/** Ids of every open sea tile, ascending. */
+const seaIds = (m: M): number[] => m.g.board.hexes.filter(h => isSeaHex(m.reg, h)).map(h => h.id);
 
 /** Puts a road of `owner` on a land edge at this vertex. */
 function giveRoadAt(g: M['g'], vertexId: number, owner: string): number {
@@ -79,37 +84,48 @@ function giveRoadAt(g: M['g'], vertexId: number, owner: string): number {
   return edgeId;
 }
 
-describe('no net on a port vertex', () => {
-  it('refuses a port vertex even with a road next to it, and accepts it again without the port', () => {
+describe('no net on a vertex, so a port vertex does not block', () => {
+  it('still offers the tiles at a port vertex next to your road', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
+    const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
     giveRoadAt(m.g, coast, 'a');
-    expect(canPlaceNet(m.ctx, 'a', coast, 'build')).toBe(true);
+    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
 
     m.g.board.vertices[coast].port = '3:1';
-    expect(canPlaceNet(m.ctx, 'a', coast, 'build')).toBe(false);
-    expect(netSpotsView(m.g, m.reg, player(m.g, 'a'))).not.toContain(coast);
-
-    m.g.board.vertices[coast].port = null;
-    expect(canPlaceNet(m.ctx, 'a', coast, 'build')).toBe(true);
+    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
+    expect(netSpotsView(m.g, m.reg, player(m.g, 'a'))).toContain(tile);
   });
 });
 
-describe('netSpotsView (the client build spots)', () => {
-  it('lists the vertices canPlaceNet accepts for this player: coast next to your own road, never inland', () => {
+describe('netSpotsView (the client build spots, hex ids)', () => {
+  it('lists the tiles canPlaceNet accepts for this player, all open sea', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
     giveRoadAt(m.g, coast, 'a');
     const spots = netSpotsView(m.g, m.reg, player(m.g, 'a'))!;
-    expect(spots).toContain(coast);
-    for (const id of spots) expect(canPlaceNet(m.ctx, 'a', id, 'build')).toBe(true);
-    for (const id of inlandIds(m)) expect(spots).not.toContain(id);
-    // The same set the build action offers once the price is paid.
+    expect(spots.length).toBeGreaterThan(0);
+    for (const id of seaHexIdsAt(m.g, m.reg, coast)) expect(spots).toContain(id);
+    for (const id of spots) {
+      expect(canPlaceNet(m.ctx, 'a', id, 'build')).toBe(true);
+      expect(isSeaHex(m.reg, m.g.board.hexes[id])).toBe(true);
+    }
+    expect(spots).toEqual(netSpotHexIds(m.ctx, 'a'));
+    // The same set the place_net action offers once the price is paid.
     const a = player(m.g, 'a');
     a.resources.wood = 2;
     a.resources.sheep = 1;
-    const legal = legalActions(m.g, m.reg, 'a').filter(x => x.type === 'build' && x.payload.piece === NET).map(x => x.payload.loc);
+    const legal = legalActions(m.g, m.reg, 'a').filter(x => x.type === PLACE_NET).map(x => x.payload.hexId);
     expect([...legal].sort((x, y) => x - y)).toEqual([...spots].sort((x, y) => x - y));
+  });
+
+  it('leaves out a tile that already carries a net', () => {
+    const m = makeGame();
+    const coast = coastIds(m)[0];
+    giveRoadAt(m.g, coast, 'a');
+    const taken = seaHexIdsAt(m.g, m.reg, coast)[0];
+    m.g.board.hexes[taken].ext.net = { owner: 'b' };
+    expect(netSpotsView(m.g, m.reg, player(m.g, 'a'))).not.toContain(taken);
   });
 
   it('is empty with no road of yours next to the coast (another player\'s road does not count)', () => {
@@ -137,8 +153,48 @@ describe('netSpotsView (the client build spots)', () => {
   it('is empty when the supply of nets is used up', () => {
     const m = makeGame();
     giveRoadAt(m.g, coastIds(m)[0], 'a');
-    player(m.g, 'a').pieces[NET] = 0;
+    const tiles = seaIds(m);
+    const far = tiles.slice(-netLimit(m.g));
+    expect(far).toHaveLength(netLimit(m.g));
+    for (const id of far) m.g.board.hexes[id].ext.net = { owner: 'a' };
     expect(netSpotsView(m.g, m.reg, player(m.g, 'a'))).toEqual([]);
+  });
+});
+
+describe('netViewData (per-player view fields)', () => {
+  const view = (m: M, pid: string, self: boolean) => netViewData.player!(m.g, m.reg, player(m.g, pid), { self } as any) as Record<string, unknown>;
+
+  it('sends netTiles for every viewer, the supply once unlocked, and netSpots and netCost only to yourself', () => {
+    const m = makeGame();
+    const tiles = seaIds(m);
+    m.g.board.hexes[tiles[0]].ext.net = { owner: 'a' };
+    m.g.board.hexes[tiles[1]].ext.net = { owner: 'a' };
+    giveRoadAt(m.g, coastIds(m)[0], 'a');
+
+    const mine = view(m, 'a', true);
+    expect(mine.netTiles).toEqual(netsOf(m.g, 'a'));
+    expect(mine.netsLeft).toBe(netLimit(m.g) - 2);
+    expect(Array.isArray(mine.netSpots)).toBe(true);
+    // The price of the next net: the client reads it for the button, the recipe popup and the afford check (a net is no longer in `pieceCosts`).
+    expect(mine.netCost).toEqual({ wood: 2, sheep: 1 });
+
+    const seen = view(m, 'a', false);
+    expect(seen.netTiles).toEqual([tiles[0], tiles[1]]);
+    expect(seen.netSpots).toBeUndefined();
+    expect(seen.netCost).toBeUndefined();
+
+    expect(view(m, 'b', true).netTiles).toBeUndefined();
+  });
+
+  it('sends nothing when nets are not in the game', () => {
+    for (const rules of [{}, { dlc: { tidebound: false } }, fishOff]) {
+      const m = makeGame(rules);
+      const v = view(m, 'a', true);
+      expect(v.netTiles).toBeUndefined();
+      expect(v.netsLeft).toBeUndefined();
+      expect(v.netSpots).toBeUndefined();
+      expect(v.netCost).toBeUndefined();
+    }
   });
 });
 
@@ -158,21 +214,19 @@ describe('net bot goal', () => {
     }
   });
 
-  it('offers a net build at a legal vertex when the hand has the price and 2 cards to spare', () => {
+  it('offers a net on a legal tile when the hand has the price and 2 cards to spare', () => {
     const m = makeGame();
-    const coast = coastIds(m)[0];
-    giveRoadAt(m.g, coast, 'a');
+    giveRoadAt(m.g, coastIds(m)[0], 'a');
     richBot(m);
     const goals = netBotGoal.goals!(m.ctx, 'a');
     expect(goals).toHaveLength(1);
     const act = goals[0].action!;
-    expect(act.type).toBe('build');
-    expect(act.payload.piece).toBe(NET);
-    expect(canPlaceNet(m.ctx, 'a', act.payload.loc, 'build')).toBe(true);
+    expect(act.type).toBe(PLACE_NET);
+    expect(canPlaceNet(m.ctx, 'a', act.payload.hexId, 'build')).toBe(true);
     expect(goals[0].cost).toEqual({ wood: 2, sheep: 1 });
   });
 
-  it('offers nothing with just the price, without a spot, without supply or at the bot limit', () => {
+  it('offers nothing with just the price, without a spot or at the bot limit', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
     const a = richBot(m);
@@ -185,17 +239,14 @@ describe('net bot goal', () => {
     richBot(m);
     expect(netBotGoal.goals!(m.ctx, 'a')).toHaveLength(1);
 
-    a.pieces[NET] = 0;
-    expect(netBotGoal.goals!(m.ctx, 'a')).toEqual([]);
-    a.pieces[NET] = 4;
-
-    const others = coastIds(m).filter(id => id !== coast).slice(0, NET_BOT_MAX);
+    const spots = netSpotHexIds(m.ctx, 'a');
+    const others = seaIds(m).filter(id => !spots.includes(id)).slice(0, NET_BOT_MAX);
     expect(others).toHaveLength(NET_BOT_MAX);
-    for (const id of others) m.g.board.vertices[id].piece = { type: NET, owner: 'a' };
+    for (const id of others) m.g.board.hexes[id].ext.net = { owner: 'a' };
     expect(netBotGoal.goals!(m.ctx, 'a')).toEqual([]);
   });
 
-  it('prefers a vertex next to a sea tile with a fish icon', () => {
+  it('prefers a tile that holds a fish icon', () => {
     const m = makeGame();
     const ids = coastIds(m);
     const first = ids[0];
@@ -213,18 +264,16 @@ describe('net bot goal', () => {
     m.g.board.hexes[fishHex!].ext.fish = 4;
     richBot(m);
 
-    const loc = netBotGoal.goals!(m.ctx, 'a')[0].action!.payload.loc;
-    expect(seaHexIdsAt(m.g, m.reg, loc)).toContain(fishHex);
+    expect(netBotGoal.goals!(m.ctx, 'a')[0].action!.payload.hexId).toBe(fishHex);
   });
 
-  it('the brain really builds the net (nothing better to do, a few cards to spare)', () => {
+  it('the brain really places the net (nothing better to do, a few cards to spare)', () => {
     const m = makeGame();
     giveRoadAt(m.g, coastIds(m)[0], 'a');
     richBot(m);
     const move = chooseBotAction(m.g, m.reg, 'a', () => 0.5);
     expect(move).not.toBeNull();
-    expect(move!.type).toBe('build');
-    expect(move!.payload.piece).toBe(NET);
-    expect(canPlaceNet(m.ctx, 'a', move!.payload.loc, 'build')).toBe(true);
+    expect(move!.type).toBe(PLACE_NET);
+    expect(canPlaceNet(m.ctx, 'a', move!.payload.hexId, 'build')).toBe(true);
   });
 });

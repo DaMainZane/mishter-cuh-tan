@@ -175,7 +175,7 @@ export function renderAll(): void {
   }
   // Tidebound Fishing (T7b2): the Net button. Shown while the server sends a net price (nets are in the game), or in the lobby while the addon is on.
   const netsEnabled = Boolean(
-    badgeTarget?.pieceCosts?.net !== undefined ||
+    badgeTarget?.netCost !== undefined ||
     (s.dlc?.tidebound && s.addons?.['tidebound.fishing'] !== false)
   );
   const netBtn = document.getElementById('btnBuildNet') as HTMLButtonElement | null;
