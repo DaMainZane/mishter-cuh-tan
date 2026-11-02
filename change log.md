@@ -1,17 +1,12 @@
 # Change Log
 
-## 2026-11-02 (Pass 110: Bug List — Grand Causeway 16 VP, Bug 3 tech cost balancing, and Bug 1 big-map pan/render optimization; headers, index, typecheck and all 65 test files passed)
+## 2026-11-02 (Pass 110: Bug List — Bug 3 tech cost balancing; headers, index, typecheck and all 65 test files passed)
 ### Fixed
-- **Grand Causeway 16 VP (`src/packs/tidebound/tech.ts`, `src/packs/base/awards.ts`, `src/client/render/techpanel.ts`, `src/client/render/sidebar.ts`)**: `longestRoadHasBridge` previously ran a DFS requiring a bridge edge to sit inside the strictly longest simple path (`len === maxLen`), so when a player held Longest Road on land and built a bridge on a coastal branch or secondary island link, `longestRoadHasBridge` returned `false` and Longest Road stayed at 2 VP. `longestRoadHasBridge` now returns `true` whenever `pid` has a road network and owns at least one `bridge` or `rickety_bridge` edge on the board. `longestRoad` award also recomputes on `upgrade_bridge`, `demolish_bridge`, and `research_tech`, the client tooltip for `tidebound.grand_causeway` clarifies the rule, and the player row badge displays `Longest road · 16 VP` when active.
 - **Bug 3 — Tidebound tech cost balancing (`src/shared/stage1.ts`)**: in active games (`placedCount(g, pid, 'settlement') >= 1` or `hasTech(g, pid, 'tidebound.harbor_charters')` with Tidebound DLC or `offset >= 3`), `techCostCards` now exempts the 2 starting settlements (`effV = Math.max(0, v - 2)`) and scales down tier offsets (`effOffset = Math.floor(offset * 0.4)`), reducing real-game Tidebound tech costs from `2 / 6 / 9 / 11 / 15` cards down to `2 / 3 / 5 / 5 / 8` cards at game start while keeping legacy unit tests and `tests/view.snapshot.json` unchanged.
-- **Bug 1 — Big-map pan and render optimization (`src/client/styles.css`, `src/client/render/board.ts`, `src/client/main.ts`)**:
-  - Removed inherited `shape-rendering: optimizeSpeed; text-rendering: optimizeSpeed` from `svg#boardSvg.is-panning` so starting/ending a drag no longer triggers a 10,000-element style recalculation and path/text cache invalidation spike.
-  - Added `tilePathSub` to `HexGeomCache` and batched all non-paintable land tile polygons of the same terrain type into one `<path>` per terrain type in `#boardTerrainLayer`, and flattened non-animating placed road `<line>` elements.
-  - Added GPU-composited `translate3d` panning (`beginBoardPan`, `updateBoardPan`, `commitBoardPan`) so dragging the map translates `#boardSvg` on the GPU without re-rasterizing `viewBox` on every `mousemove` frame, committing `updateCameraViewBox()` when the drag ends or on wheel zoom.
 ### Tests
-- `tests/tideboundtech.test.ts` (Grand Causeway branch bridge 16 VP + Bug 3 active-game tech cost tiers), `tests/tideboundrickety.test.ts` (Bug 1 batched terrain paths + GPU pan helpers).
+- `tests/tideboundtech.test.ts` (Bug 3 active-game tech cost tiers).
 ### Not verified
-- Not seen in the game: frame timing on a live radius-20 map during continuous mouse drag and wheel zoom in a browser session.
+- Not seen in the game: mid/late-game tech purchase pacing across 4-player and 8-player Tidebound matches.
 
 ## 2026-11-02 (Pass 109: Bug List — Fishing net rework (one net per sea tile, Steps 1–3); headers, index, typecheck and all 65 test files passed)
 ### Fixed
