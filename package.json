@@ -18,7 +18,9 @@
     "index": "node scripts/index.mjs",
     "index:check": "node scripts/index.mjs --check",
     "addons": "node scripts/addons.mjs",
-    "addons:check": "node scripts/addons.mjs --check"
+    "addons:check": "node scripts/addons.mjs --check",
+    "mindmap": "node scripts/mindmap.mjs",
+    "mindmap:check": "node scripts/mindmap.mjs --check"
   },
   "dependencies": {
     "express": "^4.19.2",

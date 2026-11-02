@@ -16,6 +16,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `data/bot_training_logs.jsonl` | Bot training data written by `bots/trainingLog.ts` |
 | `data/bots/_schema.md` | S0.15 cross-game bot memory & player profile JSON schema, caps, and Render portable code spec |
 | `scripts/addons.mjs` | Addon list generator (`npm run addons`; `npm run addons:check` fails if stale). Scans `src/packs/<dlc>/*.ts` for exported `AddonDef` objects, validates pack prefixes, missing deps and cycles, and writes `src/packs/<dlc>/addons.generated.ts` in deterministic dependency order |
+| `scripts/mindmap.mjs` | Concept-map check. Compares the `owns` blocks of `ARCHITECTURE.md` with the `src/` rows of this file (`npm run mindmap`; `npm run mindmap:check` fails when a file is unowned, claimed twice or gone) |
 | `scripts/index.mjs` | Index tool. Rewrites the `src/` tables in this file from the `// MODULE:` descriptions (`npm run index`; `npm run index:check` fails if they are stale). Sections and headings are listed in `SECTIONS` at the top of the script |
 | `scripts/headers.mjs` | Header tool. Every `src/**/*.ts` file starts with `// MODULE: what \| DEPENDS ON: a, b \| USED BY: c, d`. You write only the text; the two lists are computed from imports. `npm run headers` reports, `headers:write` fixes, `headers:check` is the CI form (`-- --strict` also fails on stale lists) |
 
@@ -32,6 +33,8 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `Bot Dialogue Design.md`   | Bot chat design                                    |
 | `Design UI Philosophy.md`  | Visual direction and design tokens                 |
 | `Tech Tree Design.md`      | Locked spec for the 5 root techs, per-player building-value cost formula, and per-tech hooks |
+| `ARCHITECTURE.md` | Concept map: tile, world generation, engine, packs, views, server, bots, client, and which `src/` files belong to each (checked against this file by `npm run mindmap:check`) |
+| `Spot Actions Rework.md` | Plan to move ground work, harbor upgrade and feed the sea (and nets) onto the generic spot and `act` path: findings, steps, tests |
 | `ROUTER.md` | One page: task kind to the files to open and the file to copy as a pattern (read this first before changing code) |
 | `EXTENSION POINTS.md` | One line per `PackApi` method, hook and keyed registry (`COST_MODS`, `BOT_GOALS`, `SEVEN_STEPS`, ...) with signatures and defining files |
 | `BUGS/Bug Report Template.md` | The 5-field bug report to paste to the AI (what I saw, expected, actual, repro), the AI's triage rules and its fix-report shape |

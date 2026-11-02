@@ -20,7 +20,7 @@ Content is data: an addon registers it through `PackApi` (see `EXTENSION POINTS.
 | Event card, seven step, discard limit, tile state, wild token, cost or ratio modifier | `api.define(<constant>, def)`; file and def shape per constant in `EXTENSION POINTS.md` | `stormEventCard` in `tidebound/wrecks.ts` (event card); `ricketyCollapseStep` in `tidebound/ricketyBridges.ts` (seven step) |
 | Map generation (shape, terrain, numbers, ports) | `shared/mapgen.ts` (entry `generateMap`), then the stage file: `mapshape.ts`, `mapcells.ts`, `mapterrain.ts`, `numbers.ts`, `mapcheck.ts`; recipe and share code: `maprecipe.ts`; base options: `packs/base/map/*` | `tests/mapgen.test.ts` |
 | Engine rule (turn flow, build, trade, robber, awards) | Base pack: `packs/base/*` and `packs/base/actions/*`; engine loop: `shared/engine.ts`, `shared/state.ts` | `tests/rules.test.ts` |
-| Docs and bookkeeping | After any chunk: `INDEX.md` (`npm run index`), `change log.md` | |
+| Docs and bookkeeping | After any chunk: `INDEX.md` (`npm run index`), `ARCHITECTURE.md` (`npm run mindmap:check`: a new, moved or deleted `src/` file must be owned by a domain in its `owns` blocks), `change log.md` | |
 
 ## Glue names
 

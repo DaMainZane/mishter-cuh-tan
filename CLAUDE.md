@@ -4,7 +4,7 @@ Instructions for Claude Code (and any other agent) working in this repo. Keep th
 
 ## Before you change code
 
-1. Read `ROUTER.md` first. It maps a kind of task to the files to open and one file to copy as a pattern.
+1. Read `ROUTER.md` first. It maps a kind of task to the files to open and one file to copy as a pattern. If you do not know which part of the game a change belongs to, read `ARCHITECTURE.md` (the concept map: tile, world generation, engine, packs, views, server, bots, client) before `ROUTER.md`.
 2. Then `EXTENSION POINTS.md` (registration calls, hooks, keyed registries) and `RECIPES.md` (step-by-step for a new piece, action, addon, tech node, client overlay).
 3. Do not read whole folders or whole large files. Search for a symbol (`grep`, your editor's search) and open only the file that holds it. `INDEX.md` has one line per file.
 4. For Tidebound feature work read `change log.md` and `Development Plan.md` (the chunk list T0 to T14).
@@ -36,6 +36,7 @@ The report follows `BUGS/Bug Report Template.md` (Saw, Expected, Actual, Before 
 ```
 npm run headers:write
 npm run index
+npm run mindmap:check
 npm run typecheck
 npm test
 ```
