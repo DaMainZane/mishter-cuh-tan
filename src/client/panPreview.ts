@@ -1,4 +1,4 @@
-// MODULE: drag-pan preview math (BUG 1: how much board lies off-screen at the last repaint, and whether a CSS-translated board would now show a gap, so it must repaint)
+// MODULE: drag-pan preview math (BUG 1: how much board lies off-screen at the last repaint, and whether a CSS-translated board would now show a gap, so it must repaint) | DEPENDS ON: none | USED BY: client/render/board
 
 // While dragging, `board.ts` moves the painted board as one layer (a CSS translate) instead of rewriting the viewBox, which repaints every SVG node.
 // That is exact for everything that was on screen at the last repaint. Board that was off-screen then was never painted, so dragging it into view

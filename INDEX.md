@@ -203,6 +203,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `logFilter.ts` | live log filter matching (pure: splits a filter key and decides whether a turn action matches it) |
 | `main.ts` | client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) |
 | `mapmenu.ts` | lobby map menu (summary line, option dropdown drawn from the server's option list, seed line, report, quick start chips) |
+| `panPreview.ts` | drag-pan preview math (BUG 1: how much board lies off-screen at the last repaint, and whether a CSS-translated board would now show a gap, so it must repaint) |
 | `pieceModel.ts` | generic piece UI model (R8.7: pure functions that turn the visual manifest and a player's `pieces[id]` data into buttons, badges, hints, recipe strips with their stacked cost cards, spots and shapes; no DOM, no socket, no store) |
 | `pieceui.ts` | generic piece UI (R8.7: draws the build-bar buttons, the spot layer and the placed shapes of manifest pieces and actions, shows their hints and sends their clicks; the logic is in client/pieceModel) |
 | `pirateIcon.ts` | Pirate icon: a sail with a head glyph, picked by a hash of the pirate id; pure markup, no game state |
@@ -299,3 +300,4 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `pirateicon.test.ts` | Pirate icon (`client/pirateIcon.ts`, Bug 6): same id gives the same look, the head only from the head list, every head gets used, the sail plus exactly one unmirrored glyph, no black background square, size about 1.5x the old ship, and the board layer (`renderPiratesMarkup`) drawing the new icon, keeping the strength badge and ringing the bigger badge |
 | `buildMenu.test.ts` | Build menu (`client/buildMenu.ts`, BUG 5): which pieces a corner or edge offers (settlement, city, harbor, port raise, road, bridge, rickety bridge, manifest entries) by position only, unaffordable ones listed but not payable, free roads, cost tooltip dimming and Free, 150 ms hover and long-press delay, popover placement on screen |
 | `fishSpend.test.ts` | Spending a stack of fish at once (`client/fishSpend.ts`): one pick per fish, limited by the bank, add and remove picks, the list sent as `spend_fish` |
+| `panPreview.test.ts` | Drag-pan layer preview (`client/panPreview.ts`, BUG 1): off-screen board edges in pixels (`hiddenEdges`), unpainted strip width when translated (`missingAfterOffset`), and mid-drag repaint threshold (`needsRepaint`, never repaints when the whole board fits) |

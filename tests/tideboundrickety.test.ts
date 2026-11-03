@@ -674,10 +674,11 @@ describe('Tidebound Bug 13 & Bug 14: bridge Edge SVG markup (sturdy vs rickety w
     expect(ricketySvg).not.toBe(bridgeSvg);
   });
 
-  it('avoids universal .is-panning * selector and scopes scale CSS properties to vertex/road layers for big-map performance (Bug 14)', () => {
+  it('avoids .is-panning on #boardSvg and scopes scale CSS properties to vertex/road layers for big-map performance (Bug 1, Bug 14)', () => {
     const css = readFileSync('src/client/styles.css', 'utf8');
-    expect(css).not.toContain('svg#boardSvg.is-panning *');
-    expect(css).toContain('shape-rendering: optimizeSpeed');
+    expect(css).not.toContain('svg#boardSvg.is-panning');
+    expect(css).toContain('.board-pan');
+    expect(css).toContain('.board-pan-shield');
     expect(css).toContain('.road-spot-line.spot-static');
     expect(css).toContain('.road-spot-dot.spot-static');
 

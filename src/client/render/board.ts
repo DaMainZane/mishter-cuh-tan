@@ -1,4 +1,4 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/debug, client/icons, client/pieceModel, +11 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/debug, client/icons, client/panPreview, +12 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
@@ -1251,7 +1251,7 @@ export function rerenderBoard(): void {
 }
 
 /**
- * One drag frame (BUG 1): moves the painted board by the pan since the last repaint with a CSS translate of  (the svg's wrapper). It repaints (a real viewBox) only when the
+ * One drag frame (BUG 1): moves the painted board by the pan since the last repaint with a CSS translate of `#boardPan` (the svg's wrapper). It repaints (a real viewBox) only when the
  * drag would bring board into view that was off-screen at the last repaint by more than `PAN_SLACK` of the screen; a whole-board view never
  * repaints mid-drag. `rect` is the board's screen box at the start of the drag.
  */
@@ -1294,7 +1294,10 @@ function applyPanPreview(): void {
 /** The drag ended: write the real viewBox for where the board now is (this drops the translate). */
 export function endBoardPan(): void {
   panRect = null;
-  if (state?.board) updateCameraViewBox();
+  const panLayer = document.getElementById('boardPan');
+  if (state?.board && (camPanX !== committedPanX || camPanY !== committedPanY || panLayer?.style.transform)) {
+    updateCameraViewBox();
+  }
 }
 
 export function resetCamera(): void {
