@@ -1,4 +1,4 @@
-// MODULE: tidebound.fishing addon (T7a fish wild token: spend action, counts for a 7 discard, can be stolen, never in the bank; T7b1 fishing net rework: one net sits on one sea tile (`hex.ext.net`, `place_net` action), coast placement rule, catch on every roll; T7b2 net tiles for the client view and the net bot goal; T7c fish icon boosts: a net on a tile with boosts left doubles its catch chance and the tile loses one boost per catch; T7d tide replenish: tides refill icons slowly, a deeper tide faster; T7e feed the sea: 1 wheat fills the ground under your net; T11c/d/e tech gates & Net works) | DEPENDS ON: packs/base/constants, packs/base/placement, packs/tidebound/seaData, packs/tidebound/tech, packs/tidebound/tides, shared/index, +1 more | USED BY: packs/tidebound/addons.generated, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, server/debug
+// MODULE: tidebound.fishing addon (T7a fish wild token: spend action, counts for a 7 discard, can be stolen, never in the bank; T7b1 fishing net rework: one net sits on one sea tile (`hex.ext.net`, `place_net` action), coast placement rule, catch on every roll; T7b2 net tiles for the client view and the net bot goal; T7c fish icon boosts: a net on a tile with boosts left doubles its catch chance and the tile loses one boost per catch; T7d tide replenish: tides refill icons slowly, a deeper tide faster; T7e feed the sea: 1 wheat fills the ground under your net; T11c/d/e tech gates & Net works) | DEPENDS ON: packs/base/constants, packs/tidebound/seaData, packs/tidebound/tech, packs/tidebound/tides, shared/index, shared/rng | USED BY: packs/tidebound/addons.generated, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, server/debug
 import {
   BOT_GOALS,
   canAfford,
@@ -38,7 +38,6 @@ import type {
 } from '../../shared';
 import { createRng, rngNext } from '../../shared/rng';
 import { CITY, SETTLEMENT } from '../base/constants';
-import { ownsRoadAt } from '../base/placement';
 import { FISH_BOOSTS } from './seaData';
 import { registerTideboundTechs, TECH_FISHING_NETS, TECH_HARBOR_MASTER, TECH_NET_WORKS } from './tech';
 import { floodDepthAt, tideLevelOf } from './tides';
@@ -168,9 +167,9 @@ export const fishBotGoal: BotGoalDef = {
 // ---- T7b1 & T11d: fishing nets & Net works -------------------------------------------------------------------------------
 
 // A net sits on ONE open sea tile (`hex.ext.net = { owner }`) and fishes only that tile. A tile holds at most one net, and the player picks the tile
-// with the `place_net` action. It is joined to your own road or bridge like before: the tile must touch a coast vertex that is next to a road or
-// bridge you own (see `netSpotHexIds`). It takes no vertex (so a port vertex or a settlement spot is never blocked), makes no number and takes no
-// land tile. On every roll each net has a small chance to catch one fish for its owner. Nets ignore Tides (nothing here reads the tile state of the
+// with the `place_net` action. It works like a resource tile: it must touch a settlement or city of yours (see `netSpotHexIds`) and each catch pays
+// the buildings on its corners, 1 per settlement and 2 per city (`netYield`). It takes no vertex (so a port vertex or a settlement spot is never
+// blocked), makes no number and takes no land tile. On every roll each net has a small chance to catch fish for its owner. Nets ignore Tides (nothing here reads the tile state of the
 // land), so a net keeps fishing under a flood. A tile with fish boosts left doubles that chance (see `netCatchOnRoll`).
 
 /** Id of the fishing net: the price id Net works (`netWorksCostMod`) matches, and the key of the net on a tile (`hex.ext.net`). It is no longer a `PieceDef`. */
@@ -297,23 +296,17 @@ export function hasBuildingForNet(ctx: Ctx, pid: Id): boolean {
 /**
  * The sea tiles (ids, ascending) where `pid` could put a net right now, ignoring the price and the supply:
  * - the Fishing nets tech is unlocked (`techGate`),
- * - once any settlement or city is on the board, `pid` has one too (a net must not be the first thing a player builds),
  * - the tile is open sea (`isSeaHex`), not hidden by fog and has no net on it yet,
- * - the tile touches a coast vertex (one that touches land) that is next to a road, bridge or rickety bridge `pid` owns.
- * The vertex only has to be next to your road: a net takes no vertex, so a port vertex or a settlement on it changes nothing.
+ * - the tile touches a settlement or city of `pid` (a coast vertex with a producing piece of yours). A sea tile works like a resource tile: it only
+ *   pays out to the buildings on its corners, so a net needs one of yours there (and that building is what multiplies its catch, see `netYield`).
  */
 export function netSpotHexIds(ctx: Ctx, pid: Id): number[] {
   const { g, reg } = ctx;
   if (!techGate(g, pid, TECH_FISHING_NETS)) return [];
-  const anyBuildingOnBoard = g.board.vertices.some(vx => {
-    const piece = vx.piece;
-    return !!piece && (reg.pieces.get(piece.type)?.produces || 0) > 0;
-  });
-  if (anyBuildingOnBoard && !hasBuildingForNet(ctx, pid)) return [];
   const out = new Set<number>();
   for (const v of g.board.vertices) {
-    if (v.hexIds.length === 0) continue;
-    if (!v.edgeIds.some(eId => ownsRoadAt(ctx, pid, eId))) continue;
+    const mine = v.piece;
+    if (!mine || mine.owner !== pid || (reg.pieces.get(mine.type)?.produces || 0) <= 0) continue;
     for (const id of seaHexIdsAt(g, reg, v.id)) {
       const hex = g.board.hexes[id];
       if (!hex || hex.ext?.hidden || hex.ext?.net) continue;
@@ -321,6 +314,23 @@ export function netSpotHexIds(ctx: Ctx, pid: Id): number[] {
     }
   }
   return [...out].sort((a, b) => a - b);
+}
+
+/**
+ * What one catch of the net on `hexId` is worth to `owner`: the sum of `produces` of the owner's settlements and cities on the corners of that sea tile
+ * (a settlement 1, a city 2), exactly like a land tile pays each building on its corners. 0 when none is left, and the net then catches nothing.
+ * A fish icon on the tile does not multiply this: it only raises the chance of a catch.
+ */
+export function netYield(g: GameState, reg: Registry, hexId: number, owner: Id): number {
+  let sum = 0;
+  for (const v of g.board.vertices) {
+    const piece = v.piece;
+    if (!piece || piece.owner !== owner) continue;
+    const produces = reg.pieces.get(piece.type)?.produces || 0;
+    if (produces <= 0) continue;
+    if (seaHexIdsAt(g, reg, v.id).includes(hexId)) sum += produces;
+  }
+  return sum;
 }
 
 /** Placement: build (main) phase only, and the tile is one of `netSpotHexIds`. The price and the supply are checked by the action. */
@@ -449,14 +459,16 @@ export function netCatchOnRoll(ctx: Ctx, _sum: number): void {
     if (!net || !isSeaHex(reg, hex)) continue;
     const owner = getPlayer(g, net.owner);
     if (!owner) continue;
+    const amount = netYield(g, reg, hex.id, owner.id);
+    if (amount <= 0) continue;
     const hasNetWorks = hasTech(g, owner.id, TECH_NET_WORKS);
     const baseChance = hasNetWorks ? NET_WORKS_CATCH_CHANCE : NET_CATCH_CHANCE;
     const boostedChance = hasNetWorks ? NET_WORKS_BOOSTED_CHANCE : NET_BOOSTED_CHANCE;
     const boosted = (fishLeft(hex) ?? 0) > 0;
     const chance = boosted ? boostedChance : baseChance;
     if (netDraw(g.seed, roll, hex.id) >= chance) continue;
-    grantWildToken(ctx, owner.id, FISH, 1);
-    owner.stats.fishCaught = (owner.stats.fishCaught || 0) + 1;
+    grantWildToken(ctx, owner.id, FISH, amount);
+    owner.stats.fishCaught = (owner.stats.fishCaught || 0) + amount;
     let left: number | null = null;
     let savedBoost = false;
     if (boosted) {
@@ -472,7 +484,7 @@ export function netCatchOnRoll(ctx: Ctx, _sum: number): void {
     ctx.emit('fishCaught', {
       playerId: owner.id,
       netHexId: hex.id,
-      amount: 1,
+      amount,
       ...(boosted ? { hexId: hex.id, left, savedBoost } : {})
     });
     const rest = !boosted
@@ -482,7 +494,7 @@ export function netCatchOnRoll(ctx: Ctx, _sum: number): void {
         : left === 0
           ? ' (that fishing ground is used up)'
           : ` (${left} ${left === 1 ? 'boost' : 'boosts'} left on that ground)`;
-    ctx.log(`🎣 ${owner.avatar} ${owner.name}'s net caught a fish${rest}`, owner.color);
+    ctx.log(`🎣 ${owner.avatar} ${owner.name}'s net caught ${amount === 1 ? 'a fish' : `${amount} fish`}${rest}`, owner.color);
   }
 }
 

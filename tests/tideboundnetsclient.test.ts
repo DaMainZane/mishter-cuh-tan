@@ -76,12 +76,10 @@ const coastIds = (m: M): number[] => m.g.board.vertices.filter(v => v.hexIds.len
 /** Ids of every open sea tile, ascending. */
 const seaIds = (m: M): number[] => m.g.board.hexes.filter(h => isSeaHex(m.reg, h)).map(h => h.id);
 
-/** Puts a road of `owner` on a land edge at this vertex. */
+/** A net needs a settlement or city of yours at a corner of its tile (it pays like a land tile), so this puts a settlement of `owner` on the vertex. */
 function giveRoadAt(g: M['g'], vertexId: number, owner: string): number {
-  const v = g.board.vertices[vertexId];
-  const edgeId = v.edgeIds.find(e => g.board.edges[e].hexIds.length > 0)!;
-  g.board.edges[edgeId].piece = { type: 'road', owner };
-  return edgeId;
+  g.board.vertices[vertexId].piece = { type: 'settlement', owner };
+  return vertexId;
 }
 
 describe('no net on a vertex, so a port vertex does not block', () => {

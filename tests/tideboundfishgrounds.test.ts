@@ -13,6 +13,7 @@ import {
   fishClientView,
   fishLeft,
   netCatchOnRoll,
+  netYield,
   netSeaHexIds,
   replenishFish,
   seaHexIdsAt,
@@ -90,9 +91,12 @@ function setFish(m: M, id: number, n: number | undefined): void {
   else hex.ext.fish = n;
 }
 
-/** A net sits on one sea tile (`hex.ext.net`), no longer on a vertex. */
+/** A net sits on one sea tile (`hex.ext.net`). It only pays the buildings at its corners, so a settlement of `owner` goes on a free corner of the tile when there is none yet. */
 function putNet(m: M, hexId: number, owner = 'a'): void {
   m.g.board.hexes[hexId].ext.net = { owner };
+  if (netYield(m.g, m.reg, hexId, owner) > 0) return;
+  const corner = m.g.board.vertices.find(v => v.hexIds.length > 0 && !v.piece && seaHexIdsAt(m.g, m.reg, v.id).includes(hexId));
+  if (corner) corner.piece = { type: 'settlement', owner };
 }
 
 /** One roll the way the roll action does it (it adds one to `diceStats` first). True when `owner` got a fish. */

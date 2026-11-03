@@ -1203,7 +1203,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const h = hexes[id];
       const opts = h && !h.fog ? hexOptions(menuCtx, id) : [];
       if (opts.length === 0) continue;
-      hexSpotsHtml += `<g transform="translate(${h.x}, ${h.y})" onclick="openBuildMenu('hex', ${id})" style="cursor:pointer"><circle class="spot-pulse hotspot${staticSpots ? ' spot-static' : ''}${opts.some(o => o.affordable) ? '' : ' hot-dim'}" r="26" /></g>`;
+      hexSpotsHtml += `<g transform="translate(${h.x}, ${h.y})" onclick="openBuildMenu('hex', ${id})" style="cursor:pointer"><circle r="22" fill="transparent" /><circle class="road-spot-dot hotspot${staticSpots ? ' spot-static' : ''}${opts.some(o => o.affordable) ? '' : ' hot-dim'}" r="8" /></g>`;
     }
   }
   const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn) + hexSpotsHtml;

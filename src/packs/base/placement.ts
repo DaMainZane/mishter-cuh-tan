@@ -1,4 +1,4 @@
-// MODULE: piece placement rules (settlement, road, city geometry/ownership) | DEPENDS ON: packs/base/constants, shared/index | USED BY: packs/_template/lantern, packs/base/longestRoad, packs/base/pieces, packs/tidebound/bridgeCore, packs/tidebound/fishing
+// MODULE: piece placement rules (settlement, road, city geometry/ownership) | DEPENDS ON: packs/base/constants, shared/index | USED BY: packs/_template/lantern, packs/base/longestRoad, packs/base/pieces, packs/tidebound/bridgeCore
 import type { Ctx, Id } from '../../shared';
 import { ROAD, SETTLEMENT } from './constants';
 

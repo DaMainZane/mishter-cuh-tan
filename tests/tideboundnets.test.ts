@@ -14,6 +14,7 @@ import {
   netLimit,
   netPrice,
   netSpotHexIds,
+  netYield,
   netsLeft,
   netsOf,
   seaHexIdsAt
@@ -30,8 +31,8 @@ import {
 import { setTileState } from '../src/shared/tileState';
 
 // T7b1 (net rework): fishing nets. A net sits on ONE open sea tile (`hex.ext.net = { owner }`), fishes only that tile, and a tile holds at most one
-// net. The player picks the tile with the `place_net` action. The tile must touch a coast vertex that is next to your own road or bridge.
-// On every roll each net has a 1 in 6 chance to catch one fish for its owner. The draw is a hash of the world seed, the roll count and the
+// net. The player picks the tile with the `place_net` action. The tile must touch a settlement or city of yours, like a land tile that only pays the
+// buildings on its corners. On every roll each net has a 1 in 6 chance to catch fish for its owner: 1 per settlement and 2 per city on the tile. The draw is a hash of the world seed, the roll count and the
 // tile, so it never touches `g.rng`, and nothing reads the tile state of the land, so a net keeps fishing under a flood.
 
 const on = { dlc: { tidebound: true } };
@@ -92,9 +93,23 @@ function giveRoadAt(g: M['g'], vertexId: number, owner: string): number {
   return edgeId;
 }
 
-/** Puts a net of `owner` straight on a tile (no price, no checks). */
-function putNet(m: M, hexId: number, owner = 'a'): void {
+/** Puts a settlement (or a city) of `owner` on this vertex. */
+function giveBuildingAt(g: M['g'], vertexId: number, owner: string, type = 'settlement'): void {
+  g.board.vertices[vertexId].piece = { type, owner };
+}
+
+/** Ids of the sea tiles that touch a coast vertex (a building can stand at one of their corners), ascending. */
+const coastSeaIds = (m: M): number[] => seaIds(m).filter(id => m.g.board.vertices.some(v => v.hexIds.length > 0 && seaHexIdsAt(m.g, m.reg, v.id).includes(id)));
+
+/**
+ * Puts a net of `owner` straight on a tile (no price, no checks). A net only pays the buildings at its corners, so when `owner` has none there yet,
+ * a settlement is put on the first free coast corner of the tile (use `type` 'city' for a city).
+ */
+function putNet(m: M, hexId: number, owner = 'a', type = 'settlement'): void {
   m.g.board.hexes[hexId].ext.net = { owner };
+  if (netYield(m.g, m.reg, hexId, owner) > 0) return;
+  const corner = m.g.board.vertices.find(v => v.hexIds.length > 0 && !v.piece && seaHexIdsAt(m.g, m.reg, v.id).includes(hexId));
+  if (corner) giveBuildingAt(m.g, corner.id, owner, type);
 }
 
 /** Runs the catch for `n` rolls the way the roll action does (it adds one to `diceStats` first). Returns one 0/1 per roll for `owner`'s fish. */
@@ -169,14 +184,14 @@ describe('sea tiles at a vertex', () => {
 });
 
 describe('placement', () => {
-  it('needs a sea tile at a coast vertex next to your own road, in the build phase', () => {
+  it('needs a sea tile at a corner of your own settlement or city, in the build phase', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
     const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
     expect(netSpotHexIds(m.ctx, 'a')).toEqual([]);
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
 
-    giveRoadAt(m.g, coast, 'a');
+    giveBuildingAt(m.g, coast, 'a');
     const spots = netSpotHexIds(m.ctx, 'a');
     expect(spots).toContain(tile);
     for (const id of seaHexIdsAt(m.g, m.reg, coast)) expect(spots).toContain(id);
@@ -186,39 +201,43 @@ describe('placement', () => {
     expect(canPlaceNet(m.ctx, 'a', tile, 'setup')).toBe(false);
   });
 
-  it('never offers a land tile, and a vertex with another player\'s settlement or a port does not block the tile (a net takes no vertex)', () => {
+  it('never offers a land tile, and a port on the vertex does not block the tile (a net takes no vertex)', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
     const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
-    giveRoadAt(m.g, coast, 'a');
+    giveBuildingAt(m.g, coast, 'a');
     const land = m.g.board.hexes.find(h => !isSeaHex(m.reg, h) && m.reg.tiles.get(h.type)?.land)!;
     expect(canPlaceNet(m.ctx, 'a', land.id, 'build')).toBe(false);
 
     m.g.board.vertices[coast].port = '3:1';
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
     m.g.board.vertices[coast].port = null;
+  });
 
-    // Bob settles on that vertex: Alice still has a building question (see below), so give her one far from it first.
-    const settleV = m.g.board.hexes[m.g.board.vertices[coast].hexIds[0]].vertexIds.find(vId => vId !== coast)!;
-    m.g.board.vertices[settleV].piece = { type: 'settlement', owner: 'a' };
-    m.g.board.vertices[coast].piece = { type: 'settlement', owner: 'b' };
-    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
+  it('a rival\'s building at the corner, or your own road, is not what a net needs', () => {
+    const m = makeGame();
+    const coast = coastIds(m)[0];
+    const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
+    giveBuildingAt(m.g, coast, 'b');
+    giveRoadAt(m.g, coast, 'a');
+    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
+    expect(canPlaceNet(m.ctx, 'b', tile, 'build')).toBe(true);
   });
 
   it('allows at most one net on a tile', () => {
     const m = makeGame();
     const coast = coastIds(m)[0];
     const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
-    giveRoadAt(m.g, coast, 'a');
+    giveBuildingAt(m.g, coast, 'a');
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
-    putNet(m, tile, 'b');
+    m.g.board.hexes[tile].ext.net = { owner: 'b' };
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
     expect(netSpotHexIds(m.ctx, 'a')).not.toContain(tile);
-    putNet(m, tile, 'a');
+    m.g.board.hexes[tile].ext.net = { owner: 'a' };
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
   });
 
-  it('joins through a bridge as well as a road', () => {
+  it('a road or a bridge alone does not make a net spot: only a building does', () => {
     const m = makeGame();
     const coast = coastIds(m).find(id => m.g.board.vertices[id].edgeIds.some(e => m.g.board.edges[e].hexIds.length === 0));
     expect(coast).toBeDefined();
@@ -226,16 +245,14 @@ describe('placement', () => {
     const waterEdge = m.g.board.vertices[coast!].edgeIds.find(e => m.g.board.edges[e].hexIds.length === 0)!;
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
     m.g.board.edges[waterEdge].piece = { type: 'bridge', owner: 'a' };
-    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
+    expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
   });
 
-  it('offers nothing when your only road lies between inland vertices', () => {
-    const m = makeGame();
-    const centre = m.g.board.hexes.find(h => h.q === 0 && h.r === 0)!;
-    const edge = m.g.board.edges.find(e => centre.vertexIds.includes(e.v1) && centre.vertexIds.includes(e.v2))!;
-    expect(coastIds(m)).not.toContain(edge.v1);
-    expect(coastIds(m)).not.toContain(edge.v2);
-    edge.piece = { type: 'road', owner: 'a' };
+  it('offers nothing when your only building stands inland (no sea at its corners)', () => {
+    const m = makeGame(on, 99, 2);
+    const inland = inlandIds(m)[0];
+    expect(inland).toBeDefined();
+    giveBuildingAt(m.g, inland, 'a', 'city');
     expect(netSpotHexIds(m.ctx, 'a')).toEqual([]);
   });
 
@@ -251,9 +268,8 @@ describe('placement', () => {
     giveRoadAt(m.g, coastA, 'a');
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(false);
 
-    // Once Alice builds a settlement first, she can place her fishing net on the tile
-    const settleV = m.g.board.hexes[m.g.board.vertices[coastA].hexIds[0]].vertexIds.find(vId => vId !== coastA)!;
-    m.g.board.vertices[settleV].piece = { type: 'settlement', owner: 'a' };
+    // Once Alice builds a settlement at that corner, she can place her fishing net on the tile
+    giveBuildingAt(m.g, coastA, 'a');
     expect(canPlaceNet(m.ctx, 'a', tile, 'build')).toBe(true);
   });
 });
@@ -262,7 +278,7 @@ describe('place_net', () => {
   function ready() {
     const m = makeGame();
     const coast = coastIds(m)[0];
-    giveRoadAt(m.g, coast, 'a');
+    giveBuildingAt(m.g, coast, 'a');
     const tile = seaHexIdsAt(m.g, m.reg, coast)[0];
     const a = player(m.g, 'a');
     a.resources.wood = 2;
@@ -296,7 +312,7 @@ describe('place_net', () => {
     expect(m.a.resources.wood).toBe(5);
   });
 
-  it('refuses without the price, without supply, on land and off your road, and a refusal changes nothing', () => {
+  it('refuses without the price, without supply, on land and away from your buildings, and a refusal changes nothing', () => {
     const m = ready();
     m.a.resources.sheep = 0;
     expect(place(m, m.tile).ok).toBe(false);
@@ -364,7 +380,7 @@ describe('the catch', () => {
   it('each net catches about 1 roll in 6 for its owner', () => {
     expect(NET_CATCH_CHANCE).toBeCloseTo(1 / 6);
     const m = makeGame();
-    for (const id of seaIds(m).slice(0, 3)) putNet(m, id, 'a');
+    for (const id of coastSeaIds(m).slice(0, 3)) putNet(m, id, 'a');
     rollMany(m, 1200);
     const caught = getWildTokens(m.g, 'a', FISH);
     // 3 nets x 1200 rolls x 1/6 = 600, standard deviation about 22.
@@ -376,9 +392,9 @@ describe('the catch', () => {
 
   it('gives each owner their own catches', () => {
     const m = makeGame();
-    const tiles = seaIds(m);
+    const tiles = coastSeaIds(m);
     for (const id of tiles.slice(0, 2)) putNet(m, id, 'a');
-    for (const id of tiles.slice(5, 7)) putNet(m, id, 'b');
+    for (const id of tiles.slice(6, 8)) putNet(m, id, 'b');
     rollMany(m, 1200);
     // 2 nets x 1200 rolls x 1/6 = 400 each, standard deviation about 18.
     for (const id of ['a', 'b']) {
@@ -388,9 +404,55 @@ describe('the catch', () => {
     }
   });
 
+  it('a catch pays like a land tile: 1 fish per settlement and 2 per city on the corners, and a fish icon does not multiply it', () => {
+    const m = makeGame();
+    const tile = coastSeaIds(m)[0];
+    putNet(m, tile, 'a');
+    expect(netYield(m.g, m.reg, tile, 'a')).toBe(1);
+    const corner = m.g.board.vertices.find(v => v.piece?.owner === 'a' && seaHexIdsAt(m.g, m.reg, v.id).includes(tile))!;
+    corner.piece = { type: 'city', owner: 'a' };
+    expect(netYield(m.g, m.reg, tile, 'a')).toBe(2);
+    // A second building of yours on another corner of the same tile adds up; a rival's building does not.
+    const other = m.g.board.vertices.find(v => v.id !== corner.id && !v.piece && seaHexIdsAt(m.g, m.reg, v.id).includes(tile))!;
+    other.piece = { type: 'settlement', owner: 'a' };
+    expect(netYield(m.g, m.reg, tile, 'a')).toBe(3);
+    const third = m.g.board.vertices.find(v => !v.piece && seaHexIdsAt(m.g, m.reg, v.id).includes(tile));
+    if (third) third.piece = { type: 'city', owner: 'b' };
+    expect(netYield(m.g, m.reg, tile, 'a')).toBe(3);
+    expect(netYield(m.g, m.reg, tile, 'b')).toBe(third ? 2 : 0);
+
+    // Every catch hands over the whole yield at once; a boost on the tile only changes how often it happens.
+    m.g.board.hexes[tile].ext.fish = 4;
+    let catches = 0;
+    for (let i = 0; i < 60; i++) {
+      const before = getWildTokens(m.g, 'a', FISH);
+      m.g.diceStats[8] = (m.g.diceStats[8] || 0) + 1;
+      netCatchOnRoll(m.ctx, 8);
+      const got = getWildTokens(m.g, 'a', FISH) - before;
+      if (got > 0) {
+        expect(got).toBe(3);
+        catches++;
+      }
+    }
+    expect(catches).toBeGreaterThan(0);
+    expect(player(m.g, 'a').stats.fishCaught).toBe(catches * 3);
+    // Each catch used one boost, not three.
+    expect(m.g.board.hexes[tile].ext.fish).toBe(Math.max(0, 4 - catches));
+  });
+
+  it('a net with no building of its owner left at its corners catches nothing', () => {
+    const m = makeGame();
+    const tile = coastSeaIds(m)[0];
+    putNet(m, tile, 'a');
+    for (const v of m.g.board.vertices) if (v.piece?.owner === 'a') v.piece = null;
+    expect(netYield(m.g, m.reg, tile, 'a')).toBe(0);
+    rollMany(m, 600);
+    expect(getWildTokens(m.g, 'a', FISH)).toBe(0);
+  });
+
   it('a net on a tile that is no longer open sea catches nothing', () => {
     const m = makeGame();
-    const tile = seaIds(m)[0];
+    const tile = coastSeaIds(m)[0];
     putNet(m, tile, 'a');
     m.g.board.hexes[tile].ext.river = true;
     rollMany(m, 600);
@@ -399,7 +461,7 @@ describe('the catch', () => {
 
   it('fishes only the tile it sits on: a boost on another tile does not raise the chance', () => {
     const m = makeGame();
-    const [mine, other] = seaIds(m);
+    const [mine, other] = coastSeaIds(m);
     expect(other).toBeDefined();
     putNet(m, mine, 'a');
     m.g.board.hexes[other].ext.fish = 4;
@@ -411,7 +473,7 @@ describe('the catch', () => {
 
   it('a fish icon under the net doubles the chance and loses one boost per catch', () => {
     const m = makeGame();
-    const tile = seaIds(m)[0];
+    const tile = coastSeaIds(m)[0];
     putNet(m, tile, 'a');
     m.g.board.hexes[tile].ext.fish = 4;
     rollMany(m, 60);
@@ -422,7 +484,7 @@ describe('the catch', () => {
 
   function run(seed: number, flooded: boolean) {
     const m = makeGame(on, seed);
-    for (const id of seaIds(m).slice(0, 2)) putNet(m, id, 'a');
+    for (const id of coastSeaIds(m).slice(0, 2)) putNet(m, id, 'a');
     if (flooded) for (const h of m.g.board.hexes) if (m.reg.tiles.get(h.type)?.land) setTileState(m.g, h.id, { id: 'flooded' });
     const rngBefore = m.g.rng.s;
     const pattern = rollMany(m, 600);

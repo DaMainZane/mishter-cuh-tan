@@ -377,7 +377,7 @@ function nodeHtml(p: Placed, canAct: boolean, hand: Resources | undefined): stri
   const click = mode === 'can' ? `onclick="researchTechClick('${esc(r.id)}')"` : '';
   // The server texts (`tech.ts`, pinned by the view snapshot) are older than these mechanics, so these nodes show the current rules instead.
   const descOverride: Record<string, string> = {
-    'tidebound.fishing_nets': 'Unlocks Fishing Nets: put a net on one free sea tile next to your coast road or bridge. It fishes only that tile and catches fish tokens on dice rolls. Also lets your Settlements on 3:1 ports be raised to 2:1.',
+    'tidebound.fishing_nets': 'Unlocks Fishing Nets: put a net on one free sea tile that touches your settlement or city. It fishes only that tile, like a resource tile: each catch gives 1 fish per settlement and 2 per city of yours on it. Also lets your Settlements on 3:1 ports be raised to 2:1.',
     'tidebound.harbor_master': 'Unlocks Harbors: upgrade a city on a port to 1:1 trades (click the port; up to 4 trades per turn; it keeps working while flooded), and Feed the Sea: pay 1 wheat to refill the fishing ground under one of your nets (click the net tile).'
   };
   const descText = descOverride[r.id] ?? r.description;
