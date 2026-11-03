@@ -2,6 +2,9 @@
 
 Condensed 2026-11-02 (was ~227 KB, 111 passes). Newest first. Passes 83–95 and 101–102 were written without a shell; later full runs (96, 98, 100, 103+) passed.
 
+## Pass 112 (Nov 3)
+- **112** Build menu (Bug 5): on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a see-through pulsing hotspot (dim and still when you can pay for nothing there yet); a click opens a popover anchored to it listing only the pieces legal there (settlement, city, harbor, port raise, road, bridge, rickety bridge, manifest pieces and actions); Esc or a click outside closes it. One cost tooltip (`#costTip`) shows the price as resource card stacks with missing cards dimmed, after 150 ms hover or a long press, for the popover options and the build bar alike; an option you cannot pay for is disabled but keeps its tooltip. A build mode from the bar keeps the direct click. Model `client/buildMenu.ts`, DOM `client/render/buildmenu.ts` (gets its context from `renderBoard`, so no new import cycle), test `tests/buildMenu.test.ts`.
+
 ## Passes 104–111 (Nov 1–2)
 - **111** Debug Mode: server `auditGameState` (invariants, legal spots) and `applyDebugCommand` (grant resources/fish, unlock techs, force roll, paint pieces, export snapshot); in-game board brush; FPS/SVG profiler.
 - **110** Tech cost balancing (Bug 3).

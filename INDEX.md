@@ -193,6 +193,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `actions.ts` | client UI actions (host-only edit guard, build mode and brush selection, affordability checks, requests sent to the server) |
 | `audio.ts` | WebAudio sound effects (tones, dice roll, discard, your turn, victory fanfare) and the sound toggle |
 | `avatars.ts` | player avatars (flat pictogram faces keyed by the shared avatar id, falls back to the name initial) |
+| `buildMenu.ts` | build menu model (BUG 5: which pieces a board corner or edge offers, with their price and whether you can pay; the cost tooltip markup, its delay, and where the popover sits; pure, no DOM) |
 | `constants.ts` | resource and dev card metadata (names, token colors) |
 | `cursors.ts` | lobby cursors and laser pointer (non-hosts cannot edit the map, they point at it instead) |
 | `debug.ts` | client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays |
@@ -208,6 +209,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `render/index.ts` | renderAll, draws every client panel (board, hand, sidebar, trade, tech, overlays) from the current state |
 | `render/board.ts` | board SVG renderer, camera, board input and board animations |
 | `render/bridgepicker.ts` | bridge picker (Tidebound T4c: type picker popup on an empty ocean edge, upgrade popup on your own rickety bridge, one popup that sits over the edge) |
+| `render/buildmenu.ts` | build menu popover and cost tooltip (BUG 5: a click on a board hotspot opens a popover of the pieces that may go there; one cost tooltip, shown after a short hover or a long press, serves the popover and the build bar) |
 | `render/drawer.ts` | bottom-left sheet (trade, discard, gold, monopoly, robber victim picker) |
 | `render/hand.ts` | player hand (resource stacks + dev cards) and hand click handlers |
 | `render/overlay.ts` | S0.13 overlay and popup kit (Service 11: hex tint/pattern layer, timer-bar popups, dramatic event title card, round-end recap card; T6: theme-aware flood and flood-warning patterns, elevation heat map) |
@@ -294,4 +296,4 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `techworldspan.test.ts` | Tech tree ring spacing (`WORLD_SPAN`, `FIT_VIEW` in `client/techView.ts`): world at least 2x the stage, opening view fits it, no pan while it all fits, pan clamped to the bigger world, zoom keeps the point under the cursor, span 1 behaves as before |
 | `logfilter.test.ts` | Live log filter (`client/logFilter.ts`): the player filter keeps only that player's own turns (an action in another player's turn that names them is dropped, past rounds stay), and the round, category, resource and value filters still work |
 | `pirateicon.test.ts` | Pirate icon (`client/pirateIcon.ts`, Bug 6): same id gives the same look, the head only from the head list, every head gets used, the sail plus exactly one unmirrored glyph, no black background square, size about 1.5x the old ship, and the board layer (`renderPiratesMarkup`) drawing the new icon, keeping the strength badge and ringing the bigger badge |
-
+| `buildMenu.test.ts` | Build menu (`client/buildMenu.ts`, BUG 5): which pieces a corner or edge offers (settlement, city, harbor, port raise, road, bridge, rickety bridge, manifest entries) by position only, unaffordable ones listed but not payable, free roads, cost tooltip dimming and Free, 150 ms hover and long-press delay, popover placement on screen |

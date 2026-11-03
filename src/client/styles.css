@@ -736,14 +736,9 @@ svg#boardSvg.is-panning {
 }
 .act-btn.primary .piece-badge, .act-btn.active-mode .piece-badge { color: var(--on-accent); }
 
-/* Recipe card strips (hover on Dev/Road/Settle/City buttons below the dice) */
-.btn-recipe-popup {
-  display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
-  transform: translateX(-50%); z-index: 90; pointer-events: none;
-}
-.act-btn.has-recipe:hover .btn-recipe-popup {
-  display: flex;
-}
+/* Recipe card strips. BUG 5: a `.btn-recipe-popup` only holds the cost; the one cost tooltip (#costTip, render/buildmenu.ts) shows it after a short
+   hover or a long press, for the build bar and the board's build menu alike. */
+.btn-recipe-popup { display: none; }
 .recipe-cards-strip {
   display: inline-flex; align-items: flex-start; gap: 6px;
   padding: 3px 4px; border-radius: 6px;
@@ -1047,6 +1042,9 @@ svg#boardSvg.is-panning {
   transform-box: fill-box; transform-origin: center; animation: spotPulse 1.6s ease-in-out infinite;
 }
 .spot-pulse.spot-static { animation: none; }
+/* BUG 5: build-menu hotspots are see-through; one where you can pay for nothing yet is dimmer and still. */
+.spot-pulse.hotspot { fill-opacity: 0.55; }
+.hotspot.hot-dim, .target-ring.hot-dim { opacity: 0.4; animation: none; }
 .spot-pulse:hover { opacity: 1; animation: none; transform: scale(1.15); }
 @keyframes spotPulse { 0%, 100% { opacity: 0.78; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
 .road-rim-line {

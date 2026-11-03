@@ -1,4 +1,4 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/constants, client/debug, client/icons, client/pieceModel, client/pieceui, +8 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/debug, client/icons, client/pieceModel, +11 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
@@ -28,9 +28,13 @@ import { fishTileOutlineMarkup, overlayPatternDefsMarkup, renderElevationMarkup,
 import { renderSidebar, visibleRect } from './sidebar';
 import { esc } from '../util';
 import { openBridgePicker } from './bridgepicker';
+import { syncBuildMenu } from './buildmenu';
 import { renderPiratesMarkup } from './pirates';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
+import { edgeOptions, vertexOptions } from '../buildMenu';
+import type { BuildOption, MenuContext } from '../buildMenu';
+import { manifestEntries } from '../visuals';
 import { isDebugOverlayActive, renderDebugBoardOverlayMarkup } from '../debug';
 
 const knownRoads = new Set<number>();
@@ -1034,11 +1038,27 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
 
   // 5. Road & Bridge Spots Layer (buildable edges)
   const staticSpots = vertices.length > 120;
+  // BUG 5: on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a hotspot that opens the build menu.
+  // A build mode from the bar keeps the direct click (the piece is already chosen).
+  const menuCtx = isMyTurn && state.phase === 'MAIN' && !buildMode && me ? buildMenuContext(me) : null;
   let roadSpotsHtml = '';
   for (const e of edges) {
     if (e.road) continue;
     const v1 = vertices[e.v1], v2 = vertices[e.v2];
     if (!v1 || !v2) continue;
+    if (menuCtx) {
+      const opts = edgeOptions(menuCtx, e.id);
+      if (opts.length === 0) continue;
+      const mx = (v1.x + v2.x) / 2, my = (v1.y + v2.y) / 2;
+      const cls = `${staticSpots ? ' spot-static' : ''}${hotDim(opts)}`;
+      roadSpotsHtml += `
+        <g onclick="openBuildMenu('edge', ${e.id})" style="cursor:pointer">
+          <line class="road-spot-line hotspot${cls}" x1="${v1.x}" y1="${v1.y}" x2="${v2.x}" y2="${v2.y}" />
+          <circle class="road-spot-dot hotspot${cls}" cx="${mx}" cy="${my}" r="8" />
+        </g>
+      `;
+      continue;
+    }
     const allowRoad = !buildMode || buildMode === 'road';
     const allowBridge = !buildMode || buildMode === 'bridge';
     if (isMyTurn && ((allowRoad && canClientPlaceRoad(e, me)) || (allowBridge && canClientPlaceBridge(e, me)))) {
@@ -1095,7 +1115,12 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const canHarbor = isCity && Boolean(harborSpotSet?.has(v.id));
       const canRaise = !canHarbor && !canUpgrade && Boolean(raiseSet?.has(v.id));
       const isClickable = canUpgrade || canRobThisBuilding || canHarbor;
-      const clickAttr = canHarbor
+      // BUG 5: with the build menu on, your own building is a hotspot when it offers anything (city, harbor, port raise), affordable or not.
+      const menuOpts = menuCtx && v.building.owner === socket.id ? vertexOptions(menuCtx, v.id) : [];
+      const showRing = menuCtx ? menuOpts.length > 0 : ((!isCity && canUpgrade) || canHarbor || canRaise);
+      const clickAttr = menuOpts.length > 0
+        ? `openBuildMenu('vertex', ${v.id})`
+        : canHarbor
         ? `clickHarborSpot(${v.id})`
         : canRaise
           ? `upgradePortClick(${v.id})`
@@ -1111,11 +1136,20 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
             ${anim.isAnimating ? `<circle cx="0" cy="0" r="${ringR + 4}" class="piece-impact-ring" style="${anim.delayStyle}" />` : ''}
             ${clickAttr ? `<circle r="${ringR + 2}" fill="transparent" />` : ''}
             ${canRobThisBuilding ? `<circle r="${ringR}" class="target-ring rob" />` : ''}
-            ${((!isCity && canUpgrade) || canHarbor || canRaise) && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade" />` : ''}
+            ${showRing && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade${hotDim(menuOpts)}" />` : ''}
             <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
               ${placedVertexMarkup(v.building.type, col) ?? (isCity ? cityMarkup(col) : settlementMarkup(col))}
             </g>
           </g>
+        </g>
+      `;
+    } else if (menuCtx) {
+      const opts = vertexOptions(menuCtx, v.id);
+      if (opts.length === 0) continue;
+      verticesHtml += `
+        <g onclick="openBuildMenu('vertex', ${v.id})" style="cursor:pointer">
+          <circle cx="${v.x}" cy="${v.y}" r="20" fill="transparent" />
+          <circle cx="${v.x}" cy="${v.y}" r="11" class="spot-pulse hotspot${staticSpots ? ' spot-static' : ''}${hotDim(opts)}" />
         </g>
       `;
     } else if (isMyTurn && (buildMode === 'net' || buildMode === 'feed' || buildMode === 'harbor' || isPieceMode(buildMode))) {
@@ -1135,6 +1169,9 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     lastVerticesHtml = verticesHtml;
     layers.verticesLayer.innerHTML = verticesHtml;
   }
+
+  // BUG 5: the open build menu follows this render (its options and prices), and closes when the menu is off.
+  syncBuildMenu(menuCtx);
 
   // 7. Generic spots of manifest pieces and actions (R8.7): the spots of the active build mode, from the server's `pieces[id].spots`. Empty until a piece has a visual.
   const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn);
@@ -1435,6 +1472,25 @@ export function canClientAffordPiece(me: any, piece: ClientPieceKey): boolean {
   if (!me || !me.resources) return false;
   const cost = getClientPieceCost(piece, me.id || socket.id || '');
   return Object.entries(cost).every(([r, n]) => (me.resources[r] || 0) >= (Number(n) || 0));
+}
+
+/** BUG 5: what the build menu reads about you and the board: client prices, rickety bridges, harbor and port-raise data, manifest entries. */
+export function buildMenuContext(me: any): MenuContext {
+  const myId = me?.id || socket.id || '';
+  return {
+    board: state.board,
+    me: { ...me, id: myId },
+    costOf: piece => getClientPieceCost(piece as ClientPieceKey, myId),
+    ricketyOn: isRicketyEnabled(me),
+    harborCost: me?.harborCost ?? null,
+    portRaise: portRaiseSpots(state.techActions?.harbor, true),
+    entries: manifestEntries()
+  };
+}
+
+/** A hotspot where you can pay for nothing yet is drawn dim and still (BUG 5): it opens the menu, whose options show the price. */
+function hotDim(opts: BuildOption[]): string {
+  return opts.length > 0 && !opts.some(o => o.affordable) ? ' hot-dim' : '';
 }
 
 /** Rickety bridges are in this game (the server sends a price for the piece only then). */

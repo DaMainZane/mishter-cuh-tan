@@ -1,4 +1,4 @@
-// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +16 more | USED BY: none
+// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +17 more | USED BY: none
 import { socket } from './socket';
 import { playDiceRollSound, playDiscardSound, playTone, playVictoryFanfareSound, playYourTurnSound, toggleSound } from './audio';
 import { hydrateIcons } from './icons';
@@ -33,6 +33,7 @@ import {
 import { sendChat, toggleRoundCollapse, toggleLogFilter, renderSidebar } from './render/sidebar';
 import { toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick } from './render/techpanel';
 import { clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker } from './render/bridgepicker';
+import { openBuildMenu, chooseBuildOption, closeBuildMenu } from './render/buildmenu';
 import { clickPirate } from './render/pirates';
 import { onVisualsEvent, resetManifest } from './visuals';
 import { clickSpot } from './pieceui';
@@ -76,6 +77,7 @@ Object.assign(window as any, {
   toggleTradeDrawer, buyDevCard, setBuildMode, mainTurnButton, sendChat,
   setLogTab: onSetLogTab, toggleRoundCollapse, toggleLogFilter, toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick,
   clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker, clickPirate, clickSpot,
+  openBuildMenu, chooseBuildOption, closeBuildMenu,
   confirmTradeWith, cancelTrade, respondToTrade, onClickHandResource, onClickHandWild, onClickDevCard,
   startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed, cycleAvatar, cycleBotTier, setSetupOpen,
   startSavePreset, cancelSavePreset, confirmSavePreset, presetNameKey, applyCustomPreset, applyPresetStyle,

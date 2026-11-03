@@ -1,4 +1,4 @@
-// MODULE: generic piece UI (R8.7: draws the build-bar buttons, the spot layer and the placed shapes of manifest pieces and actions, shows their hints and sends their clicks; the logic is in client/pieceModel) | DEPENDS ON: client/audio, client/pieceModel, client/socket, client/store, client/types, client/ui, +2 more | USED BY: client/actions, client/main, client/render/board, client/render/index
+// MODULE: generic piece UI (R8.7: draws the build-bar buttons, the spot layer and the placed shapes of manifest pieces and actions, shows their hints and sends their clicks; the logic is in client/pieceModel) | DEPENDS ON: client/audio, client/pieceModel, client/socket, client/store, client/types, client/ui, +2 more | USED BY: client/actions, client/main, client/render/board, client/render/buildmenu, client/render/index
 import { playTone } from './audio';
 import { socket } from './socket';
 import { state, buildMode, setBuildModeValue } from './store';

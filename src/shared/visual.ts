@@ -1,4 +1,4 @@
-// MODULE: visual manifest types (what a piece, action or overlay kind looks like, as plain data the server sends to the client; no functions) | DEPENDS ON: shared/types | USED BY: client/pieceModel, client/pieceui, client/render/overlay, client/types, client/visuals, shared/index, +2 more
+// MODULE: visual manifest types (what a piece, action or overlay kind looks like, as plain data the server sends to the client; no functions) | DEPENDS ON: shared/types | USED BY: client/buildMenu, client/pieceModel, client/pieceui, client/render/overlay, client/types, client/visuals, +3 more
 import type { Resources } from './types';
 
 /**

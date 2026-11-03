@@ -1,4 +1,4 @@
-// MODULE: small client helpers (HTML escaping, initials) | DEPENDS ON: none | USED BY: client/avatars, client/debug, client/mapmenu, client/presets, client/render/board, client/render/bridgepicker, +9 more
+// MODULE: small client helpers (HTML escaping, initials) | DEPENDS ON: none | USED BY: client/avatars, client/debug, client/mapmenu, client/presets, client/render/board, client/render/bridgepicker, +10 more
 
 export function esc(s: any): string {
   return String(s ?? '')

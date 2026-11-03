@@ -1,4 +1,4 @@
-// MODULE: tech panel (hub-and-spoke tree: a hub, one ring of techs per tier, one spoke per branch, all generated from the server's `techTree` rows; costs as mini resource cards; hover for the description; plus the Harbor charters (raise a whole port to 2:1) and Ground work controls) and the Tech button in the action bar | DEPENDS ON: client/audio, client/icons, client/pieceModel, client/socket, client/store, client/techView, +2 more | USED BY: client/main, client/render/bridgepicker, client/render/index
+// MODULE: tech panel (hub-and-spoke tree: a hub, one ring of techs per tier, one spoke per branch, all generated from the server's `techTree` rows; costs as mini resource cards; hover for the description; plus the Harbor charters (raise a whole port to 2:1) and Ground work controls) and the Tech button in the action bar | DEPENDS ON: client/audio, client/icons, client/pieceModel, client/socket, client/store, client/techView, +2 more | USED BY: client/main, client/render/bridgepicker, client/render/buildmenu, client/render/index
 import { uiIcon } from '../icons';
 import { costStackHtml } from '../pieceModel';
 import { playTone } from '../audio';
