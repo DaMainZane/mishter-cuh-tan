@@ -28,6 +28,12 @@ export interface MenuContext {
   portRaise?: { vertexId: number; cost: Resources; affordable: boolean }[];
   /** Manifest pieces and actions; the ones on a corner or edge are offered where the server lists the spot. */
   entries?: readonly ManifestEntry[];
+  /** Sea tiles you can feed and the feed price (the server's `feedSpots`, `feedCost`; spots only come when you can pay). */
+  feedSpots?: number[];
+  feedCost?: Resources | null;
+  /** Sea tiles a net may go on and the net price (`netSpots`, `netCost`). */
+  netSpots?: number[];
+  netCost?: Resources | null;
 }
 
 /** One line of the popover. `entryId` is set for a manifest piece or action (the click goes through `placeAt`). */
@@ -120,6 +126,19 @@ export function edgeOptions(c: MenuContext, edgeId: number): BuildOption[] {
     if (c.ricketyOn) out.push(option(c, 'rickety_bridge', 'Rickety bridge', 'rickety_bridge', c.costOf('rickety_bridge')));
   }
   return out.concat(entryOptions(c, 'edge', edgeId, new Set(out.map(o => o.id))));
+}
+
+/** What a sea tile offers you on your main-phase turn: feed the sea under your net, or a new net. Empty means no hotspot. */
+export function hexOptions(c: MenuContext, hexId: number): BuildOption[] {
+  const out: BuildOption[] = [];
+  if (c.feedCost && c.feedSpots?.includes(hexId)) out.push(option(c, 'feed_sea', 'Feed the sea', 'fish', c.feedCost));
+  if (c.netCost && c.netSpots?.includes(hexId)) out.push(option(c, 'place_net', 'Fishing net', 'net', c.netCost));
+  return out;
+}
+
+/** Sea tiles that may offer something (the server's lists, joined), so the board only looks at these. */
+export function hexCandidates(c: MenuContext): number[] {
+  return [...new Set([...(c.feedSpots ?? []), ...(c.netSpots ?? [])])].sort((a, b) => a - b);
 }
 
 // ---- Cost tooltip ------------------------------------------------------------------------------------------------------------

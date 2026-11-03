@@ -1,4 +1,4 @@
-// MODULE: bottom-left sheet (trade, discard, gold, monopoly, robber victim picker) | DEPENDS ON: client/audio, client/avatars, client/constants, client/icons, client/render/hand, client/render/index, +4 more | USED BY: client/main, client/render/hand, client/render/index
+// MODULE: bottom-left sheet (trade, discard, gold, monopoly, robber victim picker) | DEPENDS ON: client/audio, client/avatars, client/constants, client/fishSpend, client/icons, client/render/hand, +5 more | USED BY: client/main, client/render/hand, client/render/index
 // Flat sheet from "Design UI Philosophy.md": no emoji, pictogram icons, every color comes from a token class in styles.css.
 import { RESOURCES, RES_META } from '../constants';
 import { getMiniSvg, buildOverlappingStackHtml, uiIcon, robberMarkup } from '../icons';
@@ -13,6 +13,14 @@ import { renderHand } from './hand';
 import { esc } from '../util';
 import { avatarFace } from '../avatars';
 import { showToast } from '../ui';
+import { addFishPick, fishNeed, fishPickCount, fishPickList, removeFishPick } from '../fishSpend';
+
+/** Picks for spending a stack of fish at once: resource -> count. Reset whenever the fish sheet opens or closes. */
+let fishSel: Record<string, number> = {};
+
+export function resetFishSel(): void {
+  fishSel = {};
+}
 
 function myPlayer(): any {
   return state.players.find(p => p.id === socket.id);
@@ -282,6 +290,30 @@ export function renderInlineDrawer(me: any, isMyTurn: boolean): void {
   } else if (drawerMode === 'fish') {
     btnCancel.style.display = 'flex';
     const fish = me.wildTokens?.fish || 0;
+    if (fish > 1) {
+      // A stack: all the fish are spent at once, one pick per fish.
+      const need = fishNeed(fish, state.bank);
+      if (fishPickCount(fishSel) > need) fishSel = {};
+      const picked = fishPickCount(fishSel);
+      const trayHtml = fishPickList(fishSel).map(r =>
+        `<div class="mini-res-card card-${r}" onclick="fishPickRemove('${r}')" title="Click to put back">${getMiniSvg(r)}</div>`
+      ).join('');
+      drawer.innerHTML = `
+        <div class="sheet-head">
+          <span class="sheet-title">${getMiniSvg('fish').replace('width="28" height="28"', 'width="22" height="22"')} Spend ${fish} fish</span>
+          <span class="sheet-sub">${picked} of ${need} chosen</span>
+        </div>
+        <div class="sheet-sub">Every fish becomes 1 card of a resource you pick, taken from the bank. Pick ${need}.</div>
+        <div class="pick-row">
+          ${RESOURCES.map(r => pickCardHtml(r, `fishPickAdd('${r}')`, (state.bank?.[r] ?? 0) > 0 ? `Take ${RES_META[r].name}` : `The bank has no ${RES_META[r].name} left`)).join('')}
+        </div>
+        <div class="tray">${trayHtml || '<span class="tray-hint">Nothing chosen yet</span>'}</div>
+        <div class="sheet-foot">
+          <button class="btn primary" ${picked !== need || need === 0 ? 'disabled' : ''} onclick="fishPickConfirm()" title="Spend all the fish">${uiIcon('check', 18)}Spend ${need}</button>
+        </div>
+      `;
+      return;
+    }
     drawer.innerHTML = `
       <div class="sheet-head">
         <span class="sheet-title">${getMiniSvg('fish').replace('width="28" height="28"', 'width="22" height="22"')} Spend a fish</span>
@@ -381,6 +413,7 @@ export function toggleTradeDrawer(): void {
 }
 
 export function closeInlineDrawer(): void {
+  resetFishSel();
   clearRes(tradeGive);
   clearRes(tradeWant);
   setDrawerMode(null);
@@ -436,6 +469,40 @@ export function spendFishPick(resource: string): void {
   }
   playTone(700, 0.1);
   socket.emit('act', { code: state.code, type: 'spend_fish', payload: { resource } });
+  setDrawerMode(null);
+  renderAll();
+}
+
+/** Fish stack sheet: take one more card of `resource` for the fish that are left to spend. */
+export function fishPickAdd(resource: string): void {
+  const me = myPlayer();
+  const next = addFishPick(fishSel, resource, me?.wildTokens?.fish || 0, state.bank);
+  if (next === fishSel) {
+    playTone(300, 0.1);
+    return;
+  }
+  fishSel = next;
+  playTone(500, 0.05);
+  renderAll();
+}
+
+/** Fish stack sheet: put a picked card back. */
+export function fishPickRemove(resource: string): void {
+  fishSel = removeFishPick(fishSel, resource);
+  playTone(420, 0.05);
+  renderAll();
+}
+
+/** Fish stack sheet: spend every fish, one `spend_fish` per pick (the server runs them in order). */
+export function fishPickConfirm(): void {
+  const me = myPlayer();
+  const need = fishNeed(me?.wildTokens?.fish || 0, state.bank);
+  if (need === 0 || fishPickCount(fishSel) !== need) return;
+  playTone(700, 0.1);
+  for (const resource of fishPickList(fishSel)) {
+    socket.emit('act', { code: state.code, type: 'spend_fish', payload: { resource } });
+  }
+  fishSel = {};
   setDrawerMode(null);
   renderAll();
 }

@@ -375,10 +375,12 @@ function nodeHtml(p: Placed, canAct: boolean, hand: Resources | undefined): stri
         ? 'Research on your turn'
         : r.reason || 'Not available yet';
   const click = mode === 'can' ? `onclick="researchTechClick('${esc(r.id)}')"` : '';
-  // Net rework: the server text (`tech.ts`) still says "coastal corners", so this node shows the one-tile rule instead of the server text.
-  const descText = r.id === 'tidebound.fishing_nets'
-    ? 'Unlocks Fishing Nets: put a net on one free sea tile next to your coast road or bridge. It fishes only that tile and catches fish tokens on dice rolls. Also lets your Settlements on 3:1 ports be raised to 2:1.'
-    : r.description;
+  // The server texts (`tech.ts`, pinned by the view snapshot) are older than these mechanics, so these nodes show the current rules instead.
+  const descOverride: Record<string, string> = {
+    'tidebound.fishing_nets': 'Unlocks Fishing Nets: put a net on one free sea tile next to your coast road or bridge. It fishes only that tile and catches fish tokens on dice rolls. Also lets your Settlements on 3:1 ports be raised to 2:1.',
+    'tidebound.harbor_master': 'Unlocks Harbors: upgrade a city on a port to 1:1 trades (click the port; up to 4 trades per turn; it keeps working while flooded), and Feed the Sea: pay 1 wheat to refill the fishing ground under one of your nets (click the net tile).'
+  };
+  const descText = descOverride[r.id] ?? r.description;
   return `
     <div class="tp-node st-${mode}" style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;--bc:var(${tile})" tabindex="0" role="button"
          aria-label="${esc(r.name)}${r.owned ? ', researched' : `, ${r.cost} cards`}" ${click}>

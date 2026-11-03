@@ -1034,6 +1034,12 @@ svg#boardSvg.is-panning {
 .port-badge-outer { fill: var(--pier-dark); stroke: var(--piece-rim); stroke-width: 2.2; }
 .port-badge { stroke: var(--pier-dark); stroke-width: 1.8; }
 .port-ring { fill: none; stroke: var(--accent); stroke-width: 4; }
+/* The port badge is the node for a harbor upgrade or a port raise; a harbor gets a dark badge with an anchor. */
+.port-node-ring { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: spotPulse 1.6s ease-in-out infinite; }
+.port-node.hot-dim { opacity: 0.4; }
+.port-node.hot-dim .port-node-ring { animation: none; }
+.port-badge-outer.harbor { fill: var(--accent); }
+.port-harbor-icon { color: var(--token); }
 .port-text { fill: var(--token-ink); font-weight: 800; text-anchor: middle; }
 .port-ratio-pill { fill: var(--token); stroke: var(--pier-dark); stroke-width: 1.4; }
 .token-text { font-weight: 700; text-anchor: middle; }

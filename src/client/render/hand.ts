@@ -4,7 +4,7 @@ import { getMiniSvg, getDevSvg, buildOverlappingStackHtml, uiIcon } from '../ico
 import { playTone } from '../audio';
 import { socket } from '../socket';
 import { state, drawerMode, tradeGive, tradeWant, discardSel, discardWild, wildDiscardCount, clearRes, setDrawerMode, counterTradeId, counterGive, inFlightHandResources, inFlightMyDevCards, spectateTargetId } from '../store';
-import { renderInlineDrawer } from './drawer';
+import { renderInlineDrawer, resetFishSel } from './drawer';
 import { adjustCounter } from './trade';
 import { esc } from '../util';
 import { avatarFace } from '../avatars';
@@ -272,6 +272,7 @@ export function onClickHandWild(id: string): void {
       clearRes(tradeGive);
       clearRes(tradeWant);
     }
+    resetFishSel();
     setDrawerMode(drawerMode === 'fish' ? null : 'fish');
     playTone(560, 0.05);
     renderHand(me, isMyTurn);

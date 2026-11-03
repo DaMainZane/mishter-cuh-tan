@@ -2,7 +2,8 @@
 
 Condensed 2026-11-02 (was ~227 KB, 111 passes). Newest first. Passes 83–95 and 101–102 were written without a shell; later full runs (96, 98, 100, 103+) passed.
 
-## Pass 112 (Nov 3)
+## Passes 112–113 (Nov 3)
+- **113** Tidebound bug sweep: fish icons 30% rarer (shore 17.5%, open 5.6%); a port raised to 2:1 keeps trading while flooded (a harbor already did); the port badge is now the node for a harbor upgrade and a port raise (the city keeps only the city upgrade), and a harbor gets its own sprite (dark badge, anchor, 1:1); a sea tile you can feed or put a net on is a build-menu hotspot; clicking a stack of fish spends them all, one resource pick per fish; Tides, Harbor, Fishing, Harbor master and toolbar texts match the current rules. Tests: `tests/tideboundharbor.test.ts`, `tests/tideboundmap.test.ts`, `tests/buildMenu.test.ts`, `tests/fishSpend.test.ts`.
 - **112** Build menu (Bug 5): on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a see-through pulsing hotspot (dim and still when you can pay for nothing there yet); a click opens a popover anchored to it listing only the pieces legal there (settlement, city, harbor, port raise, road, bridge, rickety bridge, manifest pieces and actions); Esc or a click outside closes it. One cost tooltip (`#costTip`) shows the price as resource card stacks with missing cards dimmed, after 150 ms hover or a long press, for the popover options and the build bar alike; an option you cannot pay for is disabled but keeps its tooltip. A build mode from the bar keeps the direct click. Model `client/buildMenu.ts`, DOM `client/render/buildmenu.ts` (gets its context from `renderBoard`, so no new import cycle), test `tests/buildMenu.test.ts`.
 
 ## Passes 104–111 (Nov 1–2)

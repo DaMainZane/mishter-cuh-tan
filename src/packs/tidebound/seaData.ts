@@ -21,9 +21,9 @@ export const ELEVATION_3_FROM = 0.9;
 
 /** Fish boosts a sea tile starts with (the icon counts down from here; Fishing, T7c). */
 export const FISH_BOOSTS = 4;
-/** Share of the sea tiles next to land that hold fish, and of the open sea beyond. Starting guesses: tune them with the gallery. */
-export const FISH_SHARE_SHORE = 0.25;
-export const FISH_SHARE_OPEN = 0.08;
+/** Share of the sea tiles next to land that hold fish, and of the open sea beyond. 30% below the first tuning (0.25 and 0.08): fish should hint at a good net spot, not fill the sea. */
+export const FISH_SHARE_SHORE = 0.25 * 0.7;
+export const FISH_SHARE_OPEN = 0.08 * 0.7;
 
 /** Elevation for a height `h` (0..1): 3 for the top tenth, 2 for the next quarter, else 1. */
 export function elevationOf(h: number): number {

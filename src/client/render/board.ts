@@ -32,7 +32,7 @@ import { syncBuildMenu } from './buildmenu';
 import { renderPiratesMarkup } from './pirates';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
-import { edgeOptions, vertexOptions } from '../buildMenu';
+import { edgeOptions, hexCandidates, hexOptions, vertexOptions } from '../buildMenu';
 import type { BuildOption, MenuContext } from '../buildMenu';
 import { manifestEntries } from '../visuals';
 import { isDebugOverlayActive, renderDebugBoardOverlayMarkup } from '../debug';
@@ -349,7 +349,7 @@ function tokenMarkup(n: number): string {
 }
 
 // Trading port dock strictly aligned to the coastal hex edge (tangent T along v1->v2, outward normal N).
-function portMarkup(e: any, v1: any, v2: any, h: any, owned: boolean, isLobbyHost: boolean): string {
+function portMarkup(e: any, v1: any, v2: any, h: any, owned: boolean, isLobbyHost: boolean, node: PortNode | null): string {
   const mx = (v1.x + v2.x) / 2;
   const my = (v1.y + v2.y) / 2;
   const dx = mx - h.x;
@@ -395,10 +395,16 @@ function portMarkup(e: any, v1: any, v2: any, h: any, owned: boolean, isLobbyHos
   const pLvl = Math.max(state.portLevels?.[e.v1] || 0, state.portLevels?.[e.v2] || 0);
   const any = e.port === '3:1';
   const kind: string = any ? 'any' : e.port;
-  const badgeFill = any ? 'var(--token)' : (RES_META[kind]?.color || 'var(--token)');
-  const badgeBorder = any ? 'var(--pier-dark)' : (RES_META[kind]?.border || 'var(--pier-dark)');
+  // A harbor (level 2) replaces the port sprite: a dark badge with an anchor and a 1:1 pill (BUG: the harbor looked the same as the port).
+  const isHarborPort = pLvl >= 2;
+  const badgeFill = isHarborPort ? 'var(--pier-dark)' : any ? 'var(--token)' : (RES_META[kind]?.color || 'var(--token)');
+  const badgeBorder = isHarborPort ? 'var(--accent)' : any ? 'var(--pier-dark)' : (RES_META[kind]?.border || 'var(--pier-dark)');
   const ratioText = pLvl >= 2 ? '1:1' : pLvl === 1 || !any ? '2:1' : '3:1';
-  const label = any
+  const label = isHarborPort
+    ? `<g class="port-harbor-icon" transform="translate(${(sx - 10).toFixed(1)}, ${(sy - 17).toFixed(1)})">${uiIcon('harbor', 20)}</g>
+       <rect class="port-ratio-pill" x="${(sx - 13).toFixed(1)}" y="${(sy + 5).toFixed(1)}" width="26" height="12" rx="6" />
+       <text class="port-text" x="${sx.toFixed(1)}" y="${(sy + 14).toFixed(1)}" font-size="8.8">${ratioText}</text>`
+    : any
     ? `<text class="port-text" x="${sx.toFixed(1)}" y="${(sy + 4.5).toFixed(1)}" font-size="13">${ratioText}</text>`
     : `${getBoardIconSvg(kind, Number(sx.toFixed(1)), Number((sy - 4.5).toFixed(1)), 0.56)}
        <rect class="port-ratio-pill" x="${(sx - 13).toFixed(1)}" y="${(sy + 5).toFixed(1)}" width="26" height="12" rx="6" />
@@ -416,10 +422,17 @@ function portMarkup(e: any, v1: any, v2: any, h: any, owned: boolean, isLobbyHos
       <circle class="port-post" cx="${b1x.toFixed(1)}" cy="${b1y.toFixed(1)}" r="5.2" />
       <circle class="port-post" cx="${b2x.toFixed(1)}" cy="${b2y.toFixed(1)}" r="5.2" />
       ${owned ? `<circle class="port-ring" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="24" />` : ''}
-      <circle class="port-badge-outer" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="21" />
+      <circle class="port-badge-outer${isHarborPort ? ' harbor' : ''}" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="21" />
       <circle class="port-badge" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="17.5" style="fill:${badgeFill};stroke:${badgeBorder}" />
       ${label}
+      ${node ? `<g class="port-node${node.dim ? ' hot-dim' : ''}" onclick="${node.call}" style="cursor:pointer"><circle class="port-node-ring" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="26" /><circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="26" fill="transparent" /></g>` : ''}
     </g>`;
+}
+
+/** The port is the node for a harbor upgrade and a port raise (not the city on it): the click it sends, and whether you cannot pay for any of it yet. */
+interface PortNode {
+  call: string;
+  dim: boolean;
 }
 
 export function renderBoard(me: any, isMyTurn: boolean): void {
@@ -839,7 +852,29 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.piratesLayer.innerHTML = piratesHtml;
   }
 
-  // 3. Ports Layer: rebuilds only when coastal ports, port ownership, or lobby port brush changes.
+  // BUG 5: on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a hotspot that opens the build menu.
+  // A build mode from the bar keeps the direct click (the piece is already chosen).
+  const menuCtx = isMyTurn && state.phase === 'MAIN' && !buildMode && me ? buildMenuContext(me) : null;
+  // Harbor mode (toolbar): the ports of the cities you can upgrade are the nodes, or the ports you can raise when only Harbor charters are known.
+  const harborModeOn = isMyTurn && state.phase === 'MAIN' && !!me && buildMode === 'harbor';
+  const harborModeSet = harborModeOn && canClientAffordHarbor(me) ? new Set<number>(me.harborSpots ?? []) : null;
+  const raiseModeSet = harborModeOn && !me.harborCost
+    ? new Set<number>(portRaiseSpots(state.techActions?.harbor, true).filter(s => s.affordable).map(s => s.vertexId))
+    : null;
+  const portNodeFor = (e: any): PortNode | null => {
+    for (const vid of [e.v1, e.v2]) {
+      const b = vertices[vid]?.building;
+      if (!b || b.owner !== socket.id) continue;
+      if (harborModeSet?.has(vid)) return { call: `clickHarborSpot(${vid})`, dim: false };
+      if (raiseModeSet?.has(vid)) return { call: `upgradePortClick(${vid})`, dim: false };
+      if (!menuCtx) continue;
+      const opts = vertexOptions(menuCtx, vid).filter(o => o.id === 'harbor' || o.id === 'upgrade_port');
+      if (opts.length > 0) return { call: `openBuildMenu('vertex', ${vid})`, dim: !opts.some(o => o.affordable) };
+    }
+    return null;
+  };
+
+  // 3. Ports Layer: rebuilds only when coastal ports, port ownership, port nodes, or lobby port brush changes.
   const canPaintPort = isLobbyHost && activeBrush.type === 'port';
   const portsSigParts: string[] = [cachedGeomBoardKey, canPaintPort ? '1' : '0'];
   for (const e of edges) {
@@ -848,7 +883,8 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const v1 = vertices[e.v1], v2 = vertices[e.v2];
       const owned = Boolean(v1 && v2 && [v1, v2].some((v: any) => v.building && v.building.owner === socket.id));
       const pLvl = Math.max(state.portLevels?.[e.v1] || 0, state.portLevels?.[e.v2] || 0);
-      portsSigParts.push(`${e.id}:${e.port}:${owned ? '1' : '0'}:${pLvl}`);
+      const nodeSig = portNodeFor(e);
+      portsSigParts.push(`${e.id}:${e.port}:${owned ? '1' : '0'}:${pLvl}:${nodeSig ? nodeSig.call + (nodeSig.dim ? 'd' : '') : ''}`);
     }
   }
   const portsKey = portsSigParts.join('|');
@@ -865,7 +901,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
 
       if (e.port) {
         const owned = [v1, v2].some((v: any) => v.building && v.building.owner === socket.id);
-        portsHtml += portMarkup(e, v1, v2, h, owned, isLobbyHost);
+        portsHtml += portMarkup(e, v1, v2, h, owned, isLobbyHost, portNodeFor(e));
       } else if (canPaintPort) {
         portsHtml += `
           <circle data-paintable="1" cx="${mx}" cy="${my}" r="9" style="fill:rgba(255,255,255,0.5);stroke:var(--accent);stroke-width:2;cursor:pointer"
@@ -1038,9 +1074,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
 
   // 5. Road & Bridge Spots Layer (buildable edges)
   const staticSpots = vertices.length > 120;
-  // BUG 5: on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a hotspot that opens the build menu.
-  // A build mode from the bar keeps the direct click (the piece is already chosen).
-  const menuCtx = isMyTurn && state.phase === 'MAIN' && !buildMode && me ? buildMenuContext(me) : null;
   let roadSpotsHtml = '';
   for (const e of edges) {
     if (e.road) continue;
@@ -1094,14 +1127,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   const robberVictimSet = new Set<string>(state.robberVictims || []);
   let verticesHtml = '';
   const canAffordCity = me ? canClientAffordPiece(me, 'city') : false;
-  // Harbors (T8a): in harbor mode the player's upgradable port cities get a clickable upgrade ring.
-  const harborSpotSet = isMyTurn && buildMode === 'harbor' && state.phase === 'MAIN' && me && canClientAffordHarbor(me)
-    ? new Set<number>(me.harborSpots ?? [])
-    : null;
-  // Harbor charters (BUG 4): your 3:1 port cities you can pay to raise to 2:1 get an upgrade ring without any build mode (like settlement to city). Not while another mode is on.
-  const raiseSet = isMyTurn && state.phase === 'MAIN' && me && (!buildMode || buildMode === 'harbor')
-    ? new Set<number>(portRaiseSpots(state.techActions?.harbor, true).filter(s => s.affordable).map(s => s.vertexId))
-    : null;
   for (const v of vertices) {
     if (v.building) {
       const owner = state.players.find(p => p.id === v.building.owner);
@@ -1112,19 +1137,16 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const canRobThisBuilding = isMyTurn && state.phase === 'ROBBER_STEAL' &&
         v.hexIds.includes(robberHexId) && robberVictimSet.has(v.building.owner);
       const isCity = v.building.type === 'city';
-      const canHarbor = isCity && Boolean(harborSpotSet?.has(v.id));
-      const canRaise = !canHarbor && !canUpgrade && Boolean(raiseSet?.has(v.id));
-      const isClickable = canUpgrade || canRobThisBuilding || canHarbor;
-      // BUG 5: with the build menu on, your own building is a hotspot when it offers anything (city, harbor, port raise), affordable or not.
-      const menuOpts = menuCtx && v.building.owner === socket.id ? vertexOptions(menuCtx, v.id) : [];
-      const showRing = menuCtx ? menuOpts.length > 0 : ((!isCity && canUpgrade) || canHarbor || canRaise);
+      const isClickable = canUpgrade || canRobThisBuilding;
+      // BUG 5: with the build menu on, your own building is a hotspot when it offers a city (affordable or not).
+      // The harbor upgrade and the port raise are on the port (`portNodeFor`), not on the building.
+      const menuOpts = menuCtx && v.building.owner === socket.id
+        ? vertexOptions(menuCtx, v.id).filter(o => o.id !== 'harbor' && o.id !== 'upgrade_port')
+        : [];
+      const showRing = menuCtx ? menuOpts.length > 0 : (!isCity && canUpgrade);
       const clickAttr = menuOpts.length > 0
         ? `openBuildMenu('vertex', ${v.id})`
-        : canHarbor
-        ? `clickHarborSpot(${v.id})`
-        : canRaise
-          ? `upgradePortClick(${v.id})`
-          : (isCity ? canRobThisBuilding : isClickable)
+        : (isCity ? canRobThisBuilding : isClickable)
           ? `clickVertex(${v.id})`
           : '';
       const ringR = isCity ? 27 : 22;
@@ -1174,7 +1196,17 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   syncBuildMenu(menuCtx);
 
   // 7. Generic spots of manifest pieces and actions (R8.7): the spots of the active build mode, from the server's `pieces[id].spots`. Empty until a piece has a visual.
-  const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn);
+  // BUG: a sea tile you can feed (under your net) or put a net on is a hotspot of the build menu, like a corner or an edge.
+  let hexSpotsHtml = '';
+  if (menuCtx) {
+    for (const id of hexCandidates(menuCtx)) {
+      const h = hexes[id];
+      const opts = h && !h.fog ? hexOptions(menuCtx, id) : [];
+      if (opts.length === 0) continue;
+      hexSpotsHtml += `<g transform="translate(${h.x}, ${h.y})" onclick="openBuildMenu('hex', ${id})" style="cursor:pointer"><circle class="spot-pulse hotspot${staticSpots ? ' spot-static' : ''}${opts.some(o => o.affordable) ? '' : ' hot-dim'}" r="26" /></g>`;
+    }
+  }
+  const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn) + hexSpotsHtml;
   if (pieceSpotsHtml !== lastPieceSpotsHtml) {
     lastPieceSpotsHtml = pieceSpotsHtml;
     layers.pieceSpotsLayer.innerHTML = pieceSpotsHtml;
@@ -1484,6 +1516,10 @@ export function buildMenuContext(me: any): MenuContext {
     ricketyOn: isRicketyEnabled(me),
     harborCost: me?.harborCost ?? null,
     portRaise: portRaiseSpots(state.techActions?.harbor, true),
+    feedSpots: me?.feedSpots,
+    feedCost: me?.feedCost ?? null,
+    netSpots: me?.netSpots,
+    netCost: me?.netCost ?? null,
     entries: manifestEntries()
   };
 }

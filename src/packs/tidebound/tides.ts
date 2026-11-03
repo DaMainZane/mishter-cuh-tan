@@ -1,10 +1,11 @@
-// MODULE: tidebound.tides addon (T5a: `flooded` tile state, coast clusters, seeded per-cluster tide schedule applied at round start; T5b: spring tide; T5c: tide level 1 to 5 from the host's slider; T5d: elevation resistance; T5e: ports idle while their land is flooded; T6: warning a turn ahead, overlays and elevation data for the client; T13a: flood exposure in scoreVertex) | DEPENDS ON: packs/tidebound/harbor, packs/tidebound/seaData, shared/index, shared/mapshape, shared/rng, shared/tileState | USED BY: packs/tidebound/addons.generated, packs/tidebound/fishing, packs/tidebound/index, packs/tidebound/risingSea
+// MODULE: tidebound.tides addon (T5a: `flooded` tile state, coast clusters, seeded per-cluster tide schedule applied at round start; T5b: spring tide; T5c: tide level 1 to 5 from the host's slider; T5d: elevation resistance; T5e: ports idle while their land is flooded; T6: warning a turn ahead, overlays and elevation data for the client; T13a: flood exposure in scoreVertex) | DEPENDS ON: packs/base/techEffects, packs/tidebound/harbor, packs/tidebound/seaData, shared/index, shared/mapshape, shared/rng, +1 more | USED BY: packs/tidebound/addons.generated, packs/tidebound/fishing, packs/tidebound/index, packs/tidebound/risingSea
 import { addonOn, BOT_GOALS, OVERLAY_KINDS, PORT_IDLE_CHECKS, VIEW_DATA } from '../../shared';
 import type { AddonDef, BotGoalDef, Ctx, GameState, Hex, OverlayKindVisual, Registry, ViewDataDef } from '../../shared';
 import { HEX_DIRS } from '../../shared/mapshape';
 import { createRng, rngInt, rngShuffle } from '../../shared/rng';
 import type { RngState } from '../../shared/rng';
 import { getTileState, setTileState } from '../../shared/tileState';
+import { portLevel } from '../base/techEffects';
 import { isHarbor } from './harbor';
 import { ELEVATION_MAX, ELEVATION_MIN } from './seaData';
 
@@ -342,9 +343,11 @@ export function applyTides(ctx: Ctx): { risen: number[]; fell: number[] } {
 /**
  * Is the port on this vertex under water? Yes when it touches at least one land tile and every land tile it touches is flooded (a coast vertex
  * between a flooded and a dry tile keeps trading). Sea tiles do not count. Hidden (fog) land never floods, so it keeps the port working.
- * A harbor (T8) keeps working while flooded, so it is never idle here or in `PORT_IDLE_CHECKS`.
+ * A harbor (T8) keeps working while flooded, so it is never idle here or in `PORT_IDLE_CHECKS`. Neither is a port raised to 2:1 by Harbor charters
+ * (any upgraded port, level 1 or 2): an upgraded port is a harbor of sorts, and the flood must not undo the upgrade you paid for.
  */
 export function isPortFlooded(g: GameState, reg: Registry, vertexId: number): boolean {
+  if (portLevel(g, vertexId) >= 1) return false;
   if (addonOn(reg, 'tidebound.harbor') && isHarbor(g, vertexId)) return false;
   const v = g.board.vertices[vertexId];
   if (!v) return false;
@@ -603,7 +606,7 @@ export const tidesBotGoal: BotGoalDef = {
       }
     }
 
-    if (v.port && landCount > 0 && minPortFloodShare > 0 && !(addonOn(reg, 'tidebound.harbor') && isHarbor(g, vertexId))) {
+    if (v.port && landCount > 0 && minPortFloodShare > 0 && portLevel(g, vertexId) < 1 && !(addonOn(reg, 'tidebound.harbor') && isHarbor(g, vertexId))) {
       delta -= 0.6 * minPortFloodShare;
     }
 
@@ -614,7 +617,7 @@ export const tidesBotGoal: BotGoalDef = {
 export const tidesAddon: AddonDef = {
   id: 'tidebound.tides',
   name: 'Tides',
-  description: 'Coast tiles flood on a seeded schedule and produce nothing while flooded. Higher ground resists.',
+  description: 'Coast tiles flood on a seeded schedule; a flooded tile yields half, rounded up, for every settlement and city on it. Higher ground resists.',
   links: [
     { target: 'round-clock', kind: 'mechanic' },
     { target: 'tile-state', kind: 'mechanic' },

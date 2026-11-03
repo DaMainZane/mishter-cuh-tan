@@ -206,6 +206,32 @@ describe('Tidebound T8a: Harbor 1:1 upgrade, limit 1 per player, works while flo
     expect(ratioFor(g, reg, 'a', 'ore')).toBe(1);
   });
 
+  it('a port raised to 2:1 (Harbor charters) also keeps trading while flooded, and a harbor on a 2:1 resource port still trades 1:1 flooded', () => {
+    const { g, reg } = makeGame(on);
+    const [genericVid, woodVid] = assignPorts(g, GENERIC_PORT, 'wood');
+    g.board.vertices[genericVid].piece = { type: CITY, owner: 'a' };
+    g.board.vertices[woodVid].piece = { type: CITY, owner: 'b' };
+    for (const vId of [genericVid, woodVid]) {
+      for (const hId of g.board.vertices[vId].hexIds) {
+        if (reg.tiles.get(g.board.hexes[hId]?.type)?.land) setTileState(g, hId, { id: FLOODED });
+      }
+    }
+    // Raised to 2:1 (level 1) but not a harbor: the flood must not idle it.
+    g.ext.core = g.ext.core || {};
+    g.ext.core.portUpgrades = { [genericVid]: { level: 1, by: 'a' } };
+    expect(isPortFlooded(g, reg, genericVid)).toBe(false);
+    expect(isPortIdle(g, reg, genericVid)).toBe(false);
+    expect(ratioFor(g, reg, 'a', 'ore')).toBe(2);
+    // An unraised port next to it is still idle in the flood.
+    expect(isPortIdle(g, reg, woodVid)).toBe(true);
+    expect(ratioFor(g, reg, 'b', 'wood')).toBe(4);
+    // A harbor on the 2:1 wood port trades 1:1 for wood while flooded.
+    g.board.vertices[woodVid].piece = { type: CITY, owner: 'a' };
+    g.players[0].resources = { ...HARBOR_COST, wheat: 0, sheep: 0 };
+    expect(act(g, reg, 'a', UPGRADE_HARBOR, { vertexId: woodVid }).ok).toBe(true);
+    expect(ratioFor(g, reg, 'a', 'wood')).toBe(1);
+  });
+
   it('provides harborSpotsView, harborClientView, and minimal bot goal support', () => {
     const { g, reg, ctx } = makeGame(on);
     const [genericVid, woodVid] = assignPorts(g, GENERIC_PORT, 'wood');

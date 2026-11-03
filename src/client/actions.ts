@@ -500,7 +500,7 @@ export function setBuildMode(mode: string): void {
       const raise = portRaiseSpots(state.techActions?.harbor, true);
       if (raise.length === 0) showToast('Build a city on a 3:1 port to raise it to 2:1.');
       else if (!raise.some(s => s.affordable)) showToast('Not enough resources to raise a port.');
-      else showToast('Click a glowing port city to raise it to 2:1.');
+      else showToast('Click a glowing port to raise it to 2:1.');
     }
     else if (me && !canClientAffordHarbor(me)) showToast('Not enough resources for a harbor.');
     else if (me && !me.harborSpots?.length) showToast('Build a city on a port first to upgrade it to a harbor.');

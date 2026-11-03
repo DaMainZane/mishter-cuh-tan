@@ -197,6 +197,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `constants.ts` | resource and dev card metadata (names, token colors) |
 | `cursors.ts` | lobby cursors and laser pointer (non-hosts cannot edit the map, they point at it instead) |
 | `debug.ts` | client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays |
+| `fishSpend.ts` | fish spend picks (pure: how many cards a stack of fish buys, adding and removing picks within the bank's supply, the list to send) |
 | `globals.d.ts` | type declaration for the global socket.io `io`, loaded by a script tag in index.html |
 | `icons.ts` | flat resource pictograms, dev card glyphs, UI icons, piece shapes |
 | `logFilter.ts` | live log filter matching (pure: splits a filter key and decides whether a turn action matches it) |
@@ -297,3 +298,4 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `logfilter.test.ts` | Live log filter (`client/logFilter.ts`): the player filter keeps only that player's own turns (an action in another player's turn that names them is dropped, past rounds stay), and the round, category, resource and value filters still work |
 | `pirateicon.test.ts` | Pirate icon (`client/pirateIcon.ts`, Bug 6): same id gives the same look, the head only from the head list, every head gets used, the sail plus exactly one unmirrored glyph, no black background square, size about 1.5x the old ship, and the board layer (`renderPiratesMarkup`) drawing the new icon, keeping the strength badge and ringing the bigger badge |
 | `buildMenu.test.ts` | Build menu (`client/buildMenu.ts`, BUG 5): which pieces a corner or edge offers (settlement, city, harbor, port raise, road, bridge, rickety bridge, manifest entries) by position only, unaffordable ones listed but not payable, free roads, cost tooltip dimming and Free, 150 ms hover and long-press delay, popover placement on screen |
+| `fishSpend.test.ts` | Spending a stack of fish at once (`client/fishSpend.ts`): one pick per fish, limited by the bank, add and remove picks, the list sent as `spend_fish` |

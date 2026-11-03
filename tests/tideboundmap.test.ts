@@ -348,7 +348,7 @@ describe('sea data: fish', () => {
   const ringOf = (h: HexInit) => hexDistance(h, { q: 0, r: 0 });
   const ctx = () => ({ reg: on, noise: createNoise('FISH'), rng: createRng('R') }) as any;
 
-  it('shares are fixed counts: shore sea 25%, open sea 8%, fish only on sea, none on land or river', () => {
+  it('shares are fixed counts: shore sea 17.5%, open sea 5.6%, fish only on sea, none on land or river', () => {
     const inits = canvas();
     // One ring-2 tile is a river channel: not sea for fish.
     const river = inits.find(h => ringOf(h) === 2)!;
@@ -367,6 +367,11 @@ describe('sea data: fish', () => {
     expect(fish.filter(h => ringOf(h) >= 3)).toHaveLength(Math.round(openN * FISH_SHARE_OPEN));
     expect(fish.filter(h => ringOf(h) <= 1)).toHaveLength(0);
     expect(river.ext!.fish).toBeUndefined();
+  });
+
+  it('fish are 30% rarer than the first tuning (shore 25% -> 17.5%, open 8% -> 5.6%), so they only hint at where a net pays off', () => {
+    expect(FISH_SHARE_SHORE).toBeCloseTo(0.25 * 0.7, 10);
+    expect(FISH_SHARE_OPEN).toBeCloseTo(0.08 * 0.7, 10);
   });
 
   it('draws no RNG (the stage stream is untouched), and the same noise gives the same tiles', () => {

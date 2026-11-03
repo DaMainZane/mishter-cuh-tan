@@ -28,7 +28,7 @@ import {
 import { onClickHandResource, onClickHandWild, onClickDevCard } from './render/hand';
 import {
   toggleTradeDrawer, closeInlineDrawer, confirmInlineAction, executeBankTrade, proposePlayerTrade,
-  confirmMonopoly, pickGold, spendFishPick, chooseRobberVictim, adjustDiscard, removeCardFromDiscard, removeWildFromDiscard, adjustTradeWant, adjustTradeGive, fixBankTrade
+  confirmMonopoly, pickGold, spendFishPick, chooseRobberVictim, adjustDiscard, removeCardFromDiscard, removeWildFromDiscard, adjustTradeWant, adjustTradeGive, fixBankTrade, fishPickAdd, fishPickRemove, fishPickConfirm
 } from './render/drawer';
 import { sendChat, toggleRoundCollapse, toggleLogFilter, renderSidebar } from './render/sidebar';
 import { toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick } from './render/techpanel';
@@ -77,7 +77,7 @@ Object.assign(window as any, {
   toggleTradeDrawer, buyDevCard, setBuildMode, mainTurnButton, sendChat,
   setLogTab: onSetLogTab, toggleRoundCollapse, toggleLogFilter, toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick,
   clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker, clickPirate, clickSpot,
-  openBuildMenu, chooseBuildOption, closeBuildMenu,
+  openBuildMenu, chooseBuildOption, closeBuildMenu, fishPickAdd, fishPickRemove, fishPickConfirm,
   confirmTradeWith, cancelTrade, respondToTrade, onClickHandResource, onClickHandWild, onClickDevCard,
   startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed, cycleAvatar, cycleBotTier, setSetupOpen,
   startSavePreset, cancelSavePreset, confirmSavePreset, presetNameKey, applyCustomPreset, applyPresetStyle,

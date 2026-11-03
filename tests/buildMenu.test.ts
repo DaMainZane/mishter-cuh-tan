@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TIP_HOVER_MS, TIP_LONG_PRESS_MS, bridgeSiteOk, costTipHtml, edgeOptions, popoverPlace, roadSiteOk, settlementSiteOk, tipDelay, vertexOptions
+  TIP_HOVER_MS, TIP_LONG_PRESS_MS, bridgeSiteOk, costTipHtml, edgeOptions, hexOptions, popoverPlace, roadSiteOk, settlementSiteOk, tipDelay, vertexOptions
 } from '../src/client/buildMenu';
 import type { MenuBoard, MenuContext, MenuPlayer } from '../src/client/buildMenu';
 import type { ManifestEntry } from '../src/shared';
@@ -152,6 +152,30 @@ describe('build menu: options on an edge', () => {
     expect(ids(edgeOptions(ctx(b, player()), 3))).toEqual(['bridge']);
     expect(ids(edgeOptions(ctx(b, player(), { ricketyOn: true }), 3))).toEqual(['bridge', 'rickety_bridge']);
     expect(edgeOptions(ctx(b, player({ bridgesLeft: 0 }), { ricketyOn: true }), 3)).toEqual([]);
+  });
+});
+
+describe('build menu: options on a sea tile', () => {
+  const wheat = { wheat: 1 };
+  const netCost = { wood: 2, sheep: 1 };
+
+  it('a tile you can feed offers Feed the sea at the feed price, a tile you can put a net on offers a net at the net price', () => {
+    const c = ctx(strip(), player(), { feedSpots: [4], feedCost: wheat, netSpots: [7], netCost });
+    expect(hexOptions(c, 4)).toEqual([expect.objectContaining({ id: 'feed_sea', label: 'Feed the sea', cost: wheat, affordable: true })]);
+    expect(hexOptions(c, 7)).toEqual([expect.objectContaining({ id: 'place_net', cost: netCost, affordable: true })]);
+    expect(hexOptions(c, 9)).toEqual([]);
+  });
+
+  it('a tile that is both (a net spot cannot hold your net, so this is only a guard) lists feed first; you cannot pay -> listed but not payable', () => {
+    const c = ctx(strip(), player({ resources: BROKE }), { feedSpots: [4], feedCost: wheat, netSpots: [4], netCost });
+    const opts = hexOptions(c, 4);
+    expect(opts.map(o => o.id)).toEqual(['feed_sea', 'place_net']);
+    expect(opts.every(o => !o.affordable)).toBe(true);
+  });
+
+  it('without prices or spots from the server the tile offers nothing', () => {
+    expect(hexOptions(ctx(strip(), player(), { feedSpots: [4] }), 4)).toEqual([]);
+    expect(hexOptions(ctx(strip(), player()), 4)).toEqual([]);
   });
 });
 

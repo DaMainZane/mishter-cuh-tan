@@ -6,14 +6,14 @@ import { esc } from '../util';
 import { iconHtml } from '../pieceModel';
 import { placeAt } from '../pieceui';
 import { manifestEntry } from '../visuals';
-import { costTipHtml, edgeOptions, popoverPlace, tipDelay, vertexOptions } from '../buildMenu';
+import { costTipHtml, edgeOptions, hexOptions, popoverPlace, tipDelay, vertexOptions } from '../buildMenu';
 import type { BuildOption, MenuContext } from '../buildMenu';
 import { upgradePortClick } from './techpanel';
 
 // The pure half (which pieces, which price, the delay, where the popover sits) is `client/buildMenu.ts`. `board.ts` hands this file the menu context on
 // every render (`syncBuildMenu`), so this file never imports the renderers (no new import cycle).
 
-type NodeKind = 'vertex' | 'edge';
+type NodeKind = 'vertex' | 'edge' | 'hex';
 
 let open: { kind: NodeKind; id: number } | null = null;
 /** Set by `board.ts` on every render: null when the menu is off (not your main-phase turn, or a build mode is on). */
@@ -144,7 +144,7 @@ function ensureDom(): void {
 
 function optionsAt(kind: NodeKind, id: number): BuildOption[] {
   if (!ctx) return [];
-  return kind === 'vertex' ? vertexOptions(ctx, id) : edgeOptions(ctx, id);
+  return kind === 'vertex' ? vertexOptions(ctx, id) : kind === 'edge' ? edgeOptions(ctx, id) : hexOptions(ctx, id);
 }
 
 function optionHtml(o: BuildOption, hand: Record<string, number> | undefined): string {
@@ -162,7 +162,11 @@ function nodeScreenPoint(kind: NodeKind, id: number): { x: number; y: number } |
   if (!svg || !b) return null;
   let x: number;
   let y: number;
-  if (kind === 'vertex') {
+  if (kind === 'hex') {
+    const h = b.hexes[id];
+    if (!h) return null;
+    x = h.x; y = h.y;
+  } else if (kind === 'vertex') {
     const v = b.vertices[id];
     if (!v) return null;
     x = v.x; y = v.y;
@@ -264,6 +268,10 @@ export function chooseBuildOption(optionId: string): void {
       break;
     case 'upgrade_port':
       upgradePortClick(id);
+      break;
+    case 'feed_sea':
+    case 'place_net':
+      socket.emit('act', { code, type: opt.id, payload: { hexId: id } });
       break;
   }
 }

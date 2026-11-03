@@ -471,7 +471,7 @@ export const harborBotGoal: BotGoalDef = {
 export const harborAddon: AddonDef = {
   id: 'tidebound.harbor',
   name: 'Harbor',
-  description: 'Upgrade a port to a harbor for 1:1 trades. One per player, and it keeps working while flooded.',
+  description: 'Upgrade a port city to a harbor for 1:1 trades: click the port itself. One per player. A harbor, and any port raised to 2:1, keeps working while flooded.',
   links: [
     { target: 'trade-ratio', kind: 'mechanic' },
     { target: 'piece-cost', kind: 'mechanic' },

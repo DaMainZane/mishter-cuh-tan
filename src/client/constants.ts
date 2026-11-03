@@ -1,4 +1,4 @@
-// MODULE: resource and dev card metadata (names, token colors) | DEPENDS ON: none | USED BY: client/render/board, client/render/drawer, client/render/hand, client/render/sidebar, client/render/trade
+// MODULE: resource and dev card metadata (names, token colors) | DEPENDS ON: none | USED BY: client/fishSpend, client/render/board, client/render/drawer, client/render/hand, client/render/sidebar, client/render/trade
 // Colors are CSS variables defined in styles.css (design tokens). Never hardcode hex here.
 
 export const RESOURCES: string[] = ['wood', 'brick', 'sheep', 'wheat', 'ore'];
