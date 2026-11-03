@@ -11,7 +11,7 @@ import {
 } from './store';
 import { renderAll } from './render/index';
 import {
-  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations,
+  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations, panBoardPreview, endBoardPan,
   triggerAwardAnimation, onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
   onRoadHover, onRoadMove, onRoadLeave
 } from './render/board';
@@ -400,8 +400,8 @@ function init(): void {
     if (isPanning && state && state.board) {
       if (!hasDraggedMap && Math.hypot(e.clientX - panOrigin.x, e.clientY - panOrigin.y) > 4) {
         setHasDraggedMap(true);
-        const svg = document.getElementById('boardSvg');
-        if (svg) svg.classList.add('is-panning');
+        // BUG 1: a shield over the board takes the pointer during a drag (no hover work); turning off pointer events on the svg would restyle every node.
+        document.getElementById('boardPanShield')?.classList.add('on');
         onRoadLeave();
       }
       const rect = panSvgRect || cachedWheelRect;
@@ -413,15 +413,16 @@ function init(): void {
       panStart.x = e.clientX;
       panStart.y = e.clientY;
       setCamPan(camPanX + dx * worldPerPx, camPanY + dy * worldPerPx);
-      rerenderBoard();
+      // BUG 1: a drag moves the painted board (CSS translate); the real viewBox is written at the end, or when unpainted board would show.
+      panBoardPreview(rect);
     }
   });
   window.addEventListener('mouseup', () => {
+    if (isPanning) endBoardPan();
     setIsMouseDown(false);
     setIsPanning(false);
     panSvgRect = null;
-    const svg = document.getElementById('boardSvg');
-    if (svg) svg.classList.remove('is-panning');
+    document.getElementById('boardPanShield')?.classList.remove('on');
   });
   stage.addEventListener('click', (e: MouseEvent) => {
     const target = e.target as Element | null;

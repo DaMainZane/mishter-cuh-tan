@@ -305,7 +305,9 @@
       <div id="roundRecapMount" class="round-recap-mount" style="display:none;"></div>
 
       <!-- Board -->
-      <svg id="boardSvg" viewBox="-500 -450 1000 900"></svg>
+      <!-- BUG 1: a drag moves this wrapper (a CSS translate on its own GPU layer); moving the svg itself would restyle every node -->
+      <div id="boardPan" class="board-pan"><svg id="boardSvg" viewBox="-500 -450 1000 900"></svg></div>
+      <div id="boardPanShield" class="board-pan-shield"></div>
       <div id="roadHoverTooltip" class="road-hover-tooltip"></div>
 
       <!-- Bottom-left sheet and trade confirm buttons -->

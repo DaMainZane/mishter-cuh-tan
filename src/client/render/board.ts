@@ -36,6 +36,8 @@ import { edgeOptions, hexCandidates, hexOptions, vertexOptions } from '../buildM
 import type { BuildOption, MenuContext } from '../buildMenu';
 import { manifestEntries } from '../visuals';
 import { isDebugOverlayActive, renderDebugBoardOverlayMarkup } from '../debug';
+import { hiddenEdges, needsRepaint } from '../panPreview';
+import type { Box } from '../panPreview';
 
 const knownRoads = new Set<number>();
 const knownRoadPieces = new Map<number, { owner: string; pieceType: string }>();
@@ -68,6 +70,16 @@ let cachedBounds = { centerX0: 0, centerY0: 0, contentW: 1000, contentH: 900 };
 let lastBuildingScale = -1;
 let lastRoadScale = -1;
 let cameraRafPending = false;
+// BUG 1 (drag lag on big maps): the camera pan the viewBox was last written for. While dragging, the board is moved by a CSS translate of the
+// difference instead of a new viewBox, so the browser moves one painted layer instead of repainting every SVG node each frame.
+let committedPanX = 0;
+let committedPanY = 0;
+/** Off-screen board on each side at the last repaint, in pixels (computed on the first drag frame after it). */
+let panHidden: Box | null = null;
+let panRect: DOMRect | null = null;
+let panFramePending = false;
+/** Unpainted strip (a share of the shorter screen side) a drag may show before the board repaints mid-drag. */
+const PAN_SLACK = 0.12;
 
 // Layer dirty-keys so gameplay updates (rolls, trades, builds, selections) do not rebuild static hex terrain or ports.
 let lastTerrainKey = '';
@@ -155,6 +167,11 @@ export function updateCameraViewBox(): void {
   const baseX = (centerX0 - camPanX) - baseW / 2;
   const baseY = (centerY0 - camPanY) - baseH / 2;
   svg.setAttribute('viewBox', `${baseX.toFixed(1)} ${baseY.toFixed(1)} ${baseW.toFixed(1)} ${baseH.toFixed(1)}`);
+  committedPanX = camPanX;
+  committedPanY = camPanY;
+  panHidden = null;
+  const panLayer = document.getElementById('boardPan');
+  if (panLayer?.style.transform) panLayer.style.transform = '';
 
   // Scale settlements, cities, robber, shipwrecks, pirates, and roads up as the camera zooms out (or on larger boards).
   // Scoped to the vertex/spot, dynamic/wreck/pirate, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
@@ -1231,6 +1248,53 @@ export function rerenderBoard(): void {
     cameraRafPending = false;
     updateCameraViewBox();
   });
+}
+
+/**
+ * One drag frame (BUG 1): moves the painted board by the pan since the last repaint with a CSS translate of  (the svg's wrapper). It repaints (a real viewBox) only when the
+ * drag would bring board into view that was off-screen at the last repaint by more than `PAN_SLACK` of the screen; a whole-board view never
+ * repaints mid-drag. `rect` is the board's screen box at the start of the drag.
+ */
+export function panBoardPreview(rect: DOMRect): void {
+  panRect = rect;
+  if (!state || panFramePending) return;
+  panFramePending = true;
+  requestAnimationFrame(() => {
+    panFramePending = false;
+    applyPanPreview();
+  });
+}
+
+function applyPanPreview(): void {
+  const svg = document.getElementById('boardSvg');
+  const rect = panRect;
+  if (!svg || !rect || !state?.board) return;
+  const { centerX0, centerY0, contentW, contentH } = getBoardBounds();
+  const worldPerPx = camZoom * Math.max(contentW / (rect.width || 1), contentH / (rect.height || 1));
+  if (!panHidden) {
+    const cx = centerX0 - committedPanX;
+    const cy = centerY0 - committedPanY;
+    const halfW = (rect.width * worldPerPx) / 2;
+    const halfH = (rect.height * worldPerPx) / 2;
+    panHidden = hiddenEdges(
+      { left: centerX0 - contentW / 2, top: centerY0 - contentH / 2, right: centerX0 + contentW / 2, bottom: centerY0 + contentH / 2 },
+      { left: cx - halfW, top: cy - halfH, right: cx + halfW, bottom: cy + halfH },
+      worldPerPx
+    );
+  }
+  const dx = (camPanX - committedPanX) / worldPerPx;
+  const dy = (camPanY - committedPanY) / worldPerPx;
+  if (needsRepaint(panHidden, dx, dy, PAN_SLACK * Math.min(rect.width, rect.height))) {
+    updateCameraViewBox();
+    return;
+  }
+  (document.getElementById('boardPan') ?? svg).style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
+}
+
+/** The drag ended: write the real viewBox for where the board now is (this drops the translate). */
+export function endBoardPan(): void {
+  panRect = null;
+  if (state?.board) updateCameraViewBox();
 }
 
 export function resetCamera(): void {
