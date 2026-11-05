@@ -22,10 +22,12 @@ Locked 2026-10-28, updated the same evening. This file is the spec for the next 
 
 ```
 V    = settlements * 1 + cities * 2 + castles * 3        // this player's building value
-cost = max(FLOOR, tier + offset + ceil(V / DIVISOR))     // in cards
+cost = max(FLOOR, round(BASE_FACTOR * (tier + offset) + SCALE_FACTOR * ceil(V / DIVISOR)))     // in cards
+// Nov 2026 rebalance: BASE_FACTOR 0.65 (the tier part 35% cheaper), SCALE_FACTOR 0.2 (the building-value part 80% cheaper).
+// Tables below were written for the old formula (factors 1 and 1): read the numbers as the old prices.
 ```
 
-- Constants live in one object: `TECH_COST = { settlement: 1, city: 2, castle: 3, divisor: 3, floor: 2 }`. Tune in the sim matrix.
+- Constants live in one object: `TECH_COST = { settlement: 1, city: 2, castle: 3, divisor: 3, floor: 2, baseFactor: 0.65, scaleFactor: 0.2 }`. Tune in the sim matrix.
 - `tier` is 1 for every root. Deeper nodes add 1 per tier.
 - `offset` is per tech (section 3), so impact can shift the price.
 - Count pieces with `placedCount(g, pid, 'settlement' | 'city' | 'castle')`.

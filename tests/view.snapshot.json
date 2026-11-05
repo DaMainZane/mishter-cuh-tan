@@ -1459,14 +1459,13 @@
     {
      "branch": "warlords",
      "canResearch": true,
-     "cost": 3,
+     "cost": 2,
      "description": "When you play a knight, the steal takes 1 extra card.",
      "id": "warlords.plunder",
      "name": "Plunder",
      "owned": false,
      "payment": {
       "ore": 1,
-      "sheep": 1,
       "wheat": 1
      },
      "prereqs": [],
@@ -1476,14 +1475,13 @@
     {
      "branch": "wildearth",
      "canResearch": true,
-     "cost": 3,
+     "cost": 2,
      "description": "Once: turn a land tile next to your settlement or city into a basic resource tile of your choice.",
      "id": "wildearth.ground_work",
      "name": "Ground work",
      "owned": false,
      "payment": {
       "brick": 1,
-      "wheat": 1,
       "wood": 1
      },
      "prereqs": [],
@@ -1509,15 +1507,14 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 6,
+     "cost": 3,
      "description": "Unlocks Rickety Bridges (1 wood, 1 health, collapses on a 7; upgradeable to a full bridge) and raises your bridge cap by +4 before bridges cost 2x.",
      "id": "tidebound.rickety_bridges",
      "name": "Rickety bridges",
      "owned": true,
      "path": "expansion",
      "payment": {
-      "ore": 2,
-      "sheep": 2,
+      "brick": 1,
       "wood": 2
      },
      "prereqs": [
@@ -1529,16 +1526,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 6,
+     "cost": 3,
      "description": "Unlocks Fishing Nets on coastal corners (catch wild fish tokens on dice rolls) and lets your Settlements on 3:1 ports be raised to 2:1.",
      "id": "tidebound.fishing_nets",
      "name": "Fishing nets",
      "owned": true,
      "path": "industrial",
      "payment": {
-      "ore": 2,
-      "sheep": 2,
-      "wood": 2
+      "sheep": 1,
+      "wheat": 1,
+      "wood": 1
      },
      "prereqs": [
       "tidebound.harbor_charters"
@@ -1549,16 +1546,15 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 9,
+     "cost": 5,
      "description": "+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
      "id": "tidebound.salvage_crew",
      "name": "Salvage crew",
      "owned": true,
      "path": "expansion",
      "payment": {
-      "ore": 3,
-      "sheep": 3,
-      "wood": 3
+      "brick": 2,
+      "sheep": 3
      },
      "prereqs": [
       "tidebound.rickety_bridges"
@@ -1569,16 +1565,15 @@
     {
      "branch": "tidebound",
      "canResearch": true,
-     "cost": 9,
+     "cost": 5,
      "description": "Fishing Nets cost 1 less wood (1 wood + 1 sheep), base catch chance rises to 1 in 4 (1 in 2 when boosted), and boosted catches have a 1 in 3 chance to save the fish boost.",
      "id": "tidebound.net_works",
      "name": "Net works",
      "owned": false,
      "path": "industrial",
      "payment": {
-      "ore": 3,
-      "sheep": 3,
-      "wood": 3
+      "wheat": 3,
+      "wood": 2
      },
      "prereqs": [
       "tidebound.fishing_nets"
@@ -1589,16 +1584,15 @@
     {
      "branch": "tidebound",
      "canResearch": true,
-     "cost": 11,
+     "cost": 7,
      "description": "Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.",
      "id": "tidebound.pirate_hunter",
      "name": "Pirate hunter",
      "owned": false,
      "path": "expansion",
      "payment": {
-      "ore": 3,
-      "sheep": 4,
-      "wood": 4
+      "ore": 4,
+      "wheat": 3
      },
      "prereqs": [
       "tidebound.salvage_crew"
@@ -1609,16 +1603,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 11,
+     "cost": 7,
      "description": "Unlocks Harbors (upgrade a port city to 1:1 trade for up to 4 trades per turn, works while flooded) and Feed the Sea (1 wheat refills a fishing ground).",
      "id": "tidebound.harbor_master",
      "name": "Harbor master",
      "owned": true,
      "path": "industrial",
      "payment": {
-      "ore": 3,
-      "sheep": 4,
-      "wood": 4
+      "brick": 3,
+      "ore": 2,
+      "sheep": 2
      },
      "prereqs": [
       "tidebound.net_works"
@@ -1629,16 +1623,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 15,
+     "cost": 9,
      "description": "Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
      "id": "tidebound.grand_causeway",
      "name": "Grand causeway",
      "owned": true,
      "path": "expansion",
      "payment": {
-      "ore": 5,
-      "sheep": 5,
-      "wood": 5
+      "brick": 3,
+      "ore": 3,
+      "wood": 3
      },
      "prereqs": [
       "tidebound.pirate_hunter"
@@ -1649,16 +1643,16 @@
     {
      "branch": "tidebound",
      "canResearch": true,
-     "cost": 15,
+     "cost": 9,
      "description": "+1 Harbor limit (2 Harbors total) and immediately grants ceil(V / 2) random resource cards from the bank on unlock.",
      "id": "tidebound.harbor_empire",
      "name": "Harbor empire",
      "owned": false,
      "path": "industrial",
      "payment": {
-      "ore": 5,
-      "sheep": 5,
-      "wood": 5
+      "ore": 3,
+      "sheep": 3,
+      "wheat": 3
      },
      "prereqs": [
       "tidebound.harbor_master"
@@ -2195,16 +2189,35 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 5,
+     "cost": 3,
      "description": "Unlocks Rickety Bridges (1 wood, 1 health, collapses on a 7; upgradeable to a full bridge) and raises your bridge cap by +4 before bridges cost 2x.",
      "id": "tidebound.rickety_bridges",
      "name": "Rickety bridges",
      "owned": false,
      "path": "expansion",
      "payment": {
-      "ore": 1,
-      "sheep": 2,
+      "brick": 1,
       "wood": 2
+     },
+     "prereqs": [
+      "tidebound.harbor_charters"
+     ],
+     "reason": "Requires Harbor charters first",
+     "tier": 2
+    },
+    {
+     "branch": "tidebound",
+     "canResearch": false,
+     "cost": 3,
+     "description": "Unlocks Fishing Nets on coastal corners (catch wild fish tokens on dice rolls) and lets your Settlements on 3:1 ports be raised to 2:1.",
+     "id": "tidebound.fishing_nets",
+     "name": "Fishing nets",
+     "owned": false,
+     "path": "industrial",
+     "payment": {
+      "sheep": 1,
+      "wheat": 1,
+      "wood": 1
      },
      "prereqs": [
       "tidebound.harbor_charters"
@@ -2216,35 +2229,14 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 5,
-     "description": "Unlocks Fishing Nets on coastal corners (catch wild fish tokens on dice rolls) and lets your Settlements on 3:1 ports be raised to 2:1.",
-     "id": "tidebound.fishing_nets",
-     "name": "Fishing nets",
-     "owned": false,
-     "path": "industrial",
-     "payment": {
-      "ore": 1,
-      "sheep": 2,
-      "wood": 2
-     },
-     "prereqs": [
-      "tidebound.harbor_charters"
-     ],
-     "reason": "Requires Harbor charters first",
-     "tier": 2
-    },
-    {
-     "branch": "tidebound",
-     "canResearch": false,
-     "cost": 8,
      "description": "+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
      "id": "tidebound.salvage_crew",
      "name": "Salvage crew",
      "owned": false,
      "path": "expansion",
      "payment": {
-      "ore": 2,
-      "sheep": 3,
-      "wood": 3
+      "brick": 2,
+      "sheep": 3
      },
      "prereqs": [
       "tidebound.rickety_bridges"
@@ -2255,16 +2247,15 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 8,
+     "cost": 5,
      "description": "Fishing Nets cost 1 less wood (1 wood + 1 sheep), base catch chance rises to 1 in 4 (1 in 2 when boosted), and boosted catches have a 1 in 3 chance to save the fish boost.",
      "id": "tidebound.net_works",
      "name": "Net works",
      "owned": false,
      "path": "industrial",
      "payment": {
-      "ore": 2,
-      "sheep": 3,
-      "wood": 3
+      "wheat": 3,
+      "wood": 2
      },
      "prereqs": [
       "tidebound.fishing_nets"
@@ -2275,16 +2266,15 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 10,
+     "cost": 7,
      "description": "Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.",
      "id": "tidebound.pirate_hunter",
      "name": "Pirate hunter",
      "owned": false,
      "path": "expansion",
      "payment": {
-      "ore": 3,
-      "sheep": 3,
-      "wood": 4
+      "ore": 4,
+      "wheat": 3
      },
      "prereqs": [
       "tidebound.salvage_crew"
@@ -2295,16 +2285,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 10,
+     "cost": 7,
      "description": "Unlocks Harbors (upgrade a port city to 1:1 trade for up to 4 trades per turn, works while flooded) and Feed the Sea (1 wheat refills a fishing ground).",
      "id": "tidebound.harbor_master",
      "name": "Harbor master",
      "owned": false,
      "path": "industrial",
      "payment": {
-      "ore": 3,
-      "sheep": 3,
-      "wood": 4
+      "brick": 3,
+      "ore": 2,
+      "sheep": 2
      },
      "prereqs": [
       "tidebound.net_works"
@@ -2315,16 +2305,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 14,
+     "cost": 9,
      "description": "Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
      "id": "tidebound.grand_causeway",
      "name": "Grand causeway",
      "owned": false,
      "path": "expansion",
      "payment": {
-      "ore": 4,
-      "sheep": 5,
-      "wood": 5
+      "brick": 3,
+      "ore": 3,
+      "wood": 3
      },
      "prereqs": [
       "tidebound.pirate_hunter"
@@ -2335,16 +2325,16 @@
     {
      "branch": "tidebound",
      "canResearch": false,
-     "cost": 14,
+     "cost": 9,
      "description": "+1 Harbor limit (2 Harbors total) and immediately grants ceil(V / 2) random resource cards from the bank on unlock.",
      "id": "tidebound.harbor_empire",
      "name": "Harbor empire",
      "owned": false,
      "path": "industrial",
      "payment": {
-      "ore": 4,
-      "sheep": 5,
-      "wood": 5
+      "ore": 3,
+      "sheep": 3,
+      "wheat": 3
      },
      "prereqs": [
       "tidebound.harbor_master"

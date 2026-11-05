@@ -201,6 +201,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'expansion',
     prereq: TECH_HARBOR_CHARTERS,
     costOffset: 3,
+    costResources: ['wood', 'brick'],
     dlc: 'tidebound',
     description:
       'Unlocks Rickety Bridges (1 wood, 1 health, collapses on a 7; upgradeable to a full bridge) and raises your bridge cap by +4 before bridges cost 2x.',
@@ -227,6 +228,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'industrial',
     prereq: TECH_HARBOR_CHARTERS,
     costOffset: 3,
+    costResources: ['sheep', 'wheat', 'wood'],
     dlc: 'tidebound',
     description:
       'Unlocks Fishing Nets on coastal corners (catch wild fish tokens on dice rolls) and lets your Settlements on 3:1 ports be raised to 2:1.',
@@ -242,6 +244,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'expansion',
     prereq: TECH_RICKETY_BRIDGES,
     costOffset: 5,
+    costResources: ['sheep', 'brick'],
     dlc: 'tidebound',
     description:
       '+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).',
@@ -255,6 +258,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'industrial',
     prereq: TECH_FISHING_NETS,
     costOffset: 5,
+    costResources: ['wheat', 'wood'],
     dlc: 'tidebound',
     description:
       'Fishing Nets cost 1 less wood (1 wood + 1 sheep), base catch chance rises to 1 in 4 (1 in 2 when boosted), and boosted catches have a 1 in 3 chance to save the fish boost.',
@@ -270,6 +274,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'expansion',
     prereq: TECH_SALVAGE_CREW,
     costOffset: 7,
+    costResources: ['ore', 'wheat'],
     dlc: 'tidebound',
     description:
       'Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.',
@@ -283,6 +288,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'industrial',
     prereq: TECH_NET_WORKS,
     costOffset: 7,
+    costResources: ['brick', 'ore', 'sheep'],
     dlc: 'tidebound',
     description:
       'Unlocks Harbors (upgrade a port city to 1:1 trade for up to 4 trades per turn, works while flooded) and Feed the Sea (1 wheat refills a fishing ground).',
@@ -298,6 +304,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'expansion',
     prereq: TECH_PIRATE_HUNTER,
     costOffset: 10,
+    costResources: ['brick', 'ore', 'wood'],
     dlc: 'tidebound',
     description:
       'Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.',
@@ -311,6 +318,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     path: 'industrial',
     prereq: TECH_HARBOR_MASTER,
     costOffset: 10,
+    costResources: ['wheat', 'sheep', 'ore'],
     dlc: 'tidebound',
     description:
       '+1 Harbor limit (2 Harbors total) and immediately grants ceil(V / 2) random resource cards from the bank on unlock.',

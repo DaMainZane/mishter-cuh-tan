@@ -56,13 +56,13 @@ function cap(s: string): string {
 }
 
 const CSS = `
-#techPanel{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:12px;background:rgba(20,20,20,.5);--tp-node:64px;--tp-hub:76px}
+#techPanel{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:12px;background:rgba(20,20,20,.5);--tp-node:64px;--tp-hub:76px;--lane-exp:#e2a63c;--lane-ind:#4fa8cf}
 #techPanel .tp-card{width:min(760px,100%);max-height:calc(100vh - 24px);overflow:auto;padding:14px 18px 18px;border-radius:var(--r-lg);background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 #techPanel .tp-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
 #techPanel .tp-head h3{margin:0;font-size:15px;font-weight:700}
 #techPanel .tp-sub{margin:2px 0 4px;font-size:12px;font-weight:500;color:var(--ink-dim)}
 
-#techPanel .tp-stage{position:relative;aspect-ratio:1;margin:0 auto;width:max(300px,min(640px,100%,calc(100vh - 180px)));overflow:hidden;overflow:clip;border-radius:var(--r);background:var(--surface-2);touch-action:none;user-select:none;cursor:grab}
+#techPanel .tp-stage{position:relative;aspect-ratio:1;margin:0 auto;width:max(300px,min(640px,100%,calc(100vh - 180px)));overflow:hidden;overflow:clip;border-radius:var(--r);background:radial-gradient(circle at 50% 50%,var(--surface-3) 0,transparent 62%),radial-gradient(var(--line) 1px,transparent 1.6px) 0 0/24px 24px,var(--surface-2);touch-action:none;user-select:none;cursor:grab}
 #techPanel .tp-stage.tp-dragging{cursor:grabbing}
 #techPanel .tp-stage.tp-dragging .tp-tip{display:none!important}
 #techPanel .tp-world{position:absolute;left:0;top:0;width:${WORLD_SPAN * 100}%;height:${WORLD_SPAN * 100}%;transform-origin:0 0}
@@ -78,18 +78,26 @@ const CSS = `
 #techPanel .tp-stage.tp-deep .tp-cap .recipe-stack{--cw:18px;--ch:24px;--dx:3px;--dy:3px}
 #techPanel .tp-lines{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 #techPanel .tp-ring{fill:none;stroke:var(--line);stroke-width:1.5px;stroke-dasharray:3 5;vector-effect:non-scaling-stroke}
-#techPanel .tp-line{stroke:var(--surface-3);stroke-width:4px;stroke-linecap:round;vector-effect:non-scaling-stroke}
-#techPanel .tp-line.owned{stroke:var(--ok)}
+#techPanel .tp-line{stroke:var(--surface-3);stroke-width:5px;stroke-linecap:round;vector-effect:non-scaling-stroke}
+#techPanel .tp-line.lane-expansion{stroke:color-mix(in srgb,var(--lane-exp) 42%,var(--surface-3))}
+#techPanel .tp-line.lane-industrial{stroke:color-mix(in srgb,var(--lane-ind) 42%,var(--surface-3))}
 
-#techPanel .tp-hub{position:absolute;left:50%;top:50%;width:var(--tp-hub);height:var(--tp-hub);transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 0 0 6px var(--surface-2)}
+#techPanel .tp-line.owned{stroke:var(--ok);filter:drop-shadow(0 0 4px var(--ok))}
+
+#techPanel .tp-hub{position:absolute;left:50%;top:50%;width:var(--tp-hub);height:var(--tp-hub);transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);color:var(--on-accent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 0 0 6px var(--surface-2),0 0 0 8px var(--accent),0 8px 20px rgba(0,0,0,.4)}
 
 #techPanel .tp-node{position:absolute;width:var(--tp-node);height:var(--tp-node);transform:translate(-50%,-50%);outline:none}
 #techPanel .tp-node:hover,#techPanel .tp-node:focus-visible{z-index:6}
-#techPanel .tp-disc{position:relative;width:100%;height:100%;border-radius:50%;background:var(--bc,var(--tile-fog));color:var(--target-dark);display:flex;align-items:center;justify-content:center;transition:transform .12s}
+#techPanel .tp-disc{position:relative;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 32% 24%,rgba(255,255,255,.4),transparent 58%),var(--bc,var(--tile-fog));box-shadow:0 5px 12px rgba(0,0,0,.35),inset 0 0 0 3px rgba(255,255,255,.2),inset 0 -5px 9px rgba(0,0,0,.16);color:var(--target-dark);display:flex;align-items:center;justify-content:center;transition:transform .12s}
 #techPanel .tp-disc svg.ui-icon{width:30px;height:30px}
-#techPanel .tp-node.st-can .tp-disc{cursor:pointer;box-shadow:0 0 0 3px var(--accent)}
+#techPanel .tp-node.lane-expansion{--lane:var(--lane-exp)}
+#techPanel .tp-node.lane-industrial{--lane:var(--lane-ind)}
+#techPanel .tp-disc::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid var(--lane,transparent);opacity:.7;pointer-events:none}
+#techPanel .tp-tier{position:absolute;left:-5px;top:-5px;min-width:20px;height:20px;padding:0 4px;box-sizing:border-box;border-radius:10px;background:var(--surface);color:var(--ink);font-size:11px;font-weight:800;line-height:20px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.45)}
+#techPanel .tp-node.st-can .tp-disc{cursor:pointer;box-shadow:0 0 0 3px var(--accent),0 0 20px rgba(217,137,59,.6),0 5px 12px rgba(0,0,0,.35)}
+
 #techPanel .tp-node.st-can:hover .tp-disc,#techPanel .tp-node.st-can:focus-visible .tp-disc{transform:translateY(-3px)}
-#techPanel .tp-node.st-owned .tp-disc{box-shadow:0 0 0 3px var(--ok)}
+#techPanel .tp-node.st-owned .tp-disc{box-shadow:0 0 0 3px var(--ok),0 0 16px rgba(79,138,74,.5),0 5px 12px rgba(0,0,0,.35)}
 #techPanel .tp-node.st-locked .tp-disc{filter:grayscale(.45) brightness(.82)}
 #techPanel .tp-node:focus-visible .tp-disc{outline:2px solid var(--accent);outline-offset:4px}
 #techPanel .tp-check{position:absolute;right:-5px;bottom:-5px;width:22px;height:22px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--surface)}
@@ -288,20 +296,28 @@ interface Placed {
   x: number;
   y: number;
   ring: number;
+  /** The fork lane the tech belongs to (its own or inherited from a prerequisite), if any. */
+  lane?: 'expansion' | 'industrial';
 }
 
-/** Angular lane offset (degrees) for forked branch paths (~23° between expansion and industrial lanes). */
-const PATH_ANGLE_DEG: Record<string, number> = {
-  expansion: -11.5,
-  industrial: 11.5
+/**
+ * Sideways offset (world units, 100 = the whole world) of each fork lane from its branch spoke. The lanes are two straight parallel lines along the
+ * spoke: the offset is a distance, so it does not grow with the ring (an angle would make the lanes fan out into a V). 18 units apart is wider than a
+ * node's caption at the opening zoom, so neighbours on one ring never touch.
+ */
+const PATH_LATERAL: Record<string, number> = {
+  expansion: -9,
+  industrial: 9
 };
+/** Sideways gap between techs of one branch and ring that have no lane (units). */
+const SIBLING_GAP = 18;
 
 /**
  * Hub and spoke with 2-path branch forks (T11a):
  *  - One spoke per branch (evenly spaced around the hub, first at the top).
  *  - Ring index is the prerequisite chain depth (`1` for root, `parentRing + 1` for children, at least `row.tier`)
  *    so chained tier-3 steps (`salvage_crew -> pirate_hunter`, `net_works -> harbor_master`) sit on consecutive concentric rings.
- *  - Nodes with `path: 'expansion' | 'industrial'` fork into two parallel lanes (`-8.5°` and `+8.5°`, `17°` apart) along their branch spoke.
+ *  - Nodes with `path: 'expansion' | 'industrial'` fork into two straight parallel lanes (`PATH_LATERAL`) along their branch spoke.
  */
 export function layout(rows: TechRowView[], branches: string[]): { placed: Placed[]; radii: Map<number, number>; maxRing: number } {
   const byId = new Map<string, TechRowView>(rows.map(r => [r.id, r]));
@@ -333,7 +349,7 @@ export function layout(rows: TechRowView[], branches: string[]): { placed: Place
   };
 
   const maxRing = Math.max(1, ...rows.map(r => ringOf(r)));
-  const radius = (ring: number): number => (maxRing === 1 ? 32 : 14 + ((ring - 1) * 28) / (maxRing - 1));
+  const radius = (ring: number): number => (maxRing === 1 ? 32 : 12 + ((ring - 1) * 33) / (maxRing - 1));
   const radii = new Map<number, number>();
   const groups = new Map<string, TechRowView[]>();
   for (const r of rows) {
@@ -350,11 +366,12 @@ export function layout(rows: TechRowView[], branches: string[]): { placed: Place
     const base = -90 + (360 * Math.max(0, branches.indexOf(first.branch))) / Math.max(1, branches.length);
     group.forEach((row, j) => {
       const lane = pathOf(row);
-      const offsetDeg = lane && PATH_ANGLE_DEG[lane] !== undefined
-        ? PATH_ANGLE_DEG[lane]
-        : (j - (group.length - 1) / 2) * 16;
-      const a = ((base + offsetDeg) * Math.PI) / 180;
-      placed.push({ row, x: 50 + rad * Math.cos(a), y: 50 + rad * Math.sin(a), ring });
+      const lateral = lane && PATH_LATERAL[lane] !== undefined ? PATH_LATERAL[lane] : (j - (group.length - 1) / 2) * SIBLING_GAP;
+      const a = (base * Math.PI) / 180;
+      // Along the spoke by the ring radius, sideways (at a right angle to it) by the lane offset.
+      const x = 50 + rad * Math.cos(a) - lateral * Math.sin(a);
+      const y = 50 + rad * Math.sin(a) + lateral * Math.cos(a);
+      placed.push({ row, x, y, ring, lane });
     });
   }
   return { placed, radii, maxRing };
@@ -382,9 +399,9 @@ function nodeHtml(p: Placed, canAct: boolean, hand: Resources | undefined): stri
   };
   const descText = descOverride[r.id] ?? r.description;
   return `
-    <div class="tp-node st-${mode}" style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;--bc:var(${tile})" tabindex="0" role="button"
+    <div class="tp-node st-${mode}${p.lane ? ` lane-${p.lane}` : ''}" style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%;--bc:var(${tile})" tabindex="0" role="button"
          aria-label="${esc(r.name)}${r.owned ? ', researched' : `, ${r.cost} cards`}" ${click}>
-      <div class="tp-disc">${uiIcon(icon, 30)}${r.owned ? `<span class="tp-check">${uiIcon('check', 14)}</span>` : ''}</div>
+      <div class="tp-disc">${uiIcon(icon, 30)}<span class="tp-tier" title="${esc(tierLabel)}">${esc(String(r.tier))}</span>${r.owned ? `<span class="tp-check">${uiIcon('check', 14)}</span>` : ''}</div>
       <div class="tp-cap"><span class="tp-name">${esc(r.name)}</span>${r.owned ? '' : costStripHtml(r.payment, hand)}</div>
       <div class="tp-tip ${tipPos}">
         <div class="tp-tip-head"><span class="tp-tip-name">${esc(r.name)}</span><span class="tp-tip-tier">${esc(tierLabel)}</span></div>
@@ -465,7 +482,7 @@ export function renderTechPanel(isMyTurn: boolean): void {
   const lines = placed.map(p => {
     const parents = p.row.prereqs.map(id => at.get(id)).filter((q): q is Placed => !!q);
     const from = parents.length > 0 ? parents : [{ x: 50, y: 50 } as Placed];
-    return from.map(q => `<line class="tp-line ${p.row.owned ? 'owned' : ''}" x1="${q.x.toFixed(2)}" y1="${q.y.toFixed(2)}" x2="${p.x.toFixed(2)}" y2="${p.y.toFixed(2)}"/>`).join('');
+    return from.map(q => `<line class="tp-line ${p.row.owned ? 'owned' : ''}${p.lane ? ` lane-${p.lane}` : ''}" x1="${q.x.toFixed(2)}" y1="${q.y.toFixed(2)}" x2="${p.x.toFixed(2)}" y2="${p.y.toFixed(2)}"/>`).join('');
   }).join('');
   const nodes = placed.map(p => nodeHtml(p, canAct, hand)).join('');
 

@@ -497,7 +497,11 @@ export function techGate(g: GameState, pid: Id, techId: string): boolean {
 }
 
 /** Tech cost constants, all in one place. Tune them in the sim matrix (Tech Tree Design.md, section 2). */
-export const TECH_COST = { settlement: 1, city: 2, castle: 3, divisor: 3, floor: 2 };
+/**
+ * `baseFactor` and `scaleFactor` rebalanced the price (Nov 2026): the tier part of the cost is 35% lower (x0.65) and the part that grows with your buildings
+ * is 80% lower (x0.2), because researching cost too much against building something instead.
+ */
+export const TECH_COST = { settlement: 1, city: 2, castle: 3, divisor: 3, floor: 2, baseFactor: 0.65, scaleFactor: 0.2 };
 
 /** The prerequisite ids of a tech as a list (empty for a root). */
 export function techPrereqs(def: TechDef): string[] {
@@ -516,7 +520,7 @@ export function techBuildingValue(g: GameState, pid: Id): number {
 
 /**
  * Per-player tech cost in cards (Tech Tree Design.md, sections 2 & 9):
- *  - `cost = max(floor, tier + offset + ceil(V / divisor))`, where V is `techBuildingValue`
+ *  - `cost = max(floor, round(baseFactor * (tier + offset) + scaleFactor * ceil(V / divisor)))`, where V is `techBuildingValue`
  *    and `divisor = max(TECH_COST.divisor, round(0.3 * vpToWin))` (3 at 10 VP, 8 at 25 VP).
  *  - If the player has 0 techs and qualifies for Catch-up (`isCatchUpEligible`), cost is reduced by 1 (never below the floor).
  */
@@ -529,7 +533,8 @@ export function techCostCards(g: GameState, reg: Registry, pid: Id, tier: 1 | 2 
     (placedCount(g, pid, 'settlement') >= 1 || hasTech(g, pid, 'tidebound.harbor_charters'));
   const effV = activeDiscount ? Math.max(0, v - 2 * TECH_COST.settlement) : v;
   const effOffset = activeDiscount ? Math.floor(offset * 0.4) : offset;
-  let cost = Math.max(TECH_COST.floor, tier + effOffset + Math.ceil(effV / divisor));
+  const raw = TECH_COST.baseFactor * (tier + effOffset) + TECH_COST.scaleFactor * Math.ceil(effV / divisor);
+  let cost = Math.max(TECH_COST.floor, Math.round(raw));
   if (getPlayerTechs(g, pid).length === 0 && isCatchUpEligible(g, reg, pid)) {
     cost = Math.max(TECH_COST.floor, cost - 1);
   }

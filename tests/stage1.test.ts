@@ -211,8 +211,9 @@ describe('Stage 1 — Core Addon Systems & Proving-Ground Content', () => {
       const byId = (id: string) => rows.find(r => r.id === id)!;
       expect(rows).toHaveLength(5);
       expect(byId('bulwark.stockpiling')).toMatchObject({ cost: 2, payment: { brick: 1, ore: 1 }, owned: false, canResearch: true, reason: null });
-      expect(byId('warlords.plunder')).toMatchObject({ cost: 3, payment: { ore: 1, wheat: 1, sheep: 1 }, canResearch: true }); // offset +1
-      expect(byId('wildearth.ground_work')).toMatchObject({ cost: 3, payment: { wood: 1, brick: 1, wheat: 1 }, canResearch: false }); // offset +1, needs wood
+      // Offset +1 is 1.3 + 0.2 = 1.5, which rounds to 2 (the floor), so these two cost the same as the root now (prices dropped 35% / 80% in Nov 2026).
+      expect(byId('warlords.plunder')).toMatchObject({ cost: 2, payment: { ore: 1, wheat: 1 }, canResearch: true });
+      expect(byId('wildearth.ground_work')).toMatchObject({ cost: 2, payment: { wood: 1, brick: 1 }, canResearch: false }); // needs wood
       expect(byId('wildearth.ground_work').reason).toMatch(/not enough/i);
 
       expect(action.validate(ctx, 'p1', { techId: 'bulwark.stockpiling' })).toBeNull();
@@ -266,10 +267,10 @@ describe('Stage 1 — Core Addon Systems & Proving-Ground Content', () => {
       expect(g.players[0].resources.wheat + g.players[0].resources.ore).toBe(18);
 
       expect(researchTech(ctx, 'p1', 'test.c').ok).toBe(false); // still needs test.b
-      expect(researchTech(ctx, 'p1', 'test.b').costCards).toBe(3); // tier 2 + ceil(2 / 3)
+      expect(researchTech(ctx, 'p1', 'test.b').costCards).toBe(2); // round(0.65 * 2 + 0.2 * ceil(2 / 3)) = round(1.5) = 2
       const c = researchTech(ctx, 'p1', 'test.c');
       expect(c.ok).toBe(true);
-      expect(c.costCards).toBe(4); // tier 2 + offset 1 + ceil(2 / 3)
+      expect(c.costCards).toBe(2); // round(0.65 * 3 + 0.2 * 1) = round(2.15) = 2
       expect(getPlayerTechs(g, 'p1')).toEqual(['test.a', 'test.b', 'test.c']);
       expect(researchTech(ctx, 'p1', 'test.a').ok).toBe(false); // already researched
     });
@@ -289,7 +290,7 @@ describe('Stage 1 — Core Addon Systems & Proving-Ground Content', () => {
       expect(getPlayerTechs(g, 'p1')).toEqual([]);
     });
 
-    it('prices techs per player by building value: max(floor, tier + offset + ceil(V / 3))', () => {
+    it('prices techs per player by building value: max(floor, round(0.65 * (tier + offset) + 0.2 * ceil(V / 3)))', () => {
       const { g, reg } = makeStage1Game(407);
       const setBoard = (settlements: number, cities: number, castles: number) => {
         for (let i = 0; i < 12; i++) delete g.board.vertices[i].piece;
@@ -300,21 +301,30 @@ describe('Stage 1 — Core Addon Systems & Proving-Ground Content', () => {
       };
       const costs = () => [0, 1, 2].map(offset => techCostCards(g, reg, 'p1', 1, offset));
 
-      setBoard(0, 0, 0); // V = 0: ceil(0 / 3) = 0, so offsets 0 and 1 both sit on the floor
+      // Tier 1 prices sit on the floor of 2 for small offsets (the price dropped 35% on the base and 80% on the building-value part).
+      setBoard(0, 0, 0); // V = 0: 0.65 / 1.3 / 1.95
+      expect(costs()).toEqual([2, 2, 2]);
+      setBoard(2, 0, 0); // V = 2: +0.2
+      expect(costs()).toEqual([2, 2, 2]);
+      setBoard(3, 1, 0); // V = 5: +0.4
+      expect(costs()).toEqual([2, 2, 2]);
+      setBoard(3, 3, 0); // V = 9: +0.6 -> 2.55 rounds up at offset 2
       expect(costs()).toEqual([2, 2, 3]);
-      setBoard(2, 0, 0); // V = 2
-      expect(costs()).toEqual([2, 3, 4]);
-      setBoard(3, 1, 0); // V = 5
-      expect(costs()).toEqual([3, 4, 5]);
-      setBoard(3, 3, 0); // V = 9
-      expect(costs()).toEqual([4, 5, 6]);
-      setBoard(2, 3, 2); // V = 14
-      expect(costs()).toEqual([6, 7, 8]);
+      setBoard(2, 3, 2); // V = 14: +1.0
+      expect(costs()).toEqual([2, 2, 3]);
 
       // At vpToWin = 25, divisor scales to max(3, round(0.3 * 25)) = 8 so late-game builds stay affordable
       g.rules.vpToWin = 25;
-      setBoard(2, 3, 2); // V = 14 -> ceil(14 / 8) = 2
-      expect(costs()).toEqual([3, 4, 5]);
+      setBoard(2, 3, 2); // V = 14 -> ceil(14 / 8) = 2 -> +0.4
+      expect(costs()).toEqual([2, 2, 2]);
+
+      // A late node shows the new scale: tier 4 + offset 10 was 14 + the building part before, now 0.65 * 14 = 9.1.
+      g.rules.vpToWin = 10;
+      setBoard(0, 0, 0);
+      expect(techCostCards(g, reg, 'p1', 4, 10)).toBe(9);
+      // With settlements on the board the existing starting discount applies at big offsets: V - 2 = 12 and offset 10 -> 4, so 0.65 * 8 + 0.2 * 4 = 6.0
+      setBoard(2, 3, 2);
+      expect(techCostCards(g, reg, 'p1', 4, 10)).toBe(6);
     });
 
     it('keeps the Catch-up discount: 1 less for a player with 0 techs, never below the floor', () => {
@@ -328,10 +338,10 @@ describe('Stage 1 — Core Addon Systems & Proving-Ground Content', () => {
 
       expect(isCatchUpEligible(g, reg, 'p2')).toBe(true);
       expect(isCatchUpEligible(g, reg, 'p1')).toBe(false);
-      expect(techCostCards(g, reg, 'p2', 1)).toBe(2); // 2 before the discount, already at the floor
-      expect(techCostCards(g, reg, 'p2', 2)).toBe(2); // 3 before the discount
-      expect(techCostCards(g, reg, 'p2', 3)).toBe(3); // 4 before the discount
-      expect(techCostCards(g, reg, 'p1', 2)).toBe(4); // V = 5, no discount
+      expect(techCostCards(g, reg, 'p2', 1)).toBe(2); // 1 before the discount, floor 2
+      expect(techCostCards(g, reg, 'p2', 2)).toBe(2); // 2 before the discount, discount 1 would be 1, floor 2
+      expect(techCostCards(g, reg, 'p2', 4)).toBe(2); // round(2.6 + 0.2) = 3 before the discount, 2 after
+      expect(techCostCards(g, reg, 'p1', 4)).toBe(3); // V = 5, no discount: round(2.6 + 0.4) = 3
     });
 
     it('tracks Local Nemesis hits and builds a Round-End Recap', () => {

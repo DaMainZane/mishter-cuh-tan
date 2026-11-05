@@ -164,20 +164,54 @@ describe('T11a — Tech tree fork layout & 25+ VP cost divisor', () => {
     }
   });
 
+  it('draws each fork lane as one straight line, and the two lanes of a branch run parallel (no V)', () => {
+    const { g, reg } = makeMainGame(true);
+    const rows = techPanelFor(g, reg, 'p1')!;
+    const { placed } = layoutTechPanel(rows, ['tidebound', 'bulwark', 'warlords', 'wildearth', 'guildhall']);
+    const at = new Map(placed.map(p => [p.row.id, p]));
+    const pts = (ids: string[]) => ids.map(id => at.get(id)!);
+    const expansion = pts([TECH_RICKETY_BRIDGES, TECH_SALVAGE_CREW, TECH_PIRATE_HUNTER, TECH_GRAND_CAUSEWAY]);
+    const industrial = pts([TECH_FISHING_NETS, TECH_NET_WORKS, TECH_HARBOR_MASTER, TECH_HARBOR_EMPIRE]);
+    expect(expansion.every(p => p.lane === 'expansion')).toBe(true);
+    expect(industrial.every(p => p.lane === 'industrial')).toBe(true);
+
+    const dir = (list: typeof expansion) => {
+      const first = list[0];
+      const last = list[list.length - 1];
+      const len = Math.hypot(last.x - first.x, last.y - first.y);
+      return { ux: (last.x - first.x) / len, uy: (last.y - first.y) / len, first };
+    };
+    for (const lane of [expansion, industrial]) {
+      const { ux, uy, first } = dir(lane);
+      for (const p of lane) {
+        // Distance of the node from the line through the first and last node of its lane.
+        const off = Math.abs((p.x - first.x) * uy - (p.y - first.y) * ux);
+        expect(off).toBeLessThan(0.01);
+      }
+    }
+    const e = dir(expansion);
+    const i = dir(industrial);
+    expect(Math.abs(e.ux * i.uy - e.uy * i.ux)).toBeLessThan(0.001); // parallel
+    expect(e.ux * i.ux + e.uy * i.uy).toBeGreaterThan(0.999); // and the same way
+    // The lanes keep a steady gap along the whole spoke.
+    const gap = (k: number) => Math.hypot(expansion[k].x - industrial[k].x, expansion[k].y - industrial[k].y);
+    for (let k = 1; k < 4; k++) expect(Math.abs(gap(k) - gap(0))).toBeLessThan(0.01);
+  });
+
   it('scales techCostCards divisor at 25+ VP using Math.max(3, Math.round(0.3 * vpToWin))', () => {
     const { g, reg } = makeMainGame(true);
-    // Give p1 6 cities (V = 12)
-    for (let i = 0; i < 6; i++) {
+    // Give p1 12 cities (V = 24). The price is round(0.65 * (tier + offset) + 0.2 * ceil(V / divisor)), so a late node (tier 4, offset 10) shows the divisor.
+    for (let i = 0; i < 12; i++) {
       g.board.vertices[i].piece = { type: 'city', owner: 'p1' };
     }
-    expect(techBuildingValue(g, 'p1')).toBe(12);
+    expect(techBuildingValue(g, 'p1')).toBe(24);
 
-    g.rules.vpToWin = 10; // divisor = max(3, round(3)) = 3 -> 1 + 0 + ceil(12/3) = 5
-    const cost10 = techCostCards(g, reg, 'p1', 1);
-    g.rules.vpToWin = 30; // divisor = max(3, round(9)) = 9 -> 1 + 0 + ceil(12/9) = 3
-    const cost30 = techCostCards(g, reg, 'p1', 1);
-    expect(cost10).toBe(5);
-    expect(cost30).toBe(3);
+    g.rules.vpToWin = 10; // divisor = max(3, round(3)) = 3 -> 9.1 + 0.2 * ceil(24/3) = 10.7 -> 11
+    const cost10 = techCostCards(g, reg, 'p1', 4, 10);
+    g.rules.vpToWin = 30; // divisor = max(3, round(9)) = 9 -> 9.1 + 0.2 * ceil(24/9) = 9.7 -> 10
+    const cost30 = techCostCards(g, reg, 'p1', 4, 10);
+    expect(cost10).toBe(11);
+    expect(cost30).toBe(10);
   });
 });
 
@@ -378,7 +412,7 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(score(g, reg, p1, true)).toBe(0);
   });
 
-  it('discounts Tidebound tech costs in active games with starting settlements so tiers cost 2 / 3 / 5 / 5 / 8 cards (Bug 3)', () => {
+  it('discounts Tidebound tech costs in active games with starting settlements so tiers cost 2 / 2 / 3 / 5 cards (Bug 3, prices cut 35% / 80% in Nov 2026)', () => {
     const { g, reg } = makeMainGame(true);
     // Standard game start: 2 settlements on the board (V = 2)
     g.board.vertices[0].piece = { type: 'settlement', owner: 'p1' };
@@ -389,13 +423,19 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     const costOf = (id: string) => panel.find(r => r.id === id)!.cost;
 
     expect(costOf(TECH_HARBOR_CHARTERS)).toBe(2);
-    expect(costOf(TECH_RICKETY_BRIDGES)).toBe(3);
-    expect(costOf(TECH_FISHING_NETS)).toBe(3);
-    expect(costOf(TECH_SALVAGE_CREW)).toBe(5);
-    expect(costOf(TECH_NET_WORKS)).toBe(5);
-    expect(costOf(TECH_HARBOR_MASTER)).toBe(5);
-    expect(costOf(TECH_GRAND_CAUSEWAY)).toBe(8);
-    expect(costOf(TECH_HARBOR_EMPIRE)).toBe(8);
+    expect(costOf(TECH_RICKETY_BRIDGES)).toBe(2);
+    expect(costOf(TECH_FISHING_NETS)).toBe(2);
+    expect(costOf(TECH_SALVAGE_CREW)).toBe(3);
+    expect(costOf(TECH_NET_WORKS)).toBe(3);
+    expect(costOf(TECH_HARBOR_MASTER)).toBe(3);
+    expect(costOf(TECH_GRAND_CAUSEWAY)).toBe(5);
+    expect(costOf(TECH_HARBOR_EMPIRE)).toBe(5);
+
+    // Each node pays in its own resource mix, so no two neighbours ask for the same thing and the branch uses all five resources.
+    const mix = (id: string) => Object.keys(panel.find(r => r.id === id)!.payment).sort().join('+');
+    const mixes = [TECH_RICKETY_BRIDGES, TECH_FISHING_NETS, TECH_SALVAGE_CREW, TECH_NET_WORKS, TECH_PIRATE_HUNTER, TECH_HARBOR_MASTER, TECH_GRAND_CAUSEWAY, TECH_HARBOR_EMPIRE].map(mix);
+    expect(new Set(mixes).size).toBeGreaterThanOrEqual(6);
+    expect(new Set(mixes.join('+').split('+')).size).toBe(5);
   });
 
   it('Harbor Empire raises harbor limit to 2 and grants ceil(V / 2) random cards on unlock with zero g.rng draws', () => {
