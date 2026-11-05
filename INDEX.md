@@ -40,6 +40,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `BUGS/Bug Report Template.md` | The 5-field bug report to paste to the AI (what I saw, expected, actual, repro), the AI's triage rules and its fix-report shape |
 | `RECIPES.md` | Five step-by-step recipes (new piece, action, addon, tech node, client overlay): files to touch in order, the real file to copy, where hand-written glue still is |
 | `CLAUDE.md` | Instructions for Claude Code: read `ROUTER.md` first, never read whole folders, search for a symbol first, layer rules, the commands to run after a change |
+| `.claude/skills/impeccable/` | The Impeccable design skill (Apache 2.0, copied from pbakaus/impeccable without its hook): `/impeccable critique`, `distill`, `polish` and so on. `Design UI Philosophy.md` wins where they disagree (flat, matte, one accent) |
 
 ## `src/shared/` (pure engine: no sockets, DOM or timers; runs on server and client)
 
@@ -216,7 +217,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `render/hand.ts` | player hand (resource stacks + dev cards) and hand click handlers |
 | `render/overlay.ts` | S0.13 overlay and popup kit (Service 11: hex tint/pattern layer, timer-bar popups, dramatic event title card, round-end recap card; T6: theme-aware flood and flood-warning patterns, elevation heat map) |
 | `render/pirates.ts` | Tidebound T10 pirates on the board (pirate icon markup, the SVG layer markup, click to drive one off); draws its own styles |
-| `render/setup.ts` | world setup page (host only, between the name page and the board): which screen shows, tile preview, roster, scenarios, DLC cards |
+| `render/setup.ts` | world setup page (host only, between the name page and the board): Players / World / Rules tabs, tile preview, roster, scenario cards, compact DLC rows, rule fold values |
 | `render/sidebar.ts` | right sidebar (merged live log & turn history with RS card icons and click-to-filter, chat leaf, bank, player rows) |
 | `render/techpanel.ts` | tech panel (hub-and-spoke tree: a hub, one ring of techs per tier, one spoke per branch, all generated from the server's `techTree` rows; costs as mini resource cards; hover for the description; plus the Harbor charters (raise a whole port to 2:1) and Ground work controls) and the Tech button in the action bar |
 | `render/trade.ts` | active trade offer stack (top right), per-offer timers, trade responses and counter-offer editor |
@@ -237,7 +238,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `topology.test.ts` | Board topology and standard board |
 | `ports.test.ts` | Port layout on hexagons |
 | `presets.test.ts` | Custom preset save and load |
-| `setuppage.test.ts` | World setup page flag and spectator mode |
+| `setuppage.test.ts` | World setup page flag and spectator mode; the Players / World / Rules tab markup (every settings control once, one "Save map as preset") and the rule fold titles (`ruleFoldValues`) |
 | `numbers.test.ts` | Number token pool and placement |
 | `bots.test.ts` | Bot tiers and the tier ladder |
 | `dialogue.test.ts` | Bot dialogue engine and lines |

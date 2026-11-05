@@ -1,4 +1,4 @@
-// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +17 more | USED BY: none
+// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +18 more | USED BY: none
 import { socket } from './socket';
 import { playDiceRollSound, playDiscardSound, playTone, playVictoryFanfareSound, playYourTurnSound, toggleSound } from './audio';
 import { hydrateIcons } from './icons';
@@ -35,6 +35,7 @@ import { toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, co
 import { clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker } from './render/bridgepicker';
 import { openBuildMenu, chooseBuildOption, closeBuildMenu } from './render/buildmenu';
 import { clickPirate } from './render/pirates';
+import { setSetupTab, setupTabKey, toggleDlcOpen, openDlcRow } from './render/setup';
 import { onVisualsEvent, resetManifest } from './visuals';
 import { clickSpot } from './pieceui';
 import {
@@ -79,7 +80,7 @@ Object.assign(window as any, {
   clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker, clickPirate, clickSpot,
   openBuildMenu, chooseBuildOption, closeBuildMenu, fishPickAdd, fishPickRemove, fishPickConfirm,
   confirmTradeWith, cancelTrade, respondToTrade, onClickHandResource, onClickHandWild, onClickDevCard,
-  startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed, cycleAvatar, cycleBotTier, setSetupOpen,
+  startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed, cycleAvatar, cycleBotTier, setSetupOpen, setSetupTab, setupTabKey, toggleDlcOpen, openDlcRow,
   startSavePreset, cancelSavePreset, confirmSavePreset, presetNameKey, applyCustomPreset, applyPresetStyle,
   askDeletePreset, cancelDeletePreset, deletePreset,
   toggleMapMenu, mapPick, mapLandInput, mapLandChange, mapParamInput, mapParamChange, mapReroll, mapCopySeed, mapCopyCode, mapEditSeed,

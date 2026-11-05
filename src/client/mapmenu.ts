@@ -192,13 +192,13 @@ function seedLineHtml(meta: MapMetaView | null, host: boolean): string {
     <div class="map-seedline">
       <span class="map-label">Seed</span>
       <button type="button" class="map-seed" onclick="mapCopySeed()" title="Copy the seed">${seedHidden ? '••••••' : esc(seed)}</button>
-      <button type="button" class="chip-btn" onclick="mapToggleSeedVisible()" title="${seedHidden ? 'Show the seed' : 'Hide the seed on your screen'}">${seedHidden ? 'Show' : 'Hide'}</button>
-      <button type="button" class="chip-btn" onclick="mapCopyCode()" title="Copy the share code: size, shape, style and seed in one line">Copy code</button>
+      <button type="button" class="chip-btn" onclick="mapToggleSeedVisible()" title="${seedHidden ? 'Show the seed' : 'Hide the seed on your screen (handy when streaming)'}">${seedHidden ? 'Show seed' : 'Hide seed'}</button>
+      <button type="button" class="chip-btn" onclick="mapCopyCode()" title="Copy the share code: size, shape, style and seed in one line">Copy share code</button>
       ${host ? `
-        <button type="button" class="chip-btn" onclick="mapEditSeed()" title="Type a seed, or paste a share code">Edit</button>
-        <button type="button" class="chip-btn${locked ? ' chip-accent' : ''}" onclick="mapToggleLock()" title="Keep this seed when you play again">${locked ? 'Locked' : 'Lock'}</button>
-        <button type="button" class="chip-btn" onclick="startSavePreset()" title="Save this map and its style as a preset in this browser">Save as preset</button>` : ''}
-    </div>`;
+        <button type="button" class="chip-btn" onclick="mapEditSeed()" title="Type a seed, or paste a share code">Enter seed</button>
+        <button type="button" class="chip-btn" onclick="mapToggleLock()" aria-pressed="${locked}" title="Keep this seed when you play again">${locked ? 'Seed kept' : 'Keep seed'}</button>` : ''}
+    </div>
+    <p class="map-muted map-seed-help">The seed rebuilds this exact map. Send the share code and a friend gets the same world.</p>`;
 }
 
 /** Redraws the map menu in the lobby dock. Skips the work when nothing visible changed, so a half-typed seed survives broadcasts. */
@@ -212,6 +212,10 @@ export function renderMapMenu(): void {
     host, open, editingSeed, wipeArmed, seedHidden, currentPicks(), currentParams(), s.mapSeed, !!s.mapSeedLocked, s.boardRadius,
     meta, state.players.length, mapOptions ? mapOptions.options.length : 0
   ]);
+  // The closed "More map options" fold on the setup page names the current map.
+  const foldVal = document.getElementById('foldValMap');
+  const foldText = mapOptions ? summaryOf(activeOptions(currentPicks())) : '';
+  if (foldVal && foldVal.textContent !== foldText) foldVal.textContent = foldText;
   if (sig === lastMenuSig) return;
   lastMenuSig = sig;
 

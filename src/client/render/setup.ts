@@ -1,6 +1,7 @@
-// MODULE: world setup page (host only, between the name page and the board): which screen shows, tile preview, roster, scenarios, DLC cards | DEPENDS ON: client/avatars, client/icons, client/socket, client/store, client/types, client/util | USED BY: client/render/index
+// MODULE: world setup page (host only, between the name page and the board): Players / World / Rules tabs, tile preview, roster, scenario cards, compact DLC rows, rule fold values | DEPENDS ON: client/avatars, client/icons, client/socket, client/store, client/types, client/util | USED BY: client/main, client/render/index
 // The controls on the page (bots, presets, map menu, rules) keep their ids and handlers; this file decides what is visible
-// and draws the preview, player strip, scenario presets, live "what is on" summary, and DLC/addon cards from mapOptions.
+// and draws the preview, player strip, scenario cards, live "what is on" summary, DLC rows from mapOptions, and the
+// current value beside each folded rule group's title.
 import { socket } from '../socket';
 import { mapOptions, state } from '../store';
 import { avatarFace } from '../avatars';
@@ -11,6 +12,58 @@ import type { AddonInfoView, DlcInfoView, ScenarioPresetView } from '../types';
 let lastPreviewSig = '';
 let lastRosterSig = '';
 let lastDlcSig = '';
+
+type SetupTab = 'players' | 'world' | 'rules';
+const SETUP_TABS: SetupTab[] = ['players', 'world', 'rules'];
+let setupTab: SetupTab = 'players';
+/** DLC rows the host opened. A row only opens while its DLC is on. */
+const openDlcs = new Set<string>();
+
+/** Shows one tab's panel and marks its tab selected (roving tabindex, so arrow keys move between tabs). */
+function applySetupTab(): void {
+  for (const t of SETUP_TABS) {
+    const tab = document.getElementById(`setupTab-${t}`);
+    const panel = document.getElementById(`setupPanel-${t}`);
+    const on = t === setupTab;
+    if (tab) {
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+    }
+    if (panel) panel.hidden = !on;
+  }
+}
+
+export function setSetupTab(tab: string): void {
+  if (!SETUP_TABS.includes(tab as SetupTab)) return;
+  setupTab = tab as SetupTab;
+  applySetupTab();
+}
+
+/** Arrow keys, Home and End move between the tabs (WAI-ARIA tabs pattern). */
+export function setupTabKey(ev: KeyboardEvent): void {
+  const i = SETUP_TABS.indexOf(setupTab);
+  const next =
+    ev.key === 'ArrowRight' ? SETUP_TABS[(i + 1) % SETUP_TABS.length] :
+    ev.key === 'ArrowLeft' ? SETUP_TABS[(i + SETUP_TABS.length - 1) % SETUP_TABS.length] :
+    ev.key === 'Home' ? SETUP_TABS[0] :
+    ev.key === 'End' ? SETUP_TABS[SETUP_TABS.length - 1] : null;
+  if (!next) return;
+  ev.preventDefault();
+  setSetupTab(next);
+  document.getElementById(`setupTab-${next}`)?.focus();
+}
+
+export function toggleDlcOpen(id: string): void {
+  if (openDlcs.has(id)) openDlcs.delete(id);
+  else openDlcs.add(id);
+  drawScenariosAndDlcs();
+  document.querySelector<HTMLElement>(`#setupDlcGrid [aria-controls="dlcBody-${CSS.escape(id)}"]`)?.focus();
+}
+
+/** Called just before the switch turns a DLC on, so the host sees its addons straight away. */
+export function openDlcRow(id: string, turningOn: boolean): void {
+  if (turningOn) openDlcs.add(id);
+}
 
 /** Names of the Tides slider positions (1 to 5). Must match TIDE_LEVELS in packs/tidebound/tides.ts. */
 const TIDE_LEVEL_NAMES = ['Very low', 'Low', 'Medium', 'High', 'Very high'];
@@ -264,13 +317,14 @@ function drawScenariosAndDlcs(): void {
   const scenarios: ScenarioPresetView[] = mapOptions?.scenarios || [];
   const { dlcs, addons } = effectiveDlcsAndAddons();
 
-  const sig = JSON.stringify([dlcMap, addonFlags, eventsOn, fateTokens, techTreeOn, fairDice, tideLevel, risingSeaLevel, s.vpToWin, s.boardRadius, scenarios.length, dlcs.length]);
+  const sig = JSON.stringify([dlcMap, addonFlags, eventsOn, fateTokens, techTreeOn, fairDice, tideLevel, risingSeaLevel, s.vpToWin, s.boardRadius, scenarios.length, dlcs.length, [...openDlcs]]);
   if (sig === lastDlcSig) return;
   lastDlcSig = sig;
 
-  // 1. Scenarios row
+  // 1. Scenario cards: the main World choice (name, one line, the DLCs it turns on)
   const scenBox = document.getElementById('scenarioPresets');
   if (scenBox) {
+    const dlcName = (id: string) => dlcs.find(d => d.id === id)?.name || id;
     scenBox.innerHTML = scenarios
       .map(sc => {
         const dlcKeys = Object.keys(sc.dlc).filter(k => sc.dlc[k]);
@@ -280,7 +334,12 @@ function drawScenariosAndDlcs(): void {
           Boolean(s.eventsOn) === Boolean(sc.eventsOn) &&
           dlcKeys.every(k => dlcMap[k] === true) &&
           Object.keys(dlcMap).filter(k => dlcMap[k]).length === dlcKeys.length;
-        return `<button type="button" class="chip-btn${isCurrent ? ' chip-accent' : ''}" onclick="applyScenario('${esc(sc.id)}')" title="${esc(sc.description)}">${esc(sc.label)}</button>`;
+        const tags = (dlcKeys.length > 0 ? dlcKeys.map(dlcName) : ['Base game']).concat(sc.eventsOn ? ['Events'] : []);
+        return `<button type="button" class="scenario-card${isCurrent ? ' is-current' : ''}" aria-pressed="${isCurrent}" onclick="applyScenario('${esc(sc.id)}')">
+          <span class="scenario-name">${esc(sc.label)}</span>
+          <span class="scenario-desc">${esc(sc.description)}</span>
+          <span class="scenario-tags">${tags.map(t => `<span class="scenario-tag">${esc(t)}</span>`).join('')}</span>
+        </button>`;
       })
       .join('');
   }
@@ -335,74 +394,108 @@ function drawScenariosAndDlcs(): void {
     summaryBox.innerHTML = `<div class="summary-pills-row"><span class="tool-label">Active</span>${pills.join('')}</div>${blockedHtml}`;
   }
 
-  // 4. DLC cards grid
+  // 4. Expansions: one compact row per DLC (switch, "n of m addons"); its addons and settings show only when it is on and opened
   const grid = document.getElementById('setupDlcGrid');
   if (grid) {
     grid.innerHTML = dlcs
       .map(d => {
         const isDlcOn = dlcMap[d.id] === true;
+        const isOpen = isDlcOn && openDlcs.has(d.id);
         const addonList = d.addons.map(id => addons.get(id)).filter((a): a is AddonInfoView => !!a);
         const activeCount = addonList.filter(a => enabledAddons.has(a.id)).length;
+        const waiting = blockedAddons.filter(b => b.addon.pack === d.id).length;
+        const count = isDlcOn
+          ? `${activeCount} of ${addonList.length} addons${waiting > 0 ? ` · ${waiting} waiting` : ''}`
+          : `${addonList.length} addons`;
+        const switchHtml = `<label class="dlc-switch"><input type="checkbox" class="setup-switch" role="switch" aria-label="${esc(d.name)}" ${isDlcOn ? 'checked' : ''}
+          onclick="event.preventDefault(); openDlcRow('${esc(d.id)}', ${!isDlcOn}); toggleDlc('${esc(d.id)}')" /></label>`;
+        const head = isDlcOn
+          ? `<button type="button" class="dlc-expand" aria-expanded="${isOpen}" aria-controls="dlcBody-${esc(d.id)}" onclick="toggleDlcOpen('${esc(d.id)}')">
+              <span class="dlc-name">${esc(d.name)}</span><span class="dlc-count">${esc(count)}</span>
+              <span class="dlc-caret">${uiIcon('chevronDown', 16)}</span>
+            </button>`
+          : `<span class="dlc-expand is-static"><span class="dlc-name">${esc(d.name)}</span><span class="dlc-count">${esc(count)}</span></span>`;
+        if (!isOpen) return `<div class="dlc-row${isDlcOn ? ' is-on' : ''}"><div class="dlc-head">${head}${switchHtml}</div></div>`;
+
         const rowsHtml = addonList
           .map(a => {
-            const rawWanted = isDlcOn && addonFlags[a.id] !== false;
+            const rawWanted = addonFlags[a.id] !== false;
             const isActuallyOn = enabledAddons.has(a.id);
             const missingDeps = (a.deps || []).filter(depId => !enabledAddons.has(depId));
             const isBlocked = rawWanted && missingDeps.length > 0;
             const depLabels = missingDeps.map(m => addons.get(m)?.name || m).join(', ');
             return `
-              <div class="dlc-addon-row${isActuallyOn ? ' on' : ''}${isBlocked ? ' blocked' : ''}">
-                <label class="dlc-addon-label" title="${esc(a.description || '')}">
-                  <input type="checkbox" ${rawWanted ? 'checked' : ''} ${!isDlcOn ? 'disabled' : ''}
-                    onclick="event.preventDefault(); toggleAddon('${esc(a.id)}')" />
-                  <span class="dlc-addon-name">${esc(a.name)}</span>
+              <div class="dlc-addon${isActuallyOn ? ' on' : ''}${isBlocked ? ' blocked' : ''}">
+                <label class="dlc-addon-label">
+                  <input type="checkbox" ${rawWanted ? 'checked' : ''} onclick="event.preventDefault(); toggleAddon('${esc(a.id)}')" />
+                  <span class="dlc-addon-text">
+                    <span class="dlc-addon-name">${esc(a.name)}</span>
+                    ${a.description ? `<span class="dlc-addon-desc">${esc(a.description)}</span>` : ''}
+                  </span>
                 </label>
-                ${a.description ? `<span class="dlc-addon-desc">${esc(a.description)}</span>` : ''}
-                ${
-                  a.id === 'tidebound.tides' && isActuallyOn
-                    ? `<div class="dlc-addon-opt" title="High tides come more often, stay longer, reach deeper inland and flood higher ground. Low tides are the opposite.">
-                        <span class="dlc-addon-opt-label">Tide level: <strong id="tideLevelName">${esc(TIDE_LEVEL_NAMES[tideLevel - 1])}</strong></span>
-                        <input type="range" min="1" max="5" step="1" value="${tideLevel}" aria-label="Tide level"
-                          oninput="previewTideLevel(this.value)" onchange="setTideLevel(this.value)" />
-                        <span class="dlc-addon-opt-ends"><span>Low</span><span>High</span></span>
-                      </div>`
-                    : ''
-                }
-                ${
-                  a.id === 'tidebound.rising_sea' && isActuallyOn
-                    ? `<div class="dlc-addon-opt" title="Faster rising sea starts earlier and drowns coastal land more often. Slower gives more rounds before the coast shrinks.">
-                        <span class="dlc-addon-opt-label">Rising rate: <strong id="risingSeaLevelName">${esc(RISING_SEA_LEVEL_NAMES[risingSeaLevel - 1])}</strong></span>
-                        <input type="range" min="1" max="5" step="1" value="${risingSeaLevel}" aria-label="Rising sea rate"
-                          oninput="previewRisingSeaLevel(this.value)" onchange="setRisingSeaLevel(this.value)" />
-                        <span class="dlc-addon-opt-ends"><span>Slow</span><span>Fast</span></span>
-                      </div>`
-                    : ''
-                }
-                ${
-                  isBlocked
-                    ? `<button type="button" class="dlc-dep-btn" onclick="enableAddonWithDeps('${esc(a.id)}')" title="Click to enable required dependency">Needs ${esc(depLabels)} · Enable</button>`
-                    : ''
-                }
+                ${isBlocked ? `<button type="button" class="chip-btn dlc-dep-btn" onclick="enableAddonWithDeps('${esc(a.id)}')">Needs ${esc(depLabels)} · Enable</button>` : ''}
               </div>`;
           })
           .join('');
 
+        // Settings that belong to this DLC's addons sit together under the list, not inside an addon's text.
+        const settings: string[] = [];
+        if (enabledAddons.has('tidebound.tides') && d.id === 'tidebound') {
+          settings.push(`<label class="dlc-opt" title="High tides come more often, stay longer, reach deeper inland and flood higher ground. Low tides are the opposite.">
+            <span class="dlc-opt-label">Tide level <strong id="tideLevelName">${esc(TIDE_LEVEL_NAMES[tideLevel - 1])}</strong></span>
+            <input type="range" min="1" max="5" step="1" value="${tideLevel}" aria-label="Tide level"
+              oninput="previewTideLevel(this.value)" onchange="setTideLevel(this.value)" />
+          </label>`);
+        }
+        if (enabledAddons.has('tidebound.rising_sea') && d.id === 'tidebound') {
+          settings.push(`<label class="dlc-opt" title="Faster rising sea starts earlier and drowns coastal land more often. Slower gives more rounds before the coast shrinks.">
+            <span class="dlc-opt-label">Rising rate <strong id="risingSeaLevelName">${esc(RISING_SEA_LEVEL_NAMES[risingSeaLevel - 1])}</strong></span>
+            <input type="range" min="1" max="5" step="1" value="${risingSeaLevel}" aria-label="Rising sea rate"
+              oninput="previewRisingSeaLevel(this.value)" onchange="setRisingSeaLevel(this.value)" />
+          </label>`);
+        }
+
         return `
-          <div class="dlc-card${isDlcOn ? ' is-on' : ''}">
-            <div class="dlc-card-head" onclick="toggleDlc('${esc(d.id)}')">
-              <div class="dlc-card-title">
-                <input type="checkbox" class="dlc-master-switch" ${isDlcOn ? 'checked' : ''} onclick="event.stopPropagation(); event.preventDefault(); toggleDlc('${esc(d.id)}')" />
-                <strong>${esc(d.name)}</strong>
-              </div>
-              <span class="dlc-card-badge">${isDlcOn ? `${activeCount}/${addonList.length} on` : 'Off'}</span>
-            </div>
-            <div class="dlc-card-body">
+          <div class="dlc-row is-on is-open">
+            <div class="dlc-head">${head}${switchHtml}</div>
+            <div class="dlc-body" id="dlcBody-${esc(d.id)}">
               ${rowsHtml}
+              ${settings.length > 0 ? `<div class="dlc-settings"><span class="dlc-settings-title">${esc(d.name)} settings</span>${settings.join('')}</div>` : ''}
             </div>
           </div>`;
       })
       .join('');
   }
+}
+
+/** Short text for each folded rule group's title, so a closed group still says what it is set to. Pure, for tests. */
+export function ruleFoldValues(s: Record<string, any>): Record<string, string> {
+  const n = (v: any, d: number) => (v === undefined || v === null || v === '' || !Number.isFinite(Number(v)) ? d : Number(v));
+  const plural = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+  const turn = n(s.turnTimerSec, 0);
+  const inc = n(s.turnIncrementSec, 0);
+  const fate = n(s.fateTokens, 2);
+  const dev = n(s.devKnights, 14) + n(s.devVp, 5) + n(s.devRoadBuilding, 2) + n(s.devYearOfPlenty, 2) + n(s.devMonopoly, 2);
+  return {
+    foldValGame: `${n(s.vpToWin, 10)} VP · radius ${n(s.boardRadius, 2)} · discard above ${n(s.cardDiscardLimit, 7)}${s.fairDice ? ' · fair dice' : ''}`,
+    foldValTimers: `${turn > 0 ? `${turn} s turns${inc > 0 ? ` +${inc} s` : ''}` : 'No turn timer'} · trades ${n(s.tradeTimerSec, 20)} s`,
+    foldValEvents: `${s.eventsOn ? `Events on, ${plural(fate, 'fate token')}` : 'Events off'} · tech tree ${s.techTreeOn ? 'on' : 'off'}`,
+    foldValTiles: `${n(s.desertTiles, 1)} desert · ${n(s.goldTiles, 0)} gold · ${n(s.fogTiles, 0)} fog`,
+    foldValBank: `${n(s.bankResourcePerType, 19)} per resource · ${plural(dev, 'dev card')}`,
+    foldValPieces: `${plural(n(s.maxRoads, 15), 'road')} · ${plural(n(s.maxSettlements, 5), 'settlement')} · ${plural(n(s.maxCities, 4), 'city', 'cities')}`
+  };
+}
+
+function drawFoldValues(): void {
+  const vals = ruleFoldValues(state?.settings || {});
+  for (const id of Object.keys(vals)) {
+    const el = document.getElementById(id);
+    if (el && el.textContent !== vals[id]) el.textContent = vals[id];
+  }
+  const count = document.getElementById('setupTabCount');
+  const players = state?.players.length ?? 0;
+  const text = `${players}/${state?.settings?.maxPlayers ?? ''}`;
+  if (count && count.textContent !== text) count.textContent = text;
 }
 
 /** Host sees the setup page while `state.setup` is on; everyone else sees "Host is creating world" over the board. */
@@ -426,7 +519,9 @@ export function renderSetupPage(): void {
   const roster = document.getElementById('setupRoster');
   if (svg) drawPreview(svg);
   if (roster) drawRoster(roster);
+  applySetupTab();
   drawScenariosAndDlcs();
+  drawFoldValues();
 }
 
 export { effectiveDlcsAndAddons };

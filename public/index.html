@@ -100,120 +100,149 @@
         </div>
       </div>
 
-      <!-- World setup page (host only, between the name page and the board): bots, preview, map and rules. The painter stays on the board. -->
+      <!-- World setup page (host only, between the name page and the board): three tabs (Players, World, Rules) beside the map preview and the Active strip. The painter stays on the board. -->
       <div id="setupScreen" style="display:none;">
         <div class="setup-inner">
-          <div class="setup-top">
-            <section class="setup-card setup-bots">
-              <h3>Bots and talkativeness</h3>
-              <div class="tool-row">
-                <span class="tool-label">Add bot</span>
-                <select id="botTier" class="num" title="Difficulty of the next bot (click a bot's tag below to change it later)">
-                  <option value="main" selected>Main</option>
-                  <option value="secondary">Secondary</option>
-                  <option value="overload">Overload</option>
-                </select>
-                <button class="btn sm" onclick="addBot()"><span data-icon="plus" data-size="16"></span>Bot</button>
-                <button class="btn sm" onclick="removeBot()"><span data-icon="minus" data-size="16"></span>Bot</button>
-                <span class="tool-sep"></span>
-                <button id="btnSetupSpectate" class="btn sm" onclick="toggleSpectate()" title="Switch between playing in a seat and spectating"><span data-icon="eye" data-size="16"></span><span>Spectate</span></button>
-              </div>
-              <div class="tool-row">
-                <span class="tool-label">Bot chat</span>
-                <select id="setBotChat" class="num" title="How much bots talk in chat. Off also stops their replies to your messages." onchange="pushSettings()">
-                  <option value="off">Off</option>
-                  <option value="quiet">Quiet</option>
-                  <option value="normal" selected>Normal</option>
-                  <option value="chatty">Chatty</option>
-                </select>
-              </div>
-              <div id="setupRoster" class="setup-roster"></div>
-            </section>
-            <section class="setup-card setup-preview">
-              <h3>Preview</h3>
-              <svg id="setupPreview" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
-            </section>
+          <div class="setup-tabs" role="tablist" aria-label="Game setup" onkeydown="setupTabKey(event)">
+            <button type="button" role="tab" id="setupTab-players" class="setup-tab" aria-controls="setupPanel-players" aria-selected="true" onclick="setSetupTab('players')">Players <span id="setupTabCount" class="setup-tab-note"></span></button>
+            <button type="button" role="tab" id="setupTab-world" class="setup-tab" aria-controls="setupPanel-world" aria-selected="false" tabindex="-1" onclick="setSetupTab('world')">World</button>
+            <button type="button" role="tab" id="setupTab-rules" class="setup-tab" aria-controls="setupPanel-rules" aria-selected="false" tabindex="-1" onclick="setSetupTab('rules')">Rules</button>
           </div>
 
-          <section class="setup-card setup-tools">
-            <h3>Map and rules</h3>
-            <!-- Scenarios: one-click world setups (map + DLCs + VP target + events) -->
-            <div class="tool-row" id="scenarioRow">
-              <span class="tool-label">Scenarios</span>
-              <span id="scenarioPresets" class="tool-row"></span>
+          <!-- Always visible: the live map preview and what is on -->
+          <aside class="setup-side">
+            <div class="setup-card setup-preview">
+              <svg id="setupPreview" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map preview"></svg>
             </div>
-
-            <!-- Presets: quick starts come from the registry (drawn by mapmenu.ts); saved ones (host's browser) can be deleted after a confirmation -->
-            <div class="tool-row" id="presetRow">
-              <span class="tool-label">Presets</span>
-              <span id="builtinPresets" class="tool-row"></span>
-              <span class="tool-sep"></span>
-              <span id="customPresets" class="tool-row"></span>
-            </div>
-
-            <!-- Map recipe: summary and dropdown (shape, style, perks), seed, report. Drawn by mapmenu.ts from the server's option list -->
-            <div class="map-recipe-row">
-              <span class="tool-label">Map</span>
-              <div id="mapRecipe" class="map-recipe"></div>
-            </div>
-
             <!-- Live summary strip: what is on (active DLCs, addons, dependency prompts, events) -->
             <div id="setupActiveSummary" class="setup-active-summary"></div>
+          </aside>
 
-            <!-- DLC cards: master switch + individual addon toggles -->
-            <div class="setup-dlc-section" id="setupDlcSection">
-              <div class="setup-dlc-head">
-                <h4>Expansions &amp; Addons</h4>
-                <span class="muted">Toggle a DLC pack or customize individual addons</span>
+          <!-- 1. Players: the only tab you need before Start -->
+          <section id="setupPanel-players" class="setup-card setup-panel" role="tabpanel" aria-labelledby="setupTab-players">
+            <div id="setupRoster" class="setup-roster"></div>
+            <div class="setup-form">
+              <div class="setup-line">
+                <span class="setup-line-label">Add a bot</span>
+                <div class="setup-line-ctl">
+                  <select id="botTier" class="num" aria-label="Difficulty of the next bot" title="Difficulty of the next bot (click a bot's tag to change it later)">
+                    <option value="main" selected>Main</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="overload">Overload</option>
+                  </select>
+                  <button class="btn sm" onclick="addBot()" aria-label="Add a bot"><span data-icon="plus" data-size="16"></span>Bot</button>
+                  <button class="btn sm" onclick="removeBot()" aria-label="Remove a bot"><span data-icon="minus" data-size="16"></span>Bot</button>
+                </div>
               </div>
-              <div id="setupDlcGrid" class="setup-dlc-grid"></div>
+              <label class="setup-line">
+                <span class="setup-line-label">Seats</span>
+                <span class="setup-line-ctl"><input id="setMaxP" type="number" class="num" value="8" min="2" max="8" onchange="pushSettings()" /></span>
+              </label>
+              <label class="setup-line" title="How much bots talk in chat. Off also stops their replies to your messages.">
+                <span class="setup-line-label">Bot chat</span>
+                <span class="setup-line-ctl">
+                  <select id="setBotChat" class="num" onchange="pushSettings()">
+                    <option value="off">Off</option>
+                    <option value="quiet">Quiet</option>
+                    <option value="normal" selected>Normal</option>
+                    <option value="chatty">Chatty</option>
+                  </select>
+                </span>
+              </label>
+              <div class="setup-line">
+                <span class="setup-line-label">You</span>
+                <div class="setup-line-ctl">
+                  <button id="btnSetupSpectate" class="btn sm" onclick="toggleSpectate()" title="Switch between playing in a seat and spectating"><span data-icon="eye" data-size="16"></span><span>Spectate</span></button>
+                </div>
+              </div>
             </div>
+          </section>
 
-            <div class="rules-grid">
-              <div class="rule-group">
-                <h4>Game</h4>
-                <label class="field">Map radius (1-50)<input id="setRadius" type="number" class="num" value="2" min="1" max="50" onchange="pushSettings()" /></label>
-                <label class="field">VP to win<input id="setVp" type="number" class="num" value="10" min="3" max="50" onchange="pushSettings()" /></label>
-                <label class="field">Max players<input id="setMaxP" type="number" class="num" value="8" min="2" max="8" onchange="pushSettings()" /></label>
-                <label class="field">Discard above<input id="setDiscard" type="number" class="num" value="7" min="3" max="50" onchange="pushSettings()" /></label>
-                <label class="field" title="Roll dice guided by the 2d6 probability curve to reduce extreme streaks.">Fair dice<input id="setFairDice" type="checkbox" class="setup-check" onchange="pushSettings()" /></label>
+          <!-- 2. World: scenario cards are the main choice; map recipe and presets sit in a fold -->
+          <section id="setupPanel-world" class="setup-card setup-panel" role="tabpanel" aria-labelledby="setupTab-world" hidden>
+            <h3 class="setup-h">Scenario</h3>
+            <div id="scenarioPresets" class="scenario-grid"></div>
+
+            <details class="setup-fold" id="setupMapMore">
+              <summary><span class="fold-title">More map options</span><span id="foldValMap" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+              <div class="fold-body">
+                <!-- Map recipe: summary and dropdown (shape, style, perks), seed, report. Drawn by mapmenu.ts from the server's option list -->
+                <div class="fold-sub">
+                  <h4 class="setup-h4">Map</h4>
+                  <div id="mapRecipe" class="map-recipe"></div>
+                </div>
+                <!-- Presets: quick starts come from the registry (drawn by mapmenu.ts); saved ones (host's browser) can be deleted after a confirmation -->
+                <div class="fold-sub" id="presetRow">
+                  <h4 class="setup-h4">Presets</h4>
+                  <p class="setup-hint">A preset swaps in a whole map. Saved presets live in this browser.</p>
+                  <div id="builtinPresets" class="tool-row"></div>
+                  <div id="customPresets" class="tool-row"></div>
+                </div>
               </div>
-              <div class="rule-group">
-                <h4>Timers</h4>
-                <label class="field" title="Seconds per turn. 0 = no turn timer.">Turn time (sec, 0 = off)<input id="setTurnTime" type="number" class="num" value="0" min="0" max="900" onchange="pushSettings()" /></label>
-                <label class="field" title="Seconds added to your turn each time you complete an action.">+ sec per action<input id="setTurnInc" type="number" class="num" value="0" min="0" max="120" onchange="pushSettings()" /></label>
-                <label class="field" title="How long a trade offer stays open.">Trade offer (sec)<input id="setTradeTime" type="number" class="num" value="20" min="5" max="300" onchange="pushSettings()" /></label>
-              </div>
-              <div class="rule-group">
-                <h4>Special tiles</h4>
-                <label class="field">Gold hexes<input id="setGold" type="number" class="num" value="0" min="0" max="500" onchange="pushSettings()" /></label>
-                <label class="field">Desert hexes<input id="setDesert" type="number" class="num" value="1" min="0" max="200" onchange="pushSettings()" /></label>
-                <label class="field">Fog hexes<input id="setFog" type="number" class="num" value="0" min="0" max="2000" onchange="pushSettings()" /></label>
-              </div>
-              <div class="rule-group">
-                <h4>Bank and dev cards</h4>
-                <label class="field">Bank cards per type<input id="setBankRes" type="number" class="num" value="19" min="5" max="999" onchange="pushSettings()" /></label>
-                <label class="field">Knights<input id="setDevKnight" type="number" class="num" value="14" min="0" max="100" onchange="pushSettings()" /></label>
-                <label class="field">Victory points<input id="setDevVp" type="number" class="num" value="5" min="0" max="50" onchange="pushSettings()" /></label>
-                <label class="field">Road building<input id="setDevRb" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></label>
-                <label class="field">Year of plenty<input id="setDevYop" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></label>
-                <label class="field">Monopoly<input id="setDevMono" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></label>
-              </div>
-              <div class="rule-group">
-                <h4>Pieces per player (above base = 2× cost)</h4>
-                <label class="field" title="Scales with VP to win; roads built after your 15th cost 2× resources">Roads<input id="setMaxRoad" type="number" class="num" value="15" min="5" max="100" onchange="pushSettings()" /></label>
-                <label class="field" title="Scales with VP to win; settlements built after your 5th cost 2× resources">Settlements<input id="setMaxSettle" type="number" class="num" value="5" min="2" max="50" onchange="pushSettings()" /></label>
-                <label class="field" title="Scales with VP to win; cities built after your 4th cost 2× resources">Cities<input id="setMaxCity" type="number" class="num" value="4" min="1" max="50" onchange="pushSettings()" /></label>
-              </div>
-              <div class="rule-group">
-                <h4>Events and fate</h4>
-                <label class="field" title="Draw a seeded world event every few rounds.">Round events<input id="setEventsOn" type="checkbox" class="setup-check" onchange="pushSettings()" /></label>
-                <label class="field" title="Starting Fate tokens per player (spend to veto or reroll an event).">Fate tokens<input id="setFateTokens" type="number" class="num" value="2" min="0" max="10" onchange="pushSettings()" /></label>
-              </div>
-              <div class="rule-group">
-                <h4>Tech tree</h4>
-                <label class="field" title="Players and bots can research branch techs using varied resources. Off means nobody can research.">Tech tree<input id="setTechTreeOn" type="checkbox" class="setup-check" onchange="pushSettings()" /></label>
-              </div>
+            </details>
+          </section>
+
+          <!-- 3. Rules: expansions as compact rows, then folded rule groups whose titles show their current values -->
+          <section id="setupPanel-rules" class="setup-card setup-panel" role="tabpanel" aria-labelledby="setupTab-rules" hidden>
+            <h3 class="setup-h">Expansions</h3>
+            <!-- One row per DLC: switch, addon count, details on click. Drawn by render/setup.ts -->
+            <div id="setupDlcGrid" class="dlc-list"></div>
+
+            <h3 class="setup-h">Rules</h3>
+            <div class="fold-list">
+              <details class="setup-fold">
+                <summary><span class="fold-title">Game</span><span id="foldValGame" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <label class="setup-line"><span class="setup-line-label">Map radius (1-50)</span><span class="setup-line-ctl"><input id="setRadius" type="number" class="num" value="2" min="1" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">VP to win</span><span class="setup-line-ctl"><input id="setVp" type="number" class="num" value="10" min="3" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Discard above</span><span class="setup-line-ctl"><input id="setDiscard" type="number" class="num" value="7" min="3" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Fair dice<small>Rolls follow the 2d6 odds more closely, so long streaks are rarer.</small></span><span class="setup-line-ctl"><input id="setFairDice" type="checkbox" class="setup-switch" role="switch" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
+              <details class="setup-fold">
+                <summary><span class="fold-title">Timers</span><span id="foldValTimers" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <label class="setup-line"><span class="setup-line-label">Turn time (sec)<small>0 means no turn timer.</small></span><span class="setup-line-ctl"><input id="setTurnTime" type="number" class="num" value="0" min="0" max="900" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">+ sec per action<small>Added to your turn each time you act.</small></span><span class="setup-line-ctl"><input id="setTurnInc" type="number" class="num" value="0" min="0" max="120" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Trade offer (sec)</span><span class="setup-line-ctl"><input id="setTradeTime" type="number" class="num" value="20" min="5" max="300" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
+              <details class="setup-fold">
+                <summary><span class="fold-title">Events and tech tree</span><span id="foldValEvents" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <label class="setup-line"><span class="setup-line-label">Round events<small>A seeded world event every few rounds.</small></span><span class="setup-line-ctl"><input id="setEventsOn" type="checkbox" class="setup-switch" role="switch" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Fate tokens<small>Per player, spent to veto or reroll an event.</small></span><span class="setup-line-ctl"><input id="setFateTokens" type="number" class="num" value="2" min="0" max="10" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Tech tree<small>Research branch techs with resources. Off means nobody can research.</small></span><span class="setup-line-ctl"><input id="setTechTreeOn" type="checkbox" class="setup-switch" role="switch" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
+              <details class="setup-fold">
+                <summary><span class="fold-title">Special tiles</span><span id="foldValTiles" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <label class="setup-line"><span class="setup-line-label">Gold hexes</span><span class="setup-line-ctl"><input id="setGold" type="number" class="num" value="0" min="0" max="500" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Desert hexes</span><span class="setup-line-ctl"><input id="setDesert" type="number" class="num" value="1" min="0" max="200" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Fog hexes</span><span class="setup-line-ctl"><input id="setFog" type="number" class="num" value="0" min="0" max="2000" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
+              <details class="setup-fold">
+                <summary><span class="fold-title">Bank and dev cards</span><span id="foldValBank" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <label class="setup-line"><span class="setup-line-label">Bank cards per type</span><span class="setup-line-ctl"><input id="setBankRes" type="number" class="num" value="19" min="5" max="999" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Knights</span><span class="setup-line-ctl"><input id="setDevKnight" type="number" class="num" value="14" min="0" max="100" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Victory points</span><span class="setup-line-ctl"><input id="setDevVp" type="number" class="num" value="5" min="0" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Road building</span><span class="setup-line-ctl"><input id="setDevRb" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Year of plenty</span><span class="setup-line-ctl"><input id="setDevYop" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Monopoly</span><span class="setup-line-ctl"><input id="setDevMono" type="number" class="num" value="2" min="0" max="50" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
+              <details class="setup-fold">
+                <summary><span class="fold-title">Pieces per player</span><span id="foldValPieces" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
+                <div class="fold-body setup-form">
+                  <p class="setup-hint">These scale with VP to win. Pieces built past the count cost 2&times; resources.</p>
+                  <label class="setup-line"><span class="setup-line-label">Roads</span><span class="setup-line-ctl"><input id="setMaxRoad" type="number" class="num" value="15" min="5" max="100" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Settlements</span><span class="setup-line-ctl"><input id="setMaxSettle" type="number" class="num" value="5" min="2" max="50" onchange="pushSettings()" /></span></label>
+                  <label class="setup-line"><span class="setup-line-label">Cities</span><span class="setup-line-ctl"><input id="setMaxCity" type="number" class="num" value="4" min="1" max="50" onchange="pushSettings()" /></span></label>
+                </div>
+              </details>
             </div>
           </section>
         </div>
