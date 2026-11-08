@@ -1,0 +1,21 @@
+/no_think
+Write ONLY these three JavaScript functions for a Three.js board-game scene: buildSettlement(p), buildCity(p), buildRoad(p1, p2). The arguments p, p1, p2 are objects {x, z}. Reply with one ```js block that contains just the three functions. No explanation, no imports, no other code.
+
+Already available, do not redefine them: THREE, scene, add(geometry, colorHex, x, y, z, parent) (creates a mesh at x,y,z inside parent, which defaults to the scene, and returns it), addRim(obj) (adds a light outline to every mesh inside obj), and the colour numbers RED, DARK, LIGHT.
+
+RULES (the last run broke these): 1) RED, DARK and LIGHT are colour numbers, not materials. Never write new THREE.Mesh. Make every mesh with add(geometry, color, x, y, z, parent), for example add(new THREE.BoxGeometry(0.34, 0.24, 0.3), RED, 0, 0.12, 0, group). 2) Every function must add its piece to the scene (scene.add(group)) before calling addRim. 3) A group stands on the land: group.position.set(p.x, 0.35, p.z); the parts inside are relative to the group. Settlement: body y = 0.12, roof y = 0.34, door y = 0.06 and z = 0.155. City: tower y = 0.275, tower roof y = 0.67, house y = 0.12, house roof y = 0.34, door y = 0.06, z = 0.155.
+
+// SETTLEMENT: a small house standing on y = 0.35 at p = {x, z}.
+// Body BoxGeometry(0.34, 0.24, 0.3) in RED, roof ConeGeometry(0.27, 0.2, 4) in DARK rotated 45 degrees on y,
+// a small LIGHT door BoxGeometry(0.08, 0.12, 0.02) on the +z face. Build it in a THREE.Group, add the group to
+// the scene, call addRim(group), return the group.
+
+// CITY: a tower next to a house (like the settlement's), the whole group 1.3 times bigger than the settlement.
+// Tower BoxGeometry(0.26, 0.55, 0.26) in RED at x = -0.14 with a cone roof ConeGeometry(0.22, 0.24, 4) in DARK
+// rotated 45 degrees on y on top. House: same as the settlement's body, roof and door, at x = +0.17.
+// Group, group.scale.setScalar(1.3), add to the scene, addRim(group), return it.
+
+// ROAD: a thick rounded bar from p1 to p2 (both {x, z}) lying at y = 0.4 in RED.
+// CapsuleGeometry(0.07, length * 0.8 - 0.14, 4, 8) where length is the distance from p1 to p2, then
+// geometry.rotateX(Math.PI / 2). Put the mesh at the midpoint, add it to the scene, THEN call
+// mesh.lookAt(p2.x, 0.4, p2.z), then addRim(mesh). Return the mesh.

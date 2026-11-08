@@ -1,0 +1,459 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tidebound 2.5D demo: city, village, road</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #e4e0d5; font-family: system-ui, sans-serif; }
+  #theme { position: fixed; top: 12px; right: 12px; min-height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #f4f1ea; color: #2b2f33; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+  #hint { position: fixed; left: 14px; bottom: 12px; font-size: 12px; font-weight: 500; color: #2b2f33; opacity: .7; }
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<button id="theme">Light / Dark</button>
+<div id="hint">Drag to orbit, scroll to zoom</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---- palette (from our design philosophy) ----
+const PAL = { forest: 0x5f8a5a, clay: 0xc0674a, meadow: 0xa9c27a, wheat: 0xe2c56b, stone: 0x8d98a3, sea: 0x6f9fb0, shallow: 0x86b0bf, page: 0xe4e0d5 };
+const TEAM = 0xe0483a, TEAM_DARK = 0xa8321f;
+const CREAM = 0xefe6cf, WALL = 0xc4bdad, WALL_DARK = 0x9e9888, TIMBER = 0x9a7b53, TIMBER_DARK = 0x6e5434;
+const THATCH = 0xd8b25a, LIGHT = 0xf4f1ea, DOOR = 0x5a4430, WINDOW = 0x44505a, PINE = 0x3d6240, LEAF = 0x6f9a57, FIRE = 0xd9893b;
+
+// ---- scene ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(PAL.page);
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(2.4, 6.0, 6.6);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(1.3, 0.2, -0.5);
+controls.enableDamping = true;
+controls.enablePan = false;
+controls.minPolarAngle = 0.5;
+controls.maxPolarAngle = 1.15;
+controls.minDistance = 4;
+controls.maxDistance = 11;
+controls.update();
+const sky = new THREE.HemisphereLight(0xffffff, 0xb8c4c8, 0.9);
+const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+sun.position.set(4, 9, 5);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0006;
+Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7 });
+scene.add(sky, sun);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- tiny helpers (flat shaded, matte, one material per colour) ----
+const mats = new Map();
+function mat(color, opts = {}) {
+  const key = color + JSON.stringify(opts);
+  if (!mats.has(key)) mats.set(key, new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 1, metalness: 0, ...opts }));
+  return mats.get(key);
+}
+const shade = (c, k) => new THREE.Color(c).multiplyScalar(k).getHex();
+function mesh(geo, color, x, y, z, parent, opts) {
+  const m = new THREE.Mesh(geo, mat(color, opts));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+// y is the BOTTOM of the shape for these three
+const box = (w, h, d, c, x, y, z, p) => mesh(new THREE.BoxGeometry(w, h, d), c, x, y + h / 2, z, p);
+const cyl = (r, h, c, x, y, z, p, seg = 8, rTop = r) => mesh(new THREE.CylinderGeometry(rTop, r, h, seg), c, x, y + h / 2, z, p);
+const cone = (r, h, c, x, y, z, p, seg = 8) => mesh(new THREE.ConeGeometry(r, h, seg), c, x, y + h / 2, z, p);
+function group(parent, x = 0, y = 0, z = 0, rotY = 0) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = rotY;
+  parent.add(g);
+  return g;
+}
+// deterministic randomness, so the demo looks the same every time
+let seed = 7;
+const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+// Gable roof: ridge along x, base on y = 0.
+function gableGeo(w, d, h) {
+  const hw = w / 2, hd = d / 2;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([
+    -hw, 0, -hd, -hw, 0, hd, -hw, h, 0,
+    hw, 0, -hd, hw, 0, hd, hw, h, 0
+  ], 3));
+  g.setIndex([0, 1, 2, 3, 5, 4, 1, 4, 5, 1, 5, 2, 0, 5, 3, 0, 2, 5]);
+  g.computeVertexNormals();
+  return g;
+}
+
+// ---- hex layout (pointy-top, edge length 1) ----
+const S3 = Math.sqrt(3);
+const hexCenter = (q, r) => ({ x: S3 * (q + r / 2), z: 1.5 * r });
+
+// ---- things that wave or bob ----
+const flags = [];
+const reveals = [];
+function reveal(g, delay) { reveals.push({ g, delay }); if (!reduced) g.scale.setScalar(0.001); }
+
+function flag(parent, x, y, z, height = 0.3) {
+  cyl(0.008, height, TIMBER_DARK, x, y, z, parent, 5);
+  const geo = new THREE.PlaneGeometry(0.15, 0.09);
+  geo.translate(0.075, 0, 0);
+  const f = mesh(geo, TEAM, x, y + height - 0.06, z, parent, { side: THREE.DoubleSide });
+  f.castShadow = false;
+  flags.push(f);
+}
+
+// ---- buildings ----
+function house(parent, x, z, rot, o = {}) {
+  const { w = 0.3, d = 0.26, h = 0.2, wall = CREAM, roof = TEAM_DARK, chimney = false } = o;
+  const g = group(parent, x, 0, z, rot);
+  box(w, h, d, wall, 0, 0, 0, g);
+  box(w + 0.01, 0.03, d + 0.01, TIMBER, 0, 0, 0, g);               // timber foot
+  box(w + 0.01, 0.022, d + 0.01, TIMBER, 0, h * 0.62, 0, g);       // timber band
+  mesh(gableGeo(w + 0.08, d + 0.08, h * 0.85), roof, 0, h, 0, g);
+  box(0.07, 0.11, 0.02, DOOR, 0, 0, d / 2 + 0.004, g);
+  box(0.05, 0.05, 0.02, WINDOW, -w / 3, h * 0.55, d / 2 + 0.004, g);
+  box(0.05, 0.05, 0.02, WINDOW, w / 3, h * 0.55, d / 2 + 0.004, g);
+  if (chimney) box(0.05, 0.13, 0.05, WALL_DARK, w / 4, h * 0.8, -d / 6, g);
+  return g;
+}
+
+function roundTower(parent, x, z, o = {}) {
+  const { r = 0.12, h = 0.55, roof = TEAM } = o;
+  const g = group(parent, x, 0, z);
+  cyl(r, h, WALL, 0, 0, 0, g, 8, r * 0.92);
+  cyl(r * 1.08, 0.04, WALL_DARK, 0, h - 0.04, 0, g, 8);           // corbel ring
+  cone(r * 1.2, r * 2.2, roof, 0, h, 0, g, 8);
+  box(0.03, 0.09, 0.02, WINDOW, 0, h * 0.55, r * 0.93, g);
+  return g;
+}
+
+function battlements(parent, w, y, z, n) {
+  for (let i = 0; i < n; i++) box(w / (n * 1.8), 0.05, 0.05, WALL, -w / 2 + (i + 0.5) * (w / n), y, z, parent);
+}
+
+function keep(parent, x, z) {
+  const g = group(parent, x, 0, z);
+  box(0.5, 0.36, 0.34, WALL, 0, 0, 0, g);
+  box(0.51, 0.03, 0.35, WALL_DARK, 0, 0, 0, g);
+  battlements(g, 0.5, 0.36, 0.15, 5);
+  battlements(g, 0.5, 0.36, -0.15, 5);
+  box(0.13, 0.17, 0.02, DOOR, 0, 0, 0.172, g);                     // gate
+  box(0.16, 0.03, 0.03, WALL_DARK, 0, 0.17, 0.175, g);             // lintel
+  box(0.045, 0.07, 0.02, WINDOW, -0.17, 0.2, 0.172, g);
+  box(0.045, 0.07, 0.02, WINDOW, 0.17, 0.2, 0.172, g);
+  cyl(0.14, 0.34, WALL_DARK, 0, 0.36, -0.02, g, 8, 0.125);          // central tower
+  cone(0.17, 0.3, TEAM, 0, 0.7, -0.02, g, 8);
+  flag(g, 0, 1.0, -0.02, 0.26);
+  return g;
+}
+
+function stall(parent, x, z, rot) {
+  const g = group(parent, x, 0, z, rot);
+  box(0.26, 0.09, 0.12, TIMBER, 0, 0, 0, g);
+  for (const sx of [-0.12, 0.12]) cyl(0.01, 0.2, TIMBER_DARK, sx, 0, 0.05, g, 5);
+  for (let i = 0; i < 5; i++) {
+    const s = box(0.056, 0.015, 0.16, i % 2 ? CREAM : TEAM, -0.112 + i * 0.056, 0.2, 0.02, g);
+    s.rotation.x = 0.28;
+  }
+  box(0.06, 0.04, 0.05, THATCH, -0.06, 0.09, 0, g);                 // goods
+  box(0.05, 0.05, 0.05, TEAM_DARK, 0.06, 0.09, 0, g);
+  return g;
+}
+
+function well(parent, x, z) {
+  const g = group(parent, x, 0, z);
+  cyl(0.075, 0.075, WALL, 0, 0, 0, g, 8);
+  cyl(0.055, 0.01, WINDOW, 0, 0.07, 0, g, 8);
+  for (const s of [-1, 1]) box(0.015, 0.2, 0.015, TIMBER_DARK, s * 0.07, 0.07, 0, g);
+  mesh(gableGeo(0.2, 0.14, 0.07), TEAM_DARK, 0, 0.27, 0, g);
+  return g;
+}
+
+function hut(parent, x, z, rot) {
+  const g = group(parent, x, 0, z, rot);
+  cyl(0.12, 0.13, CREAM, 0, 0, 0, g, 7);
+  cyl(0.125, 0.025, TIMBER, 0, 0, 0, g, 7);
+  cone(0.18, 0.17, THATCH, 0, 0.13, 0, g, 7);
+  box(0.055, 0.09, 0.02, DOOR, 0, 0, 0.115, g);
+  return g;
+}
+
+function fence(parent, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+  const rail = box(len, 0.02, 0.015, TIMBER, (ax + bx) / 2, 0.07, (az + bz) / 2, parent);
+  rail.rotation.y = -ang;
+  const rail2 = box(len, 0.02, 0.015, TIMBER, (ax + bx) / 2, 0.035, (az + bz) / 2, parent);
+  rail2.rotation.y = -ang;
+  const n = Math.max(2, Math.round(len / 0.1));
+  for (let i = 0; i <= n; i++) box(0.02, 0.1, 0.02, TIMBER_DARK, ax + dx * i / n, 0, az + dz * i / n, parent);
+}
+
+function wallRun(parent, ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+  const w = box(len, 0.13, 0.07, WALL, (ax + bx) / 2, 0, (az + bz) / 2, parent);
+  w.rotation.y = -ang;
+  const n = Math.round(len / 0.09);
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n;
+    const m = box(len / n * 0.55, 0.045, 0.075, WALL, ax + dx * t, 0.13, az + dz * t, parent);
+    m.rotation.y = -ang;
+  }
+}
+
+// ---- nature ----
+function pine(parent, x, z, s = 1) {
+  const g = group(parent, x, 0, z);
+  cyl(0.03 * s, 0.1 * s, TIMBER_DARK, 0, 0, 0, g, 5);
+  cone(0.17 * s, 0.22 * s, PINE, 0, 0.07 * s, 0, g, 6);
+  cone(0.14 * s, 0.2 * s, shade(PINE, 1.1), 0, 0.2 * s, 0, g, 6);
+  cone(0.1 * s, 0.18 * s, shade(PINE, 1.2), 0, 0.33 * s, 0, g, 6);
+  return g;
+}
+function roundTree(parent, x, z, s = 1) {
+  const g = group(parent, x, 0, z);
+  cyl(0.035 * s, 0.16 * s, TIMBER_DARK, 0, 0, 0, g, 5);
+  mesh(new THREE.IcosahedronGeometry(0.15 * s, 0), LEAF, 0, 0.27 * s, 0, g);
+  mesh(new THREE.IcosahedronGeometry(0.09 * s, 0), shade(LEAF, 1.12), 0.07 * s, 0.38 * s, 0.02 * s, g);
+  return g;
+}
+function mountain(parent, x, z, s, y = 0) {
+  const g = group(parent, x, y, z, rnd() * 3);
+  cone(0.34 * s, 0.6 * s, PAL.stone, 0, 0, 0, g, 5);
+  cone(0.105 * s, 0.18 * s, LIGHT, 0, 0.42 * s, 0, g, 5);
+  return g;
+}
+function sheep(parent, x, z, rot) {
+  const g = group(parent, x, 0, z, rot);
+  const body = mesh(new THREE.IcosahedronGeometry(0.07, 0), LIGHT, 0, 0.1, 0, g);
+  body.scale.set(1.35, 1, 1);
+  box(0.05, 0.05, 0.05, 0x4a5a2e, 0.1, 0.09, 0, g);
+  for (const lx of [-0.05, 0.05]) for (const lz of [-0.03, 0.03]) box(0.014, 0.05, 0.014, 0x4a5a2e, lx, 0, lz, g);
+  return g;
+}
+function haystack(parent, x, z) {
+  const g = group(parent, x, 0, z);
+  cyl(0.09, 0.1, THATCH, 0, 0, 0, g, 7);
+  cone(0.1, 0.1, shade(THATCH, 0.9), 0, 0.1, 0, g, 7);
+  return g;
+}
+
+// ---- unit: a spearman ----
+function spearman(parent, x, z, rot) {
+  const g = group(parent, x, 0, z, rot);
+  cyl(0.06, 0.2, TEAM, 0, 0.04, 0, g, 6, 0.045);
+  box(0.05, 0.05, 0.03, TIMBER_DARK, -0.025, 0, 0, g);
+  box(0.05, 0.05, 0.03, TIMBER_DARK, 0.025, 0, 0, g);
+  mesh(new THREE.IcosahedronGeometry(0.052, 0), 0xf0cfa6, 0, 0.3, 0, g);
+  cyl(0.058, 0.04, WALL_DARK, 0, 0.3, 0, g, 6);                      // helmet
+  const shield = cyl(0.075, 0.02, TEAM_DARK, 0.085, 0.1, 0.03, g, 6);
+  shield.rotation.z = Math.PI / 2;
+  cyl(0.03, 0.012, LIGHT, 0.1, 0.1, 0.03, g, 6).rotation.z = Math.PI / 2;
+  cyl(0.008, 0.5, TIMBER, -0.085, 0.02, 0.03, g, 5);
+  cone(0.02, 0.07, WALL_DARK, -0.085, 0.52, 0.03, g, 4);
+  return g;
+}
+
+// ---- terrain ----
+function tile(q, r, top, h) {
+  const c = hexCenter(q, r);
+  const t = new THREE.Mesh(new THREE.CylinderGeometry(0.97, 0.97, h, 6), [mat(shade(top, 0.72)), mat(top), mat(shade(top, 0.72))]);
+  t.position.set(c.x, h / 2, c.z);
+  t.castShadow = true;
+  t.receiveShadow = true;
+  scene.add(t);
+  return group(scene, c.x, h, c.z);
+}
+
+const LAND = {
+  '0,0': [PAL.meadow, 0.35], '1,0': [PAL.meadow, 0.35], '2,-1': [PAL.meadow, 0.35], '1,-1': [PAL.forest, 0.35],
+  '0,-1': [PAL.stone, 0.5], '2,0': [PAL.wheat, 0.35], '-1,0': [PAL.meadow, 0.35]
+};
+const tiles = {};
+for (let q = -4; q <= 4; q++) {
+  for (let r = -4; r <= 4; r++) {
+    if (Math.abs(q + r) > 4) continue;
+    const key = q + ',' + r, l = LAND[key];
+    tiles[key] = l ? tile(q, r, l[0], l[1]) : tile(q, r, PAL.shallow, 0.1);
+  }
+}
+const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), mat(PAL.sea));
+sea.rotation.x = -Math.PI / 2;
+sea.position.y = 0.02;
+sea.receiveShadow = true;
+scene.add(sea);
+
+// ---- the city on tile (0,0) ----
+{
+  const g = tiles['0,0'];
+  const city = group(g);
+  cyl(0.88, 0.03, 0xe7dfc9, 0, 0, 0, city, 6);                       // light base plate
+  keep(city, 0, -0.12);
+  roundTower(city, -0.4, -0.1);
+  roundTower(city, 0.4, -0.1);
+  house(city, -0.55, 0.36, 0.25, { chimney: true });
+  house(city, -0.12, 0.52, -0.08, { w: 0.34, d: 0.28, h: 0.24, wall: WALL });
+  house(city, 0.5, 0.4, -0.3, { w: 0.26, d: 0.24, h: 0.18, roof: TEAM, chimney: true });
+  house(city, -0.64, -0.4, 0.6, { w: 0.24, d: 0.22, h: 0.17 });
+  house(city, 0.66, -0.4, -0.5, { w: 0.24, d: 0.22, h: 0.17, wall: WALL });
+  stall(city, 0.16, 0.3, 0.2);
+  well(city, -0.3, 0.2);
+  wallRun(city, -0.5, -0.74, 0.5, -0.74);
+  roundTower(city, -0.58, -0.74, { r: 0.07, h: 0.3 });
+  roundTower(city, 0.58, -0.74, { r: 0.07, h: 0.3 });
+  flag(city, 0.5, 0.42, 0.55, 0.26);
+  reveal(city, 100);
+}
+
+// ---- the village on tile (2,-1) ----
+{
+  const g = tiles['2,-1'];
+  const v = group(g);
+  cyl(0.7, 0.03, 0xe7dfc9, 0, 0, 0, v, 6);
+  hut(v, -0.5, -0.1, 0.4);
+  hut(v, 0.42, -0.42, -0.5);
+  hut(v, 0.5, 0.3, 0.9);
+  well(v, 0, 0);
+  haystack(v, 0.62, -0.02);
+  fence(v, -0.7, -0.45, -0.2, -0.72);
+  fence(v, 0.05, -0.74, 0.5, -0.66);
+  for (const [lx, lz, a] of [[-0.2, -0.42, 0], [-0.13, -0.42, 1.2], [-0.16, -0.36, 2.4]]) {
+    const log = cyl(0.014, 0.1, TIMBER_DARK, lx, 0.01, lz, v, 5);
+    log.rotation.z = Math.PI / 2;
+    log.rotation.y = a;
+  }
+  cone(0.03, 0.08, FIRE, -0.16, 0.02, -0.4, v, 5);
+  flag(v, -0.05, 0, 0.1, 0.34);
+  reveal(v, 500);
+}
+
+// ---- nature on the other tiles ----
+{
+  const forest = tiles['1,-1'];
+  for (const [x, z, s] of [[-0.45, -0.3, 1.1], [-0.1, -0.55, 1.3], [0.35, -0.4, 1], [0.55, 0.05, 1.2], [-0.5, 0.25, 0.9], [0, 0.1, 1.4], [0.3, 0.5, 0.9], [-0.15, 0.55, 1]]) pine(forest, x, z, s);
+  reveal(forest, 350);
+
+  const mount = tiles['0,-1'];
+  mountain(mount, -0.15, -0.1, 1.2);
+  mountain(mount, 0.35, 0.2, 0.8);
+  mountain(mount, -0.4, 0.4, 0.7);
+  reveal(mount, 250);
+
+  const farm = tiles['2,0'];
+  for (let i = 0; i < 5; i++) {
+    const s = box(0.7, 0.03, 0.1, i % 2 ? 0xd9b84f : PAL.wheat, 0, 0, -0.38 + i * 0.19, farm);
+    s.rotation.y = 0.15;
+  }
+  haystack(farm, -0.55, 0.45);
+  haystack(farm, 0.5, -0.5);
+  reveal(farm, 650);
+
+  const meadow = tiles['-1,0'];
+  roundTree(meadow, -0.4, -0.3, 1.1);
+  roundTree(meadow, 0.3, -0.5, 0.9);
+  roundTree(meadow, 0.45, 0.35, 1);
+  sheep(meadow, -0.1, 0.2, 0.6);
+  sheep(meadow, 0.0, 0.42, -0.4);
+  reveal(meadow, 450);
+}
+
+// ---- road: cobbles from the city gate, through tile (1,0), to the village ----
+{
+  const a = hexCenter(0, 0), b = hexCenter(1, 0), c = hexCenter(2, -1);
+  const u = { x: (c.x - b.x) / 1.732, z: (c.z - b.z) / 1.732 };
+  const pts = [{ x: a.x + 0.64, z: a.z }, b, { x: c.x - u.x * 0.55, z: c.z - u.z * 0.55 }];
+  const road = group(scene);
+  const tones = [WALL, WALL_DARK, 0xd2ccbd];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1];
+    const dx = q.x - p.x, dz = q.z - p.z, len = Math.hypot(dx, dz), ang = Math.atan2(dz, dx);
+    const ux = dx / len, uz = dz / len;
+    const base = box(len, 0.012, 0.25, 0xb49b74, (p.x + q.x) / 2, 0.35, (p.z + q.z) / 2, road);
+    base.rotation.y = -ang;
+    for (let s = 0.05; s < len; s += 0.13) {
+      for (const off of [-0.065, 0.065]) {
+        const cb = box(0.1 + rnd() * 0.03, 0.025, 0.075 + rnd() * 0.02, tones[Math.floor(rnd() * 3)],
+          p.x + ux * s - uz * off + (rnd() - 0.5) * 0.02, 0.36, p.z + uz * s + ux * off + (rnd() - 0.5) * 0.02, road);
+        cb.rotation.y = -ang + (rnd() - 0.5) * 0.35;
+      }
+    }
+  }
+  cyl(0.15, 0.03, WALL_DARK, b.x, 0.36, b.z, road, 8);                // junction plate
+  spearman(road, b.x + 0.18, b.z + 0.22, -0.6).position.y = 0.36;   // stands on the tile top
+  reveal(road, 300);
+}
+
+// ---- pier and boat on the ocean tile south of the city ----
+let boat;
+{
+  const d = { x: 0.5, z: 0.866 }, ang = Math.atan2(d.z, d.x);
+  const pier = group(scene, d.x * 1.2, 0, d.z * 1.2, -ang);
+  box(0.95, 0.04, 0.26, TIMBER, 0, 0.18, 0, pier);
+  for (let i = -4; i <= 4; i++) box(0.012, 0.045, 0.27, TIMBER_DARK, i * 0.1, 0.18, 0, pier);
+  for (const px of [-0.42, 0, 0.42]) for (const pz of [-0.11, 0.11]) cyl(0.025, 0.22, TIMBER_DARK, px, 0.02, pz, pier, 6);
+  cyl(0.018, 0.2, TIMBER_DARK, 0.45, 0.22, 0.11, pier, 5);            // lantern post
+  box(0.05, 0.05, 0.05, FIRE, 0.45, 0.42, 0.11, pier);
+  reveal(pier, 550);
+
+  boat = group(scene, d.x * 1.95 - d.z * 0.32, 0.1, d.z * 1.95 + d.x * 0.32, -0.35);   // lies across the view so the sail shows
+  box(0.46, 0.08, 0.17, TIMBER, 0, 0, 0, boat);
+  cone(0.1, 0.18, TIMBER, 0.31, 0.0, 0, boat, 4).rotation.z = -Math.PI / 2;
+  box(0.46, 0.02, 0.18, TEAM, 0, 0.065, 0, boat);
+  cyl(0.012, 0.42, TIMBER_DARK, 0, 0.08, 0, boat, 5);
+  const sailGeo = new THREE.BufferGeometry();
+  sailGeo.setAttribute('position', new THREE.Float32BufferAttribute([0.01, 0.12, 0, 0.01, 0.46, 0, 0.2, 0.12, 0], 3));
+  sailGeo.setIndex([0, 1, 2]);
+  sailGeo.computeVertexNormals();
+  mesh(sailGeo, CREAM, 0, 0, 0, boat, { side: THREE.DoubleSide });
+  reveal(boat, 700);
+}
+
+// ---- light / dark theme from the same palette ----
+let dark = false;
+document.getElementById('theme').addEventListener('click', () => {
+  dark = !dark;
+  scene.background.set(dark ? 0x1f1d1a : PAL.page);
+  mat(PAL.sea).color.set(dark ? 0x3f6270 : PAL.sea);
+  mat(PAL.shallow).color.set(dark ? 0x4d7686 : PAL.shallow);
+  sky.intensity = dark ? 0.45 : 0.9;
+  sun.intensity = dark ? 1.1 : 1.9;
+  document.body.style.background = dark ? '#1f1d1a' : '#e4e0d5';
+  document.getElementById('hint').style.color = dark ? '#f4f1ea' : '#2b2f33';
+});
+
+// ---- loop: pieces ease in, flags and boat move slowly (both off with reduced motion) ----
+const ease = k => 1 - Math.pow(1 - k, 3);
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const t = clock.getElapsedTime();
+  if (!reduced) {
+    for (const r of reveals) r.g.scale.setScalar(Math.max(0.001, ease(Math.min(1, Math.max(0, (t * 1000 - r.delay) / 700)))));
+    flags.forEach((f, i) => { f.rotation.y = Math.sin(t * 2 + i) * 0.28; });
+    boat.position.y = 0.1 + Math.sin(t * 1.2) * 0.012;
+    boat.rotation.z = Math.sin(t * 0.9) * 0.02;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

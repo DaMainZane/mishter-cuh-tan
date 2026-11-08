@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Tidebound pieces demo</title>
+<style>html,body{margin:0;height:100%;background:#e4e0d5;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ---- scene, camera, light (flat, matte, one soft shadow) ----
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xe4e0d5);
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+camera.position.set(3.5, 5, 6);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.9, 0.3, 0.2);
+controls.enableDamping = true;
+controls.maxPolarAngle = 1.3;
+controls.update();
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(5, 8, 4);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 });
+scene.add(sun, new THREE.AmbientLight(0xffffff, 1.1));
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ---- helpers ----
+const RED = 0xe0483a, DARK = 0xa8321f, LIGHT = 0xf4f1ea;
+const S3 = Math.sqrt(3);
+const hexCenter = (q, r) => ({ x: S3 * (q + r / 2), z: 1.5 * r });
+const hexCorner = (q, r, i) => {
+  const c = hexCenter(q, r), a = Math.PI / 180 * (30 + 60 * i);
+  return { x: c.x + Math.cos(a), z: c.z + Math.sin(a) };
+};
+const mat = color => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 1, metalness: 0 });
+// Makes a mesh, puts it at (x, y, z) inside parent (the scene by default) and returns it.
+function add(geometry, color, x, y, z, parent = scene) {
+  const m = new THREE.Mesh(geometry, mat(color));
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+// Light outline: a slightly bigger copy of every mesh, drawn from the inside.
+function addRim(obj) {
+  const meshes = [];
+  obj.traverse(o => { if (o.isMesh && !o.userData.isRim) meshes.push(o); });
+  for (const m of meshes) {
+    const r = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ color: LIGHT, side: THREE.BackSide }));
+    r.userData.isRim = true;
+    r.position.copy(m.position);
+    r.rotation.copy(m.rotation);
+    r.scale.copy(m.scale).multiplyScalar(1.12);
+    m.parent.add(r);
+  }
+}
+
+// ---- tiles and ocean ----
+const land = { '0,0': 0x5f8a5a, '1,0': 0xc0674a, '0,1': 0xe2c56b, '0,-1': 0x8d98a3, '-1,0': 0xa9c27a };
+for (let q = -3; q <= 3; q++) {
+  for (let r = -3; r <= 3; r++) {
+    if (Math.abs(q + r) > 3) continue;
+    const c = hexCenter(q, r), color = land[q + ',' + r];
+    const h = color ? 0.35 : 0.1;
+    add(new THREE.CylinderGeometry(0.97, 0.97, h, 6), color ?? 0x86b0bf, c.x, h / 2, c.z);
+  }
+}
+const sea = add(new THREE.PlaneGeometry(40, 40), 0x6f9fb0, 0, 0.02, 0);
+sea.rotation.x = -Math.PI / 2;
+sea.castShadow = false;
+
+// ---- the pieces (everything above this line is given) ----
+
+// SETTLEMENT: a small house standing on y = 0.35 at p = {x, z}.
+// Body BoxGeometry(0.34, 0.24, 0.3) in RED, roof ConeGeometry(0.27, 0.2, 4) in DARK rotated 45 degrees on y,
+// a small LIGHT door BoxGeometry(0.08, 0.12, 0.02) on the +z face. Build it in a THREE.Group, add the group to
+// the scene, call addRim(group), return the group.
+function buildSettlement(p) {
+  // FILL: write the body of buildSettlement here
+}
+
+// CITY: a tower next to a house (like the settlement's), the whole group 1.3 times bigger than the settlement.
+// Tower BoxGeometry(0.26, 0.55, 0.26) in RED at x = -0.14 with a cone roof ConeGeometry(0.22, 0.24, 4) in DARK
+// rotated 45 degrees on y on top. House: same as the settlement's body, roof and door, at x = +0.17.
+// Group, group.scale.setScalar(1.3), add to the scene, addRim(group), return it.
+function buildCity(p) {
+  // FILL: write the body of buildCity here
+}
+
+// ROAD: a thick rounded bar from p1 to p2 (both {x, z}) lying at y = 0.4 in RED.
+// CapsuleGeometry(0.07, length * 0.8 - 0.14, 4, 8) where length is the distance from p1 to p2, then
+// geometry.rotateX(Math.PI / 2). Put the mesh at the midpoint, add it to the scene, THEN call
+// mesh.lookAt(p2.x, 0.4, p2.z), then addRim(mesh). Return the mesh.
+function buildRoad(p1, p2) {
+  // FILL: write the body of buildRoad here
+}
+
+// ---- put the pieces on the board ----
+const c0 = hexCorner(0, 0, 0), c5 = hexCorner(0, 0, 5), c4 = hexCorner(0, 0, 4);
+buildSettlement(c0); // touches three land tiles
+buildCity(c4);       // touches two land tiles and the ocean tile (1,-1)
+buildRoad(c0, c5);
+buildRoad(c5, c4);
+
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
