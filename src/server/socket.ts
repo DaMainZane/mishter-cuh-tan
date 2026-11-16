@@ -616,7 +616,8 @@ export function registerSocketHandlers(io: Server): void {
           dlc: resetDlc,
           addons: sc.addons ?? {},
           eventsOn: !!sc.eventsOn,
-          fateTokens: sc.fateTokens ?? 2
+          fateTokens: sc.fateTokens ?? 2,
+          ...(resetDlc.tidebound ? { techTreeOn: true } : {})
         },
         room.settings
       );

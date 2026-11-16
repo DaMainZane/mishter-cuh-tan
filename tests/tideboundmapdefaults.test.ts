@@ -15,14 +15,16 @@ function lobbyRoom() {
 
 describe('Turning Tidebound on in the lobby', () => {
   // BUG 1: the DLC toggle left the map alone, so Tidebound started on a plain hexagon with no sea.
-  it('moves the map to islands with wide water on a bigger board', () => {
+  it('moves the map to islands with wide water on a bigger board and turns the tech tree on by default', () => {
     const room = lobbyRoom();
     expect(room.settings.dlc?.tidebound).toBeFalsy();
+    expect(room.settings.techTreeOn).toBe(false);
     expect(room.settings.boardRadius).toBeLessThan(TIDEBOUND_MAP_RADIUS);
 
     room.settings = mergeSettings({ dlc: { tidebound: true } }, room.settings);
     applyTideboundMapDefaults(room);
 
+    expect(room.settings.techTreeOn).toBe(true);
     expect(room.settings.mapPicks).toEqual(expect.arrayContaining(['islands', 'wide_water']));
     expect(room.settings.boardRadius).toBe(TIDEBOUND_MAP_RADIUS);
     expect(room.mapMeta?.recipe.radius).toBe(TIDEBOUND_MAP_RADIUS);

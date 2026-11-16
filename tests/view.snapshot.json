@@ -1306,7 +1306,7 @@
      },
      "pirateDrives": [],
      "playedDevCardThisTurn": false,
-     "publicVp": 18,
+     "publicVp": 8,
      "resourceCount": 25,
      "resources": {
       "brick": 5,
@@ -1366,11 +1366,11 @@
        "city": 2,
        "devVp": 0,
        "largestArmy": 0,
-       "longestRoad": 16,
+       "longestRoad": 6,
        "settlement": 0
       }
      },
-     "vp": 18
+     "vp": 8
     }
    ],
    "portLevels": {
@@ -1624,7 +1624,7 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 9,
-     "description": "Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
+     "description": "Longest Road is worth 6 VP instead of 2 (+4 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
      "id": "tidebound.grand_causeway",
      "name": "Grand causeway",
      "owned": true,
@@ -1995,7 +1995,7 @@
       }
      },
      "playedDevCardThisTurn": false,
-     "publicVp": 18,
+     "publicVp": 8,
      "resourceCount": 25,
      "roadsLeft": 15,
      "settlementsLeft": 5,
@@ -2048,11 +2048,11 @@
        "city": 2,
        "devVp": 0,
        "largestArmy": 0,
-       "longestRoad": 16,
+       "longestRoad": 6,
        "settlement": 0
       }
      },
-     "vp": 18
+     "vp": 8
     }
    ],
    "portLevels": {
@@ -2306,7 +2306,7 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 9,
-     "description": "Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
+     "description": "Longest Road is worth 6 VP instead of 2 (+4 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.",
      "id": "tidebound.grand_causeway",
      "name": "Grand causeway",
      "owned": false,
@@ -2679,7 +2679,7 @@
       }
      },
      "playedDevCardThisTurn": false,
-     "publicVp": 18,
+     "publicVp": 8,
      "resourceCount": 25,
      "resources": {
       "brick": 5,
@@ -2739,11 +2739,11 @@
        "city": 2,
        "devVp": 0,
        "largestArmy": 0,
-       "longestRoad": 16,
+       "longestRoad": 6,
        "settlement": 0
       }
      },
-     "vp": 18
+     "vp": 8
     }
    ],
    "portLevels": {

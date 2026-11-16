@@ -1,4 +1,4 @@
-// MODULE: client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays | DEPENDS ON: client/icons, client/pieceModel, client/render/board, client/render/pirates, client/socket, client/store, +2 more | USED BY: client/main, client/render/board, client/render/index
+// MODULE: client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays | DEPENDS ON: client/icons, client/pieceModel, client/render/board, client/render/pirates, client/render/terrainCanvas, client/socket, +3 more | USED BY: client/main
 import { fishGroundMarkup, hexIconLayout, netTileMarkup, robberMarkup, wreckMarkup } from './icons';
 import { portRaiseSpots } from './pieceModel';
 import {
@@ -9,6 +9,7 @@ import {
   canClientPlaceSettlement
 } from './render/board';
 import { pirateMarkup } from './render/pirates';
+import { getTerrainCanvasStats } from './render/terrainCanvas';
 import { socket } from './socket';
 import { state } from './store';
 import { showToast } from './ui';
@@ -282,7 +283,8 @@ function updatePerfLoop(now: number): void {
       const perfEl = document.getElementById('debugPerfLine');
       if (perfEl) {
         const nodes = countSvgNodes();
-        perfEl.textContent = `FPS: ${currentFps} | Max frame (3s): ${worstFrameMs}ms | SVG nodes: ${nodes.total} (T:${nodes.terrain} R:${nodes.roads} V:${nodes.vertices} O:${nodes.overlays})`;
+        const cs = getTerrainCanvasStats();
+        perfEl.textContent = `FPS: ${currentFps} | Max frame (3s): ${worstFrameMs}ms | Canvas: ${cs.lastDrawMs}ms (${cs.visibleHexes}/${cs.totalHexes} hexes) | SVG nodes: ${nodes.total} (T:${nodes.terrain} R:${nodes.roads} V:${nodes.vertices} O:${nodes.overlays})`;
       }
     }
   }
@@ -371,6 +373,10 @@ export function toggleDebugMode(force?: boolean): void {
 }
 
 export function onDebugStateUpdated(): void {
+  const layer = document.getElementById('boardDebugLayer');
+  if (layer) {
+    layer.innerHTML = isDebugOverlayActive() ? renderDebugBoardOverlayMarkup() : '';
+  }
   if (!debugOpen || !state) return;
   const stateKey = `${state.code}_${state.status}_${state.turnCount}_${state.phase}_${state.round}`;
   if (debugAutoAudit && state.status !== 'LOBBY' && stateKey !== lastAuditStateKey) {
@@ -384,6 +390,7 @@ export function renderDebugHud(): void {
   if (!debugOpen) return;
   const el = ensureDebugHudElement();
   const nodes = countSvgNodes();
+  const cs = getTerrainCanvasStats();
 
   const report = lastAuditReport;
   const clientSpots = collectClientSpots();
@@ -420,7 +427,7 @@ export function renderDebugHud(): void {
       <button type="button" class="dbg-close" onclick="toggleDebugMode(false)">✕</button>
     </div>
     <div class="dbg-perf" id="debugPerfLine">
-      FPS: ${currentFps} | Max frame (3s): ${worstFrameMs}ms | SVG nodes: ${nodes.total} (T:${nodes.terrain} R:${nodes.roads} V:${nodes.vertices} O:${nodes.overlays})
+      FPS: ${currentFps} | Max frame (3s): ${worstFrameMs}ms | Canvas: ${cs.lastDrawMs}ms (${cs.visibleHexes}/${cs.totalHexes} hexes) | SVG nodes: ${nodes.total} (T:${nodes.terrain} R:${nodes.roads} V:${nodes.vertices} O:${nodes.overlays})
     </div>
     <div class="dbg-sec">
       <div class="dbg-lbl">Quick Sandbox Grants</div>

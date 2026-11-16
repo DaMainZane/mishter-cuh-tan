@@ -4,7 +4,7 @@ import { playDiceRollSound, playDiscardSound, playTone, playVictoryFanfareSound,
 import { hydrateIcons } from './icons';
 import { toggleTheme, showToast, triggerVictoryConfetti, clearVictoryConfetti } from './ui';
 import {
-  state, camZoom, camPanX, camPanY, isPanning, panStart, discardSel, drawerMode,
+  state, camZoom, camPanX, camPanY, isPanning, isMouseDown, panStart, discardSel, drawerMode,
   activeBrush, hasDraggedMap,
   setState, setIsMouseDown, setIsPanning, setHasDraggedMap, setCamZoom, setCamPan, setDrawerMode,
   setBuildModeValue, setHideVictoryOverlay, clearRes, clearDiscardWild, clearAllInFlight, setLogTab, elevationView, setElevationView
@@ -13,7 +13,7 @@ import { renderAll } from './render/index';
 import {
   rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations, panBoardPreview, endBoardPan,
   triggerAwardAnimation, onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
-  onRoadHover, onRoadMove, onRoadLeave
+  onRoadHover, onRoadMove, onRoadLeave, hexAtClientPoint
 } from './render/board';
 import { respondToTrade, confirmTradeWith, cancelTrade, startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed } from './render/trade';
 import { initCursors } from './cursors';
@@ -51,6 +51,7 @@ import {
 import {
   debugClickBoard,
   initDebugMode,
+  onDebugStateUpdated,
   sendDebugCmd,
   setDebugBrush,
   toggleDebugIds,
@@ -240,6 +241,7 @@ socket.on('gameState', (newState: any) => {
 
   syncAutomaticDrawers();
   renderAll();
+  onDebugStateUpdated();
 
   if (state.recentProductions && state.recentProductions.length > 0) {
     triggerFlyingResourceAnimations(state.recentProductions);
@@ -368,17 +370,26 @@ function init(): void {
     rerenderBoard();
   }, { passive: false });
 
+  let lastLobbyPaintedHexId: number | null = null;
   stage.addEventListener('mousedown', (e: MouseEvent) => {
     const target = e.target as Element | null;
     // Ignore clicks on floating UI panels inside boardStage (only pan when pressing on the SVG board or stage)
     if (target && target !== stage && !target.closest('#boardSvg')) return;
 
-    const isLobbyPaintTarget = Boolean(
+    const isLobbyHexBrush = Boolean(
       state &&
       state.status === 'LOBBY' &&
       state.hostId === socket.id &&
-      activeBrush.type &&
-      target?.closest('[data-paintable="1"]')
+      (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
+    );
+    const paintedHexId = isLobbyHexBrush && e.button === 0 && !e.altKey ? hexAtClientPoint(e.clientX, e.clientY) : null;
+    const isLobbyPaintTarget = Boolean(
+      paintedHexId !== null ||
+      (state &&
+        state.status === 'LOBBY' &&
+        state.hostId === socket.id &&
+        activeBrush.type &&
+        target?.closest('[data-paintable="1"]'))
     );
 
     setHasDraggedMap(false);
@@ -395,6 +406,10 @@ function init(): void {
       cachedWheelRectTime = performance.now();
     } else {
       setIsMouseDown(true);
+      lastLobbyPaintedHexId = paintedHexId;
+      if (paintedHexId !== null) {
+        onHexInteract(paintedHexId, e);
+      }
     }
   });
   window.addEventListener('mousemove', (e: MouseEvent) => {
@@ -414,14 +429,26 @@ function init(): void {
       panStart.x = e.clientX;
       panStart.y = e.clientY;
       setCamPan(camPanX + dx * worldPerPx, camPanY + dy * worldPerPx);
-      // BUG 1: a drag moves the painted board (CSS translate); the real viewBox is written at the end, or when unpainted board would show.
       panBoardPreview(rect);
+    } else if (
+      isMouseDown &&
+      state &&
+      state.status === 'LOBBY' &&
+      state.hostId === socket.id &&
+      (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
+    ) {
+      const hexId = hexAtClientPoint(e.clientX, e.clientY);
+      if (hexId !== null && hexId !== lastLobbyPaintedHexId) {
+        lastLobbyPaintedHexId = hexId;
+        onHexEnter(hexId, e);
+      }
     }
   });
   window.addEventListener('mouseup', () => {
     if (isPanning) endBoardPan();
     setIsMouseDown(false);
     setIsPanning(false);
+    lastLobbyPaintedHexId = null;
     panSvgRect = null;
     document.getElementById('boardPanShield')?.classList.remove('on');
   });

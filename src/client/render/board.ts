@@ -1,4 +1,4 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/debug, client/icons, client/panPreview, +12 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/icons, client/pieceModel, client/pieceui, +11 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
@@ -35,9 +35,13 @@ import { portRaiseSpots } from '../pieceModel';
 import { edgeOptions, hexCandidates, hexOptions, vertexOptions } from '../buildMenu';
 import type { BuildOption, MenuContext } from '../buildMenu';
 import { manifestEntries } from '../visuals';
-import { isDebugOverlayActive, renderDebugBoardOverlayMarkup } from '../debug';
-import { hiddenEdges, needsRepaint } from '../panPreview';
-import type { Box } from '../panPreview';
+import {
+  computeCanvasCamera,
+  drawBoardTerrainCanvas,
+  findHexAtWorldPoint,
+  screenToWorld,
+  type TerrainHexLike
+} from './terrainCanvas';
 
 const knownRoads = new Set<number>();
 const knownRoadPieces = new Map<number, { owner: string; pieceType: string }>();
@@ -74,12 +78,13 @@ let cameraRafPending = false;
 // difference instead of a new viewBox, so the browser moves one painted layer instead of repainting every SVG node each frame.
 let committedPanX = 0;
 let committedPanY = 0;
-/** Off-screen board on each side at the last repaint, in pixels (computed on the first drag frame after it). */
-let panHidden: Box | null = null;
-let panRect: DOMRect | null = null;
 let panFramePending = false;
-/** Unpainted strip (a share of the shorter screen side) a drag may show before the board repaints mid-drag. */
-const PAN_SLACK = 0.12;
+
+let cachedCanvasHexes: TerrainHexLike[] = [];
+let cachedLandPathD = '';
+let cachedWaterPathD = '';
+let cachedCanPaintHex = false;
+let cachedAnimatingFogIds = new Set<number>();
 
 // Layer dirty-keys so gameplay updates (rolls, trades, builds, selections) do not rebuild static hex terrain or ports.
 let lastTerrainKey = '';
@@ -169,9 +174,23 @@ export function updateCameraViewBox(): void {
   svg.setAttribute('viewBox', `${baseX.toFixed(1)} ${baseY.toFixed(1)} ${baseW.toFixed(1)} ${baseH.toFixed(1)}`);
   committedPanX = camPanX;
   committedPanY = camPanY;
-  panHidden = null;
   const panLayer = document.getElementById('boardPan');
   if (panLayer?.style.transform) panLayer.style.transform = '';
+
+  if (cachedCanvasHexes.length > 0) {
+    drawBoardTerrainCanvas({
+      hexes: cachedCanvasHexes,
+      landPath: cachedLandPathD,
+      waterPath: cachedWaterPathD,
+      isLobby: state.status === 'LOBBY',
+      canPaintHex: cachedCanPaintHex,
+      bounds: { centerX0, centerY0, contentW, contentH },
+      camZoom,
+      camPanX,
+      camPanY,
+      animatingFogHexIds: cachedAnimatingFogIds
+    });
+  }
 
   // Scale settlements, cities, robber, shipwrecks, pirates, and roads up as the camera zooms out (or on larger boards).
   // Scoped to the vertex/spot, dynamic/wreck/pirate, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
@@ -579,9 +598,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     }
   }
 
-  updateCameraViewBox();
-
-  // 1. Static / Terrain Layer: rebuilds only when board terrain/numbers/fog/lobby brush changes.
+  // 1. Static / Terrain Layer: rendered onto #boardTerrainCanvas with viewport culling (0 SVG DOM nodes in #boardTerrainLayer).
   const canPaintHex = isLobbyHost && (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber');
   const terrainSigParts: string[] = [
     cachedGeomBoardKey,
@@ -599,64 +616,45 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     lastTerrainKey = terrainKey;
     let landPathD = '';
     let waterPathD = '';
+    const nextCanvasHexes: TerrainHexLike[] = [];
+    const nextAnimatingFog = new Set<number>();
+
     for (const h of hexes) {
       const g = hexGeomCache.get(h.id);
       if (!g) continue;
       if (h.type === 'water') {
-        if (state.status === 'LOBBY' && !canPaintHex) waterPathD += g.pathSub;
-        continue;
+        if (state.status === 'LOBBY') waterPathD += g.pathSub;
+      } else {
+        landPathD += g.pathSub;
       }
-      landPathD += g.pathSub;
-    }
-
-    let terrainHtml = '';
-    if (landPathD) {
-      // Single combined <path> for shallow water and single <path> for sand instead of 2*N separate polygons.
-      terrainHtml += `<path d="${landPathD}" style="fill:var(--sea-shallow);stroke:var(--sea-shallow);stroke-width:46;stroke-linejoin:round" />`;
-      terrainHtml += `<path d="${landPathD}" style="fill:var(--sand);stroke:var(--sand);stroke-width:16;stroke-linejoin:round" />`;
-    }
-    if (waterPathD) {
-      // Single combined <path> for non-paintable lobby water cells instead of ratusan dashed polygons (Bug 14).
-      terrainHtml += `<path d="${waterPathD}" style="fill:rgba(255,255,255,0.06);stroke:rgba(255,255,255,0.24);stroke-width:1.6;stroke-linejoin:round;pointer-events:none" />`;
-    }
-
-    for (const h of hexes) {
-      const geom = hexGeomCache.get(h.id)!;
-      if (h.type === 'water') {
-        if (state.status === 'LOBBY' && canPaintHex) {
-          terrainHtml += `
-            <polygon data-paintable="1" points="${geom.rawPts}" style="fill:rgba(255,255,255,0.07);stroke:rgba(255,255,255,0.32);stroke-width:2;cursor:pointer"
-              onmousedown="onHexInteract(${h.id}, event)" onmouseenter="onHexEnter(${h.id}, event)" />
-          `;
-        }
-        continue;
+      if (getPieceAnimAttrs(`fog_${h.id}`, now).isAnimating) {
+        nextAnimatingFog.add(h.id);
       }
-
-      const isFog = !!h.fog || h.type === 'fog';
-      const tileType = isFog ? 'fog' : h.type;
-      const meta = RES_META[tileType] || RES_META.desert;
-      const hasNumber = !isFog && !!h.number;
-      const fogAnim = getPieceAnimAttrs(`fog_${h.id}`, now);
-      const glyph = hasNumber ? getBoardIconSvg(tileType, 0, -24, 1.45) : getBoardIconSvg(tileType, 0, 0, 1.9);
-      const paintAttrs = canPaintHex
-        ? `data-paintable="1" style="cursor:pointer" onmousedown="onHexInteract(${h.id}, event)" onclick="onHexClick(${h.id}, event)" onmouseenter="onHexEnter(${h.id}, event)"`
-        : '';
-
-      terrainHtml += `
-        <g ${paintAttrs}>
-          <polygon points="${geom.tilePoly}" style="fill:${meta.color};stroke:${meta.border};stroke-width:4;stroke-linejoin:round" />
-          <g transform="translate(${h.x}, ${h.y})">
-            <g class="${fogAnim.isAnimating ? 'fog-reveal-anim' : ''}" style="${fogAnim.delayStyle}">
-              ${glyph}
-              ${hasNumber ? tokenMarkup(h.number) : ''}
-            </g>
-          </g>
-        </g>
-      `;
+      nextCanvasHexes.push({
+        id: h.id,
+        x: h.x,
+        y: h.y,
+        type: h.type,
+        fog: Boolean(h.fog),
+        number: h.number ?? null,
+        tilePoly: g.tilePoly,
+        rawPts: g.rawPts
+      });
     }
-    layers.terrainLayer.style.pointerEvents = canPaintHex ? 'auto' : 'none';
-    layers.terrainLayer.innerHTML = terrainHtml;
+
+    cachedLandPathD = landPathD;
+    cachedWaterPathD = waterPathD;
+    cachedCanvasHexes = nextCanvasHexes;
+    cachedCanPaintHex = canPaintHex;
+    cachedAnimatingFogIds = nextAnimatingFog;
+
+    if (layers.terrainLayer.innerHTML !== '') {
+      layers.terrainLayer.innerHTML = '';
+    }
+    layers.terrainLayer.style.pointerEvents = 'none';
   }
+
+  updateCameraViewBox();
 
   // 2. Dynamic Hex Overlay Layer: rolled hex dimming, robber target highlights, and the robber piece.
   const robberAnim = getPieceAnimAttrs('robber_move', now);
@@ -1228,16 +1226,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     lastPieceSpotsHtml = pieceSpotsHtml;
     layers.pieceSpotsLayer.innerHTML = pieceSpotsHtml;
   }
-
-  // 8. Debug overlay layer (H/V/E IDs, sandbox click targets, and all-icons stress test when Debug Mode is active)
-  const debugLayer = document.getElementById('boardDebugLayer');
-  if (debugLayer) {
-    const debugHtml = isDebugOverlayActive() ? renderDebugBoardOverlayMarkup() : '';
-    if (debugHtml !== lastDebugHtml) {
-      lastDebugHtml = debugHtml;
-      debugLayer.innerHTML = debugHtml;
-    }
-  }
 }
 
 // Updates camera viewBox smoothly via requestAnimationFrame on pan/zoom without reconstructing the SVG DOM.
@@ -1251,53 +1239,40 @@ export function rerenderBoard(): void {
 }
 
 /**
- * One drag frame (BUG 1): moves the painted board by the pan since the last repaint with a CSS translate of `#boardPan` (the svg's wrapper). It repaints (a real viewBox) only when the
- * drag would bring board into view that was off-screen at the last repaint by more than `PAN_SLACK` of the screen; a whole-board view never
- * repaints mid-drag. `rect` is the board's screen box at the start of the drag.
+ * Updates the 2D terrain canvas and lightweight SVG piece overlay directly on each animation frame during a drag,
+ * eliminating unpainted edge gaps and mid-drag chunk pop-in.
  */
-export function panBoardPreview(rect: DOMRect): void {
-  panRect = rect;
+export function panBoardPreview(_rect?: DOMRect): void {
   if (!state || panFramePending) return;
   panFramePending = true;
   requestAnimationFrame(() => {
     panFramePending = false;
-    applyPanPreview();
+    updateCameraViewBox();
   });
 }
 
-function applyPanPreview(): void {
-  const svg = document.getElementById('boardSvg');
-  const rect = panRect;
-  if (!svg || !rect || !state?.board) return;
-  const { centerX0, centerY0, contentW, contentH } = getBoardBounds();
-  const worldPerPx = camZoom * Math.max(contentW / (rect.width || 1), contentH / (rect.height || 1));
-  if (!panHidden) {
-    const cx = centerX0 - committedPanX;
-    const cy = centerY0 - committedPanY;
-    const halfW = (rect.width * worldPerPx) / 2;
-    const halfH = (rect.height * worldPerPx) / 2;
-    panHidden = hiddenEdges(
-      { left: centerX0 - contentW / 2, top: centerY0 - contentH / 2, right: centerX0 + contentW / 2, bottom: centerY0 + contentH / 2 },
-      { left: cx - halfW, top: cy - halfH, right: cx + halfW, bottom: cy + halfH },
-      worldPerPx
-    );
-  }
-  const dx = (camPanX - committedPanX) / worldPerPx;
-  const dy = (camPanY - committedPanY) / worldPerPx;
-  if (needsRepaint(panHidden, dx, dy, PAN_SLACK * Math.min(rect.width, rect.height))) {
-    updateCameraViewBox();
-    return;
-  }
-  (document.getElementById('boardPan') ?? svg).style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
-}
-
-/** The drag ended: write the real viewBox for where the board now is (this drops the translate). */
+/** The drag ended: flush any pending camera update. */
 export function endBoardPan(): void {
-  panRect = null;
   const panLayer = document.getElementById('boardPan');
   if (state?.board && (camPanX !== committedPanX || camPanY !== committedPanY || panLayer?.style.transform)) {
     updateCameraViewBox();
   }
+}
+
+/**
+ * Returns the hex ID underneath viewport client coordinates `(clientX, clientY)` using fast math hit-testing
+ * (replaces 1,300+ `<polygon data-paintable="1">` DOM nodes in Lobby).
+ */
+export function hexAtClientPoint(clientX: number, clientY: number): number | null {
+  if (!state?.board || cachedCanvasHexes.length === 0) return null;
+  const svg = document.getElementById('boardSvg');
+  if (!svg) return null;
+  const rect = svg.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const bounds = getBoardBounds();
+  const cam = computeCanvasCamera(bounds, camZoom, camPanX, camPanY, rect.width, rect.height);
+  const worldPt = screenToWorld(clientX - rect.left, clientY - rect.top, cam);
+  return findHexAtWorldPoint(worldPt.x, worldPt.y, cachedCanvasHexes);
 }
 
 export function resetCamera(): void {

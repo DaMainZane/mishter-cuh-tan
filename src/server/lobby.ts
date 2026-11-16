@@ -173,6 +173,7 @@ export function applyTideboundMapDefaults(
   room.settings.mapParams = {};
   room.settings.boardRadius = Math.max(room.settings.boardRadius, TIDEBOUND_MAP_RADIUS);
   room.settings.mapSeed = '';
+  room.settings.techTreeOn = true;
   refreshMap(room);
 }
 

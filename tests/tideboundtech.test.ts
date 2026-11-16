@@ -351,7 +351,7 @@ describe('T11e — Nodes 7–9 registration & Harbor Master gating', () => {
   });
 });
 
-describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Harbor Empire', () => {
+describe('T11f — demolish_bridge, Grand Causeway (6 VP Longest Road), and Harbor Empire', () => {
   it('demolish_bridge removes own bridge or rickety_bridge, refunds floor(cost/2) cards, and requires Salvage Crew', () => {
     const { g, reg } = makeMainGame(true);
     const p1 = g.players[0];
@@ -382,7 +382,7 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(p1.pieces[BRIDGE]).toBe(beforePool + 2);
   });
 
-  it('Grand Causeway makes Longest Road worth 16 VP (+14 bonus) only when Longest Road includes a bridge, and drops if lost', () => {
+  it('Grand Causeway makes Longest Road worth 6 VP (+4 bonus) only when Longest Road includes a bridge, and drops if lost', () => {
     const { g, reg } = makeMainGame(true);
     const p1 = g.players[0];
     // 5 connected land roads (edges 0..4) -> Longest Road = 5, no bridge yet
@@ -406,7 +406,7 @@ describe('T11f — demolish_bridge, Grand Causeway (16 VP Longest Road), and Har
     expect(score(g, reg, p1, true)).toBe(GRAND_CAUSEWAY_VP);
     expect(publicVP(g, reg, p1)).toBe(GRAND_CAUSEWAY_VP);
 
-    // Losing Longest Road immediately drops the +14 bonus
+    // Losing Longest Road immediately drops the +4 bonus
     g.awards.longestRoad = 'p2';
     expect(grandCausewayBonusVp(g, reg, 'p1')).toBe(0);
     expect(score(g, reg, p1, true)).toBe(0);

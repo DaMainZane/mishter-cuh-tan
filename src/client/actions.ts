@@ -289,7 +289,11 @@ export function toggleDlc(dlcId: string): void {
   if (!state || !requireHost('change DLC settings')) return;
   const curDlc = state.settings?.dlc && typeof state.settings.dlc === 'object' ? { ...state.settings.dlc } : {};
   curDlc[dlcId] = !curDlc[dlcId];
-  socket.emit('updateSettings', { code: state.code, newSettings: { dlc: curDlc } });
+  const newSettings: Record<string, any> = { dlc: curDlc };
+  if (dlcId === 'tidebound' && curDlc[dlcId]) {
+    newSettings.techTreeOn = true;
+  }
+  socket.emit('updateSettings', { code: state.code, newSettings });
   playTone(curDlc[dlcId] ? 560 : 440, 0.05);
 }
 

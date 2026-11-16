@@ -1,4 +1,4 @@
-// MODULE: Tidebound tech tree nodes (T11a-T11f: 8 extension nodes across Expansion & Industrial paths, techGate re-export, Grand Causeway 16 VP hook, Harbor Empire ceil(V/2) bank card grant) | DEPENDS ON: packs/base/constants, packs/base/techEffects, packs/tidebound/bridgeConsts, packs/tidebound/ricketyBridges, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, +1 more
+// MODULE: Tidebound tech tree nodes (T11a-T11f: 8 extension nodes across Expansion & Industrial paths, techGate re-export, Grand Causeway 6 VP hook, Harbor Empire ceil(V/2) bank card grant) | DEPENDS ON: packs/base/constants, packs/base/techEffects, packs/tidebound/bridgeConsts, packs/tidebound/ricketyBridges, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, +1 more
 import {
   bankGive,
   BOT_GOALS,
@@ -45,20 +45,20 @@ export const TECH_NET_WORKS = 'tidebound.net_works';
 export const TECH_PIRATE_HUNTER = 'tidebound.pirate_hunter';
 /** Tier 3b — Industrial path (`offset = 7`, cost 11 at V = 2): unlocks Harbors (`upgrade_harbor`, 1:1 trade up to 4/turn) and Feed the Sea (`feed_sea`). */
 export const TECH_HARBOR_MASTER = 'tidebound.harbor_master';
-/** Tier 4 — Expansion path (`offset = 10`, cost 15 at V = 2): Longest Road is worth 16 VP instead of 2 (+14 VP) when the road includes a bridge or rickety bridge. */
+/** Tier 4 — Expansion path (`offset = 10`, cost 15 at V = 2): Longest Road is worth 6 VP instead of 2 (+4 VP) when the road includes a bridge or rickety bridge. */
 export const TECH_GRAND_CAUSEWAY = 'tidebound.grand_causeway';
 /** Tier 4 — Industrial path (`offset = 10`, cost 15 at V = 2): +1 harbor limit (2 total) and grants `ceil(V / 2)` random cards from the bank on unlock. */
 export const TECH_HARBOR_EMPIRE = 'tidebound.harbor_empire';
 
-/** Total VP that Longest Road is worth with Grand Causeway when the road includes a bridge (`2` base + `14` bonus = `16`). */
-export const GRAND_CAUSEWAY_VP = 16;
+/** Total VP that Longest Road is worth with Grand Causeway when the road includes a bridge (`2` base + `4` bonus = `6`). */
+export const GRAND_CAUSEWAY_VP = 6;
 /** Extra VP added on top of the base 2 VP Longest Road award when Grand Causeway is active. */
 export const GRAND_CAUSEWAY_BONUS_VP = GRAND_CAUSEWAY_VP - 2;
 
 /** Salt mixed into the world seed for Harbor Empire's one-time random bank grant (zero `g.rng` draws). */
 export const HARBOR_EMPIRE_RNG_SALT = 0x48454d50; // 'HEMP'
 
-// ---- T11f: Grand Causeway (16 VP Longest Road when road includes a bridge) -------------------------------------
+// ---- T11f: Grand Causeway (6 VP Longest Road when road includes a bridge) --------------------------------------
 
 /**
  * True when `pid`'s longest road-like path on the board (`maxLen > 0`, using the same opponent-piece blocking rules as `longestRoadFor`)
@@ -109,7 +109,7 @@ export function longestRoadHasBridge(g: GameState, reg: Registry, pid: Id): bool
 }
 
 /**
- * Extra VP (+14, bringing Longest Road from 2 VP to 16 VP) for `pid` when:
+ * Extra VP (+4, bringing Longest Road from 2 VP to 6 VP) for `pid` when:
  *  1. `pid` has researched `tidebound.grand_causeway`,
  *  2. `pid` currently holds the Longest Road award (`g.awards.longestRoad?.owner === pid`), and
  *  3. `pid`'s longest road includes at least one bridge or rickety bridge (`longestRoadHasBridge`).
@@ -307,7 +307,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     costResources: ['brick', 'ore', 'wood'],
     dlc: 'tidebound',
     description:
-      'Longest Road is worth 16 VP instead of 2 (+14 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.',
+      'Longest Road is worth 6 VP instead of 2 (+4 VP) while you hold Longest Road and your road includes at least 1 bridge or rickety bridge.',
     replace: true
   },
   {

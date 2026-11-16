@@ -338,7 +338,7 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       expect(bob.netTiles.length).toBe(1);
       expect(bob.pieceCosts.net).toBeUndefined();
       expect(bob.pieceCosts.rickety_bridge).toBeDefined();
-      expect(bob.stats.vpBreakdown.longestRoad).toBe(16);
+      expect(bob.stats.vpBreakdown.longestRoad).toBe(6);
 
       // Only the owner gets the spot lists.
       expect(playerOf(other, 'b').netTiles).toEqual(bob.netTiles);
