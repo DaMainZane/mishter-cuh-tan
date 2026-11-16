@@ -82,3 +82,12 @@ const PORT = Number(process.env.PORT) || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Colonist-Style HexSettlers (Hard Bots + Full Trade) running at http://0.0.0.0:${PORT}`);
 });
+
+const shutdown = (): void => {
+  io.close();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 200).unref();
+};
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
+

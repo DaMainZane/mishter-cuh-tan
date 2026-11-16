@@ -59,18 +59,24 @@ const clientOptions = {
 copyStatic();
 
 if (watching) {
-  const serverCtx = await context(serverOptions);
   const clientCtx = await context(clientOptions);
-  await serverCtx.watch();
+  await clientCtx.rebuild();
   await clientCtx.watch();
+  const serverCtx = await context(serverOptions);
+  await serverCtx.watch();
   const recopy = () => {
     try { copyStatic(); } catch (e) { console.error(e); }
   };
   fsWatch('public', { recursive: true }, recopy);
   fsWatch('src/client/styles.css', recopy);
   const cleanup = () => {
-    if (child) child.kill();
-    process.exit(0);
+    if (child && child.exitCode === null && !child.killed) {
+      child.once('exit', () => process.exit(0));
+      child.kill('SIGTERM');
+      setTimeout(() => process.exit(0), 300).unref();
+    } else {
+      process.exit(0);
+    }
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);
