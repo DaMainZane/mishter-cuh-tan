@@ -109,10 +109,12 @@
             <button type="button" role="tab" id="setupTab-rules" class="setup-tab" aria-controls="setupPanel-rules" aria-selected="false" tabindex="-1" onclick="setSetupTab('rules')">Rules</button>
           </div>
 
-          <!-- Always visible: the live map preview and what is on -->
-          <aside class="setup-side">
-            <div class="setup-card setup-preview">
+          <!-- Always visible: the live map preview (sticky while scrolling) with quick Tidebound & Rules controls -->
+          <aside class="setup-side" id="setupSide">
+            <div class="setup-card setup-preview" id="setupPreviewCard">
               <svg id="setupPreview" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map preview"></svg>
+              <div id="setupPreviewBar" class="setup-preview-bar"></div>
+              <div id="setupPreviewDrawer" class="setup-preview-drawer" hidden></div>
             </div>
             <!-- Live summary strip: what is on (active DLCs, addons, dependency prompts, events) -->
             <div id="setupActiveSummary" class="setup-active-summary"></div>
@@ -188,7 +190,7 @@
             <!-- One row per DLC: switch, addon count, details on click. Drawn by render/setup.ts -->
             <div id="setupDlcGrid" class="dlc-list"></div>
 
-            <h3 class="setup-h">Rules</h3>
+            <h3 class="setup-h" id="setupRulesHeading">Rules</h3>
             <div class="fold-list">
               <details class="setup-fold">
                 <summary><span class="fold-title">Game</span><span id="foldValGame" class="fold-val"></span><span class="fold-caret" data-icon="chevronDown" data-size="16"></span></summary>
