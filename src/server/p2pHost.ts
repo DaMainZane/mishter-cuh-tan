@@ -21,6 +21,13 @@ export interface EmbeddedHostController {
 
 function clonePayload<T>(payload: T): T {
   if (payload === undefined || payload === null || typeof payload !== 'object') return payload;
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(payload);
+    } catch {
+      // Fall through to JSON clone if payload has non-cloneable fields.
+    }
+  }
   try {
     return JSON.parse(JSON.stringify(payload));
   } catch {

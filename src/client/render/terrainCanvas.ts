@@ -1,4 +1,4 @@
-// MODULE: 2D canvas terrain renderer (viewport-culled hexes, coastlines, resource glyphs, number tokens, and math hex hit-testing) | DEPENDS ON: none | USED BY: client/debug, client/render/board
+// MODULE: 2D canvas board renderer (full-board static atlas + crisp vector zoom for terrain, coastlines, ports, fish, overlays, and frustum-culled build spots) | DEPENDS ON: none | USED BY: client/debug, client/render/board
 
 export interface BoardBounds {
   centerX0: number;
@@ -29,6 +29,93 @@ export interface TerrainHexLike {
   rawPts?: string;
 }
 
+export interface CanvasPortLike {
+  edgeId: number;
+  v1x: number;
+  v1y: number;
+  v2x: number;
+  v2y: number;
+  hx: number;
+  hy: number;
+  port: string;
+  owned: boolean;
+  level: number;
+  sx: number;
+  sy: number;
+}
+
+export interface CanvasFishLike {
+  hexId: number;
+  fx: number;
+  fy: number;
+  left: number;
+  hasIcon: boolean;
+  tilePoly?: string;
+}
+
+export interface CanvasHexOverlayLike {
+  hexId: number;
+  x: number;
+  y: number;
+  innerPoly: string;
+  kind: string;
+  label?: string;
+}
+
+export interface CanvasVertexSpot {
+  vertexId: number;
+  x: number;
+  y: number;
+  kind: 'direct' | 'menu';
+  dim?: boolean;
+}
+
+export interface CanvasEdgeSpot {
+  edgeId: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  mx: number;
+  my: number;
+  kind: 'direct' | 'menu' | 'bridge_upgrade';
+  dim?: boolean;
+}
+
+export interface CanvasPortSpot {
+  edgeId: number;
+  sx: number;
+  sy: number;
+  kind: 'paint' | 'harbor' | 'upgrade_port' | 'menu';
+  vertexId?: number;
+  dim?: boolean;
+}
+
+export interface CanvasFeedSpot {
+  hexId: number;
+  fx: number;
+  fy: number;
+  isNew?: boolean;
+}
+
+export interface CanvasHexSpot {
+  hexId: number;
+  x: number;
+  y: number;
+  innerPoly: string;
+  kind: 'robber' | 'net' | 'rolled' | 'menu';
+  dim?: boolean;
+}
+
+export interface CanvasInteractiveSpots {
+  vertices?: ReadonlyArray<CanvasVertexSpot>;
+  edges?: ReadonlyArray<CanvasEdgeSpot>;
+  ports?: ReadonlyArray<CanvasPortSpot>;
+  feeds?: ReadonlyArray<CanvasFeedSpot>;
+  hexes?: ReadonlyArray<CanvasHexSpot>;
+  roadScale?: number;
+}
+
 export interface TerrainCanvasDrawInput {
   hexes: TerrainHexLike[];
   landPath: string;
@@ -40,6 +127,11 @@ export interface TerrainCanvasDrawInput {
   camPanX: number;
   camPanY: number;
   animatingFogHexIds?: ReadonlySet<number>;
+  staticVersion?: number;
+  ports?: ReadonlyArray<CanvasPortLike>;
+  fishGrounds?: ReadonlyArray<CanvasFishLike>;
+  hexOverlays?: ReadonlyArray<CanvasHexOverlayLike>;
+  interactiveSpots?: CanvasInteractiveSpots | null;
 }
 
 export interface TerrainCanvasStats {
@@ -146,7 +238,7 @@ const polyCornersCache = new Map<string, Array<[number, number]>>();
 function getCachedCorners(polyStr: string): Array<[number, number]> {
   let pts = polyCornersCache.get(polyStr);
   if (!pts) {
-    if (polyCornersCache.size > 4000) polyCornersCache.clear();
+    if (polyCornersCache.size > 6000) polyCornersCache.clear();
     pts = parsePolyPoints(polyStr);
     polyCornersCache.set(polyStr, pts);
   }
@@ -189,9 +281,23 @@ interface ThemePalette {
   themeKey: string;
   seaShallow: string;
   sand: string;
+  pier: string;
+  pierDark: string;
+  accent: string;
+  danger: string;
+  pieceRim: string;
+  ink: string;
   token: string;
   tokenInk: string;
   tokenHot: string;
+  elev1: string;
+  elev2: string;
+  elev3: string;
+  elevInk: string;
+  ovFloodTint: string;
+  ovFloodLine: string;
+  ovFloodWarnTint: string;
+  ovFloodWarnLine: string;
   tile: Record<string, string>;
   trim: Record<string, string>;
   glyph: {
@@ -225,14 +331,29 @@ function readThemePalette(): ThemePalette {
     const v = style?.getPropertyValue(name)?.trim();
     return v || fallback;
   };
+  const isDark = themeKey === 'dark';
 
   cachedPalette = {
     themeKey,
-    seaShallow: css('--sea-shallow', '#86b0bf'),
-    sand: css('--sand', '#e8d9ab'),
+    seaShallow: css('--sea-shallow', isDark ? '#5d8696' : '#86b0bf'),
+    sand: css('--sand', isDark ? '#a8946a' : '#e8d9ab'),
+    pier: css('--pier', isDark ? '#b08f63' : '#9a7b53'),
+    pierDark: css('--pier-dark', isDark ? '#7a603e' : '#6e5434'),
+    accent: css('--accent', '#d9893b'),
+    danger: css('--danger', isDark ? '#e0604a' : '#c4472f'),
+    pieceRim: css('--piece-rim', '#f4f1ea'),
+    ink: css('--ink', isDark ? '#ece9e1' : '#2b2f33'),
     token: css('--token', '#f4f1ea'),
     tokenInk: css('--token-ink', '#2b2f33'),
     tokenHot: css('--token-hot', '#b3402e'),
+    elev1: css('--elev-1', isDark ? 'rgba(240, 214, 120, 0.72)' : 'rgba(250, 226, 130, 0.78)'),
+    elev2: css('--elev-2', isDark ? 'rgba(214, 112, 44, 0.80)' : 'rgba(226, 126, 52, 0.84)'),
+    elev3: css('--elev-3', isDark ? 'rgba(166, 44, 36, 0.90)' : 'rgba(150, 36, 28, 0.92)'),
+    elevInk: css('--elev-ink', isDark ? '#f4f1ea' : '#ffffff'),
+    ovFloodTint: css('--ov-flood-tint', isDark ? 'rgba(18, 54, 102, 0.62)' : 'rgba(21, 62, 112, 0.56)'),
+    ovFloodLine: css('--ov-flood-line', isDark ? 'rgba(186, 230, 253, 0.95)' : 'rgba(186, 230, 253, 0.92)'),
+    ovFloodWarnTint: css('--ov-flood-warn-tint', isDark ? 'rgba(29, 78, 137, 0.34)' : 'rgba(29, 78, 137, 0.30)'),
+    ovFloodWarnLine: css('--ov-flood-warn-line', isDark ? 'rgba(168, 222, 245, 0.90)' : 'rgba(33, 92, 140, 0.85)'),
     tile: {
       wood: css('--tile-wood', '#5f8a5a'),
       brick: css('--tile-brick', '#c0674a'),
@@ -281,7 +402,7 @@ function getHexPolyPath2D(tilePoly: string): Path2D | null {
   if (typeof Path2D === 'undefined') return null;
   let path = hexPolyPathCache.get(tilePoly);
   if (!path) {
-    if (hexPolyPathCache.size > 4000) hexPolyPathCache.clear();
+    if (hexPolyPathCache.size > 6000) hexPolyPathCache.clear();
     const d = 'M ' + tilePoly.trim().replace(/\s+/g, ' L ') + ' Z';
     path = new Path2D(d);
     hexPolyPathCache.set(tilePoly, path);
@@ -298,6 +419,8 @@ interface GlyphPaths {
   oreDk: Path2D;
   goldIngots: Path2D;
   goldSpark: Path2D;
+  fishTail: Path2D;
+  floodWaves: Path2D;
 }
 
 let glyphPaths: GlyphPaths | null = null;
@@ -316,7 +439,11 @@ function getGlyphPaths(): GlyphPaths | null {
     goldIngots: new Path2D(
       'M-13,11 L-10,5 L-1,5 L-3,11 Z M0,11 L2,5 L11,5 L13,11 Z M-6.5,4 L-4,-2 L4,-2 L6.5,4 Z'
     ),
-    goldSpark: new Path2D('M9,-13 L10.2,-9.2 L14,-8 L10.2,-6.8 L9,-3 L7.8,-6.8 L4,-8 L7.8,-9.2 Z')
+    goldSpark: new Path2D('M9,-13 L10.2,-9.2 L14,-8 L10.2,-6.8 L9,-3 L7.8,-6.8 L4,-8 L7.8,-9.2 Z'),
+    fishTail: new Path2D('M6,0 L13.5,-6.5 L13.5,6.5 Z'),
+    floodWaves: new Path2D(
+      'M-26,-10 Q-13,-20 0,-10 Q13,-20 26,-10 M-34,4 Q-17,-8 0,4 Q17,-8 34,4 M-26,18 Q-13,8 0,18 Q13,8 26,18'
+    )
   };
   return glyphPaths;
 }
@@ -357,23 +484,20 @@ function fillEllipse(
   ctx.fill();
 }
 
-/** Draws the exact pictogram from `src/client/icons.ts` (`getBoardIconSvg(tileType, 0, hasNumber ? -24 : 0, hasNumber ? 1.45 : 1.9)`). */
-function drawTerrainGlyph(
+/** Draws a flat pictogram glyph centered at `(cx, cy)` with `scale` (matching `src/client/icons.ts`). */
+function drawGlyphAt(
   ctx: CanvasRenderingContext2D,
   tileType: string,
-  hx: number,
-  hy: number,
-  hasNumber: boolean,
+  cx: number,
+  cy: number,
+  iconScale: number,
   pal: ThemePalette
 ): void {
   const gp = getGlyphPaths();
   if (!gp) return;
 
-  const yOffset = hasNumber ? -24 : 0;
-  const iconScale = hasNumber ? 1.45 : 1.9;
-
   ctx.save();
-  ctx.translate(hx, hy + yOffset);
+  ctx.translate(cx, cy);
   ctx.scale(iconScale, iconScale);
 
   switch (tileType) {
@@ -459,6 +583,18 @@ function drawTerrainGlyph(
   ctx.restore();
 }
 
+/** Draws the exact pictogram from `src/client/icons.ts` (`getBoardIconSvg(tileType, 0, hasNumber ? -24 : 0, hasNumber ? 1.45 : 1.9)`). */
+function drawTerrainGlyph(
+  ctx: CanvasRenderingContext2D,
+  tileType: string,
+  hx: number,
+  hy: number,
+  hasNumber: boolean,
+  pal: ThemePalette
+): void {
+  drawGlyphAt(ctx, tileType, hx, hy + (hasNumber ? -24 : 0), hasNumber ? 1.45 : 1.9, pal);
+}
+
 /** Draws the exact number token from `tokenMarkup(n)` in `src/client/render/board.ts`. */
 function drawNumberToken(
   ctx: CanvasRenderingContext2D,
@@ -482,18 +618,529 @@ function drawNumberToken(
   ctx.fillText(String(num), hx, ty + 8);
 }
 
+/** Draws a flat anchor icon (matching `uiIcon('harbor', 20)`) for upgraded 1:1 harbors. */
+function drawHarborAnchor(ctx: CanvasRenderingContext2D, sx: number, sy: number, color: string): void {
+  ctx.save();
+  ctx.translate(sx, sy - 7);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.9;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.arc(0, -5.5, 2.2, 0, Math.PI * 2);
+  ctx.moveTo(0, -3.3);
+  ctx.lineTo(0, 6.2);
+  ctx.moveTo(-4, -1);
+  ctx.lineTo(4, -1);
+  ctx.moveTo(-6.2, 2.2);
+  ctx.quadraticCurveTo(-5, 6.5, 0, 6.5);
+  ctx.quadraticCurveTo(5, 6.5, 6.2, 2.2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draws a single coastal port dock + badge (matching `portMarkup` in `src/client/render/board.ts`). */
+function drawPort(ctx: CanvasRenderingContext2D, p: CanvasPortLike, pal: ThemePalette): void {
+  const mx = (p.v1x + p.v2x) / 2;
+  const my = (p.v1y + p.v2y) / 2;
+  const dx = mx - p.hx;
+  const dy = my - p.hy;
+  const nLen = Math.hypot(dx, dy) || 1;
+  const nx = dx / nLen;
+  const ny = dy / nLen;
+
+  const ex = p.v2x - p.v1x;
+  const ey = p.v2y - p.v1y;
+  const eLen = Math.hypot(ex, ey) || 1;
+  const tx = ex / eLen;
+  const ty = ey / eLen;
+
+  const D0 = -4.5;
+  const D1 = 35;
+  const hw0 = Math.max(14, eLen / 2 - 7);
+  const hw1 = hw0 * 0.55;
+  const b1x = mx - tx * hw0 + nx * D0;
+  const b1y = my - ty * hw0 + ny * D0;
+  const b2x = mx + tx * hw0 + nx * D0;
+  const b2y = my + ty * hw0 + ny * D0;
+  const t1x = mx - tx * hw1 + nx * D1;
+  const t1y = my - ty * hw1 + ny * D1;
+  const t2x = mx + tx * hw1 + nx * D1;
+  const t2y = my + ty * hw1 + ny * D1;
+
+  // Dock apron
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  ctx.fillStyle = pal.pierDark;
+  ctx.beginPath();
+  ctx.moveTo(b1x, b1y);
+  ctx.lineTo(b2x, b2y);
+  ctx.lineTo(t2x, t2y);
+  ctx.lineTo(t1x, t1y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cross-planks
+  ctx.globalAlpha = 0.75;
+  ctx.strokeStyle = pal.pierDark;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (const d of [7, 16, 25]) {
+    const f = (d - D0) / (D1 - D0);
+    const halfW = hw0 * (1 - f) + hw1 * f;
+    const px = mx + nx * d;
+    const py = my + ny * d;
+    ctx.moveTo(px - tx * halfW, py - ty * halfW);
+    ctx.lineTo(px + tx * halfW, py + ty * halfW);
+  }
+  ctx.stroke();
+
+  // Pier rims & wood planks
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = pal.pierDark;
+  ctx.lineWidth = 11;
+  ctx.beginPath();
+  ctx.moveTo(b1x, b1y);
+  ctx.lineTo(t1x, t1y);
+  ctx.moveTo(b2x, b2y);
+  ctx.lineTo(t2x, t2y);
+  ctx.stroke();
+
+  ctx.strokeStyle = pal.pier;
+  ctx.lineWidth = 6.5;
+  ctx.beginPath();
+  ctx.moveTo(b1x, b1y);
+  ctx.lineTo(t1x, t1y);
+  ctx.moveTo(b2x, b2y);
+  ctx.lineTo(t2x, t2y);
+  ctx.stroke();
+
+  // Posts
+  ctx.fillStyle = pal.pier;
+  ctx.strokeStyle = pal.pierDark;
+  ctx.lineWidth = 2;
+  for (const [px, py] of [[b1x, b1y], [b2x, b2y]]) {
+    ctx.beginPath();
+    ctx.arc(px, py, 5.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  const sx = p.sx;
+  const sy = p.sy;
+  const any = p.port === '3:1';
+  const isHarborPort = p.level >= 2;
+  const ratioText = p.level >= 2 ? '1:1' : p.level === 1 || !any ? '2:1' : '3:1';
+
+  // Ownership ring
+  if (p.owned) {
+    ctx.strokeStyle = pal.accent;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(sx, sy, 24, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Outer badge rim
+  ctx.fillStyle = isHarborPort ? pal.accent : pal.pierDark;
+  ctx.strokeStyle = pal.pieceRim;
+  ctx.lineWidth = 2.2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 21, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Inner badge fill
+  const badgeFill = isHarborPort ? pal.pierDark : any ? pal.token : (pal.tile[p.port] || pal.token);
+  const badgeBorder = isHarborPort ? pal.accent : any ? pal.pierDark : (pal.trim[p.port] || pal.pierDark);
+  ctx.fillStyle = badgeFill;
+  ctx.strokeStyle = badgeBorder;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.arc(sx, sy, 17.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Badge label / glyph
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  if (isHarborPort) {
+    drawHarborAnchor(ctx, sx, sy, pal.token);
+    ctx.fillStyle = pal.token;
+    ctx.strokeStyle = pal.pierDark;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(sx - 13, sy + 5, 26, 12, 6);
+    else ctx.rect(sx - 13, sy + 5, 26, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = pal.tokenInk;
+    ctx.font = '800 8.8px system-ui, -apple-system, sans-serif';
+    ctx.fillText(ratioText, sx, sy + 14);
+  } else if (any) {
+    ctx.fillStyle = pal.tokenInk;
+    ctx.font = '800 13px system-ui, -apple-system, sans-serif';
+    ctx.fillText(ratioText, sx, sy + 4.5);
+  } else {
+    drawGlyphAt(ctx, p.port, sx, sy - 4.5, 0.56, pal);
+    ctx.fillStyle = pal.token;
+    ctx.strokeStyle = pal.pierDark;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') ctx.roundRect(sx - 13, sy + 5, 26, 12, 6);
+    else ctx.rect(sx - 13, sy + 5, 26, 12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = pal.tokenInk;
+    ctx.font = '800 8.8px system-ui, -apple-system, sans-serif';
+    ctx.fillText(ratioText, sx, sy + 14);
+  }
+  ctx.restore();
+}
+
+/** Draws a Tidebound fishing ground tile outline + pictogram + boost pips (matching `fishGroundMarkup`). */
+function drawFishGround(ctx: CanvasRenderingContext2D, f: CanvasFishLike, pal: ThemePalette): void {
+  const gp = getGlyphPaths();
+  if (!gp) return;
+
+  if (f.hasIcon && f.tilePoly) {
+    const poly = getHexPolyPath2D(f.tilePoly);
+    if (poly) {
+      ctx.save();
+      ctx.strokeStyle = pal.token;
+      ctx.lineWidth = 3.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke(poly);
+      ctx.restore();
+    }
+  }
+
+  const n = Math.max(0, Math.min(4, Math.round(f.left)));
+  const spent = n <= 0;
+
+  ctx.save();
+  ctx.translate(f.fx, f.fy);
+  ctx.scale(1.25, 1.25);
+  ctx.globalAlpha = !f.hasIcon ? 0.6 : spent ? 0.55 : 0.92;
+
+  // Fish body & tail
+  ctx.save();
+  ctx.translate(0, -3);
+  if (spent) {
+    ctx.strokeStyle = pal.token;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([3, 2]);
+    ctx.beginPath();
+    ctx.ellipse(-2, 0, 9.5, 6.2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.stroke(gp.fishTail);
+    ctx.setLineDash([]);
+    ctx.fillStyle = pal.token;
+    fillCircle(ctx, -6.5, -1.6, 1.5);
+  } else {
+    ctx.fillStyle = pal.token;
+    fillEllipse(ctx, -2, 0, 9.5, 6.2);
+    ctx.fill(gp.fishTail);
+    ctx.fillStyle = pal.tokenInk;
+    fillCircle(ctx, -6.5, -1.6, 1.5);
+  }
+  ctx.restore();
+
+  // 4 boost pips
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = pal.token;
+  ctx.fillStyle = pal.token;
+  for (let i = 0; i < 4; i++) {
+    const px = (i - 1.5) * 7;
+    ctx.beginPath();
+    ctx.arc(px, 11, 2.4, 0, Math.PI * 2);
+    if (i < n) ctx.fill();
+    else ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Draws a single colorblind-safe hex overlay (Tidebound flood/warning/drowned, elevation heat map, or base overlays). */
+function drawHexOverlay(ctx: CanvasRenderingContext2D, ov: CanvasHexOverlayLike, pal: ThemePalette): void {
+  const poly = getHexPolyPath2D(ov.innerPoly);
+  if (!poly) return;
+
+  ctx.save();
+  if (ov.kind === 'elev-1' || ov.kind === 'elev-2' || ov.kind === 'elev-3') {
+    const level = ov.kind === 'elev-3' ? 3 : ov.kind === 'elev-2' ? 2 : 1;
+    ctx.fillStyle = level === 3 ? pal.elev3 : level === 2 ? pal.elev2 : pal.elev1;
+    ctx.fill(poly);
+    ctx.font = '800 14px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillStyle = pal.elevInk;
+    const txt = '\u25B2'.repeat(level);
+    ctx.strokeText(txt, ov.x, ov.y + 46);
+    ctx.fillText(txt, ov.x, ov.y + 46);
+    ctx.restore();
+    return;
+  }
+
+  const gp = getGlyphPaths();
+  const isFlood = ov.kind === 'flood';
+  const isWarn = ov.kind === 'flood-warn';
+
+  // Clip to hex inner polygon
+  ctx.clip(poly);
+  if (isFlood || isWarn) {
+    ctx.fillStyle = isFlood ? pal.ovFloodTint : pal.ovFloodWarnTint;
+    ctx.fill(poly);
+
+    ctx.save();
+    ctx.translate(ov.x, ov.y);
+    ctx.scale(0.86, 0.86);
+    const lineColor = isFlood ? pal.ovFloodLine : pal.ovFloodWarnLine;
+    ctx.fillStyle = lineColor;
+    ctx.globalAlpha = isFlood ? 0.12 : 0.08;
+    fillCircle(ctx, 0, 0, 40);
+    if (isFlood) {
+      ctx.globalAlpha = 0.14;
+      fillCircle(ctx, 0, 0, 24);
+    }
+    if (gp) {
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = isFlood ? 3.4 : 3.0;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      if (isWarn) ctx.setLineDash([8, 6]);
+      ctx.stroke(gp.floodWaves);
+      if (isWarn) ctx.setLineDash([]);
+    }
+    ctx.restore();
+  } else {
+    // Fallback tint + diagonal stripe for any other overlay kind (plague, crack, wave, etc.)
+    ctx.fillStyle =
+      ov.kind === 'wall-incomplete'
+        ? 'rgba(196, 71, 47, 0.22)'
+        : ov.kind === 'plague'
+          ? 'rgba(79, 138, 74, 0.24)'
+          : 'rgba(217, 137, 59, 0.22)';
+    ctx.fill(poly);
+    ctx.strokeStyle =
+      ov.kind === 'wall-incomplete'
+        ? '#c4472f'
+        : ov.kind === 'plague'
+          ? '#3f743b'
+          : '#d9893b';
+    ctx.lineWidth = 2.4;
+    ctx.globalAlpha = 0.72;
+    ctx.beginPath();
+    for (let offset = -60; offset <= 60; offset += 16) {
+      ctx.moveTo(ov.x + offset - 50, ov.y - 50);
+      ctx.lineTo(ov.x + offset + 50, ov.y + 50);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  if (ov.label) {
+    ctx.save();
+    ctx.font = '800 8.5px system-ui, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 2.6;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = pal.token;
+    ctx.fillStyle = pal.tokenInk;
+    ctx.strokeText(ov.label, ov.x, ov.y + 44);
+    ctx.fillText(ov.label, ov.x, ov.y + 44);
+    ctx.restore();
+  }
+}
+
+/** Draws frustum-culled interactive spots on top of the terrain/atlas layer (<0.25ms even for 3,000+ spots). */
+function drawInteractiveSpots(
+  ctx: CanvasRenderingContext2D,
+  spots: CanvasInteractiveSpots,
+  pal: ThemePalette,
+  cam: CanvasCamera
+): void {
+  const roadScale = spots.roadScale ?? 1;
+
+  // 1. Hex targets (rolled dimming, robber move targets, net spots, menu hex dots)
+  if (spots.hexes && spots.hexes.length > 0) {
+    for (let i = 0; i < spots.hexes.length; i++) {
+      const hs = spots.hexes[i];
+      if (!isHexVisible(hs.x, hs.y, cam)) continue;
+      if (hs.kind === 'menu') {
+        ctx.save();
+        ctx.globalAlpha = hs.dim ? 0.4 : 0.9;
+        ctx.fillStyle = pal.accent;
+        ctx.strokeStyle = pal.pieceRim;
+        ctx.lineWidth = 2.5 * roadScale;
+        ctx.beginPath();
+        ctx.arc(hs.x, hs.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        continue;
+      }
+      const poly = getHexPolyPath2D(hs.innerPoly);
+      if (!poly) continue;
+      ctx.save();
+      if (hs.kind === 'rolled') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.24)';
+        ctx.fill(poly);
+      } else if (hs.kind === 'robber') {
+        ctx.fillStyle = pal.danger;
+        ctx.globalAlpha = 0.24;
+        ctx.fill(poly);
+        ctx.globalAlpha = 0.82;
+        ctx.strokeStyle = pal.danger;
+        ctx.lineWidth = 3.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke(poly);
+      } else if (hs.kind === 'net') {
+        ctx.fillStyle = pal.accent;
+        ctx.globalAlpha = 0.16;
+        ctx.fill(poly);
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([9, 6]);
+        ctx.stroke(poly);
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    }
+  }
+
+  // 2. Feed-the-sea rings
+  if (spots.feeds && spots.feeds.length > 0) {
+    ctx.save();
+    for (let i = 0; i < spots.feeds.length; i++) {
+      const f = spots.feeds[i];
+      if (!isHexVisible(f.fx, f.fy, cam)) continue;
+      ctx.fillStyle = pal.accent;
+      ctx.globalAlpha = 0.18;
+      fillCircle(ctx, f.fx, f.fy, 30);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = pal.accent;
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(f.fx, f.fy, 30, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+
+  // 3. Port spots (lobby port-paint dots + harbor / port-raise rings)
+  if (spots.ports && spots.ports.length > 0) {
+    ctx.save();
+    for (let i = 0; i < spots.ports.length; i++) {
+      const ps = spots.ports[i];
+      if (!isHexVisible(ps.sx, ps.sy, cam)) continue;
+      if (ps.kind === 'paint') {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(ps.sx, ps.sy, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.globalAlpha = ps.dim ? 0.35 : 0.9;
+        ctx.fillStyle = pal.accent;
+        ctx.beginPath();
+        ctx.arc(ps.sx, ps.sy, 26, 0, Math.PI * 2);
+        ctx.save();
+        ctx.globalAlpha = ps.dim ? 0.14 : 0.32;
+        ctx.fill();
+        ctx.restore();
+        ctx.strokeStyle = pal.accent;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 4. Edge spots (road/bridge build spots + rickety bridge upgrade dots)
+  if (spots.edges && spots.edges.length > 0) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (let i = 0; i < spots.edges.length; i++) {
+      const es = spots.edges[i];
+      if (!isHexVisible(es.mx, es.my, cam)) continue;
+      if (es.kind === 'bridge_upgrade') {
+        ctx.fillStyle = pal.accent;
+        ctx.strokeStyle = pal.pieceRim;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(es.mx, es.my, 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        continue;
+      }
+      ctx.globalAlpha = es.dim ? 0.22 : 0.42;
+      ctx.strokeStyle = pal.accent;
+      ctx.lineWidth = 12 * roadScale;
+      ctx.beginPath();
+      ctx.moveTo(es.x1, es.y1);
+      ctx.lineTo(es.x2, es.y2);
+      ctx.stroke();
+
+      ctx.globalAlpha = es.dim ? 0.4 : es.kind === 'menu' ? 0.72 : 0.95;
+      ctx.fillStyle = pal.accent;
+      ctx.strokeStyle = pal.pieceRim;
+      ctx.lineWidth = 2.6 * roadScale;
+      ctx.beginPath();
+      ctx.arc(es.mx, es.my, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 5. Vertex spots (setup settlement spots, main build spots, build-menu vertex hotspots)
+  if (spots.vertices && spots.vertices.length > 0) {
+    ctx.save();
+    // Keep vertex dots legible when zoomed far out on radius 10-20 boards without inflating into overlaps
+    const dotR = Math.max(9.5, Math.min(13.5, 4.6 * cam.worldPerPx));
+    const strokeW = Math.max(2.4, dotR * 0.24);
+    ctx.lineWidth = strokeW;
+    ctx.strokeStyle = pal.pieceRim;
+    ctx.fillStyle = pal.accent;
+    for (let i = 0; i < spots.vertices.length; i++) {
+      const vs = spots.vertices[i];
+      if (!isHexVisible(vs.x, vs.y, cam)) continue;
+      ctx.globalAlpha = vs.dim ? 0.36 : vs.kind === 'menu' ? 0.62 : 0.92;
+      ctx.beginPath();
+      ctx.arc(vs.x, vs.y, dotR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
 let lastInput: TerrainCanvasDrawInput | null = null;
 let observersAttached = false;
 let cachedViewW = 0;
 let cachedViewH = 0;
 
-// Full-board pre-rendered offscreen atlas so pan/drag/zoom frames blit the entire board in 1 GPU drawImage call (<0.2ms, zero chunk pop-in)
+// Full-board pre-rendered offscreen atlas (ZERO chunks, ZERO pop-in) for fast zoomed-out pan/zoom (<0.2ms/frame)
 let atlasCanvas: HTMLCanvasElement | null = null;
 let atlasKey = '';
 let atlasWorldX = 0;
 let atlasWorldY = 0;
 let atlasWorldW = 1;
 let atlasWorldH = 1;
+let atlasScaleUsed = 1;
 let atlasTotalLandCount = 0;
 
 const stats: TerrainCanvasStats = {
@@ -540,7 +1187,7 @@ function ensureCanvasElement(): HTMLCanvasElement | null {
   return canvas;
 }
 
-function renderTerrainWorldToContext(
+function renderStaticSceneToContext(
   ctx: CanvasRenderingContext2D,
   input: TerrainCanvasDrawInput,
   pal: ThemePalette,
@@ -635,18 +1282,53 @@ function renderTerrainWorldToContext(
     }
   }
 
+  // 4. Hex overlays (Tidebound flood/warning/drowned, elevation heat map, base overlays)
+  if (input.hexOverlays && input.hexOverlays.length > 0) {
+    for (let i = 0; i < input.hexOverlays.length; i++) {
+      const ov = input.hexOverlays[i];
+      if (cam && !isHexVisible(ov.x, ov.y, cam)) continue;
+      drawHexOverlay(ctx, ov, pal);
+    }
+  }
+
+  // 5. Tidebound fishing grounds (sea tile outlines + fish pictograms + boost pips)
+  if (input.fishGrounds && input.fishGrounds.length > 0) {
+    for (let i = 0; i < input.fishGrounds.length; i++) {
+      const f = input.fishGrounds[i];
+      if (cam && !isHexVisible(f.fx, f.fy, cam)) continue;
+      drawFishGround(ctx, f, pal);
+    }
+  }
+
+  // 6. Coastal trading ports (docks, piers, badges, glyphs, ownership rings)
+  if (input.ports && input.ports.length > 0) {
+    for (let i = 0; i < input.ports.length; i++) {
+      const p = input.ports[i];
+      if (cam && !isHexVisible(p.sx, p.sy, cam)) continue;
+      drawPort(ctx, p, pal);
+    }
+  }
+
   return { visibleCount, totalLandCount };
 }
 
-function ensureBoardAtlas(input: TerrainCanvasDrawInput, pal: ThemePalette): HTMLCanvasElement | null {
-  if (typeof document === 'undefined') return null;
+function buildAtlasKey(input: TerrainCanvasDrawInput, pal: ThemePalette): string {
+  // Fast O(1) path when caller provides monotonic `staticVersion` (avoids per-frame string hashing of 1,000+ hexes).
+  if (typeof input.staticVersion === 'number') {
+    return `${pal.themeKey}|v${input.staticVersion}|${input.bounds.centerX0.toFixed(1)},${input.bounds.centerY0.toFixed(1)},${input.bounds.contentW.toFixed(1)},${input.bounds.contentH.toFixed(1)}`;
+  }
   let hexSig = '';
   for (let i = 0; i < input.hexes.length; i++) {
     const h = input.hexes[i];
     if (h.type === 'water') continue;
     hexSig += `${h.id}:${h.fog ? 'f' : h.type}:${h.number ?? ''};`;
   }
-  const nextKey = `${pal.themeKey}|${input.isLobby ? 1 : 0}|${input.canPaintHex ? 1 : 0}|${input.bounds.centerX0.toFixed(1)},${input.bounds.centerY0.toFixed(1)},${input.bounds.contentW.toFixed(1)},${input.bounds.contentH.toFixed(1)}|${input.landPath.length}|${input.waterPath.length}|${hexSig}`;
+  return `${pal.themeKey}|${input.isLobby ? 1 : 0}|${input.canPaintHex ? 1 : 0}|${input.bounds.centerX0.toFixed(1)},${input.bounds.centerY0.toFixed(1)},${input.bounds.contentW.toFixed(1)},${input.bounds.contentH.toFixed(1)}|${input.landPath.length}|${input.waterPath.length}|${hexSig}`;
+}
+
+function ensureBoardAtlas(input: TerrainCanvasDrawInput, pal: ThemePalette): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const nextKey = buildAtlasKey(input, pal);
   if (atlasCanvas && atlasKey === nextKey) {
     return atlasCanvas;
   }
@@ -657,8 +1339,9 @@ function ensureBoardAtlas(input: TerrainCanvasDrawInput, pal: ThemePalette): HTM
   const worldX = input.bounds.centerX0 - worldW / 2;
   const worldY = input.bounds.centerY0 - worldH / 2;
 
-  // Cap atlas texture size to 2400px max dimension so large radius 10-20 boards stay crisp and fast in mobile GPU RAM
-  const maxTexDim = 2400;
+  // Single full-board GPU texture (no chunks, no pop-in). 3072px on desktop, 2400px on mobile.
+  const isNarrow = typeof window !== 'undefined' && window.innerWidth <= 900;
+  const maxTexDim = isNarrow ? 2400 : 3072;
   const atlasScale = Math.min(2.0, maxTexDim / Math.max(worldW, worldH));
   const texW = Math.max(1, Math.round(worldW * atlasScale));
   const texH = Math.max(1, Math.round(worldH * atlasScale));
@@ -675,20 +1358,22 @@ function ensureBoardAtlas(input: TerrainCanvasDrawInput, pal: ThemePalette): HTM
   actx.clearRect(0, 0, texW, texH);
   actx.setTransform(atlasScale, 0, 0, atlasScale, -worldX * atlasScale, -worldY * atlasScale);
 
-  const counts = renderTerrainWorldToContext(actx, { ...input, animatingFogHexIds: undefined }, pal, null);
+  const counts = renderStaticSceneToContext(actx, { ...input, animatingFogHexIds: undefined }, pal, null);
   atlasKey = nextKey;
   atlasWorldX = worldX;
   atlasWorldY = worldY;
   atlasWorldW = worldW;
   atlasWorldH = worldH;
+  atlasScaleUsed = atlasScale;
   atlasTotalLandCount = counts.totalLandCount;
   return atlasCanvas;
 }
 
 /**
- * Draws the board's static/semi-static terrain layer onto `#boardTerrainCanvas`.
- * Uses a pre-rendered full-board offscreen bitmap atlas so dragging and zooming on huge maps
- * or Tidebound maps takes <0.2ms per frame with zero chunk pop-in.
+ * Draws the board's terrain, coastlines, ports, fish, overlays, and interactive spots onto `#boardTerrainCanvas`.
+ * - Zoomed out / normal view: blits ONE pre-rendered full-board offscreen bitmap atlas in <0.2ms (zero chunk loading, zero pop-in).
+ * - Zoomed in closely past atlas resolution: draws only the ~15-80 on-screen elements directly in crisp Retina 2D vector canvas.
+ * - Interactive build spots are always rendered in a fast frustum-culled pass on top (<0.25ms), replacing thousands of SVG DOM nodes.
  */
 export function drawBoardTerrainCanvas(input: TerrainCanvasDrawInput): void {
   lastInput = input;
@@ -736,14 +1421,23 @@ export function drawBoardTerrainCanvas(input: TerrainCanvasDrawInput): void {
   const hasFogAnim = Boolean(input.animatingFogHexIds && input.animatingFogHexIds.size > 0);
   const atlas = !hasFogAnim ? ensureBoardAtlas(input, pal) : null;
 
-  if (atlas) {
+  // Use the single full-board atlas whenever its pixel density is close to screen density;
+  // only switch to direct Retina vector drawing when zoomed in deeply (few hexes on screen) so text/glyphs stay sharp.
+  const screenWorldScale = cam.scale * dpr;
+  const useCrispVectorZoom = !atlas || screenWorldScale > atlasScaleUsed * 1.65;
+
+  if (!useCrispVectorZoom && atlas) {
     ctx.drawImage(atlas, atlasWorldX, atlasWorldY, atlasWorldW, atlasWorldH);
     stats.visibleHexes = atlasTotalLandCount;
     stats.totalHexes = atlasTotalLandCount;
   } else {
-    const counts = renderTerrainWorldToContext(ctx, input, pal, cam);
+    const counts = renderStaticSceneToContext(ctx, input, pal, cam);
     stats.visibleHexes = counts.visibleCount;
     stats.totalHexes = counts.totalLandCount;
+  }
+
+  if (input.interactiveSpots) {
+    drawInteractiveSpots(ctx, input.interactiveSpots, pal, cam);
   }
 
   const t1 = typeof performance !== 'undefined' ? performance.now() : 0;

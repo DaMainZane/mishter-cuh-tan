@@ -88,7 +88,7 @@ export function renderAll(): void {
   const dockSpecBtn = document.getElementById('btnDockSpectate');
   if (dockSpecBtn) {
     dockSpecBtn.classList.toggle('primary', isSpec);
-    dockSpecBtn.innerHTML = `${uiIcon(isSpec ? 'users' : 'eye', 16)}<span>${isSpec ? 'Join seat' : 'Spectate'}</span>`;
+    dockSpecBtn.innerHTML = `${uiIcon(isSpec ? 'users' : 'eye', 15)}<span class="dock-act-lbl">${isSpec ? 'Join seat' : 'Spectate'}</span>`;
   }
 
   const menuSpecBtn = document.getElementById('btnMenuSpectate');
@@ -134,6 +134,13 @@ export function renderAll(): void {
     renderPresetRow();
   } else {
     lobbyBar.style.display = 'none';
+  }
+  const boardStage = document.getElementById('boardStage');
+  if (boardStage) {
+    const isLobby = state.status === 'LOBBY';
+    const painterVisible = isLobby && !state.setup && lobbyBar.style.display !== 'none';
+    boardStage.classList.toggle('is-lobby', isLobby);
+    boardStage.classList.toggle('is-painter-open', painterVisible);
   }
 
   document.getElementById('die1')!.innerHTML = dieFaceSvg(state.lastDice[0]);

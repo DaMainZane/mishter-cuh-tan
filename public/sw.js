@@ -1,4 +1,4 @@
-const CACHE_NAME = 'colonist-custom-mobile-v1';
+const CACHE_NAME = 'colonist-custom-mobile-v1.1';
 const ASSETS = [
   './',
   './index.html',

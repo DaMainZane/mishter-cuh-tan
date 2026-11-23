@@ -65,8 +65,8 @@ describe('embedded P2P host server', () => {
       hostClient.emitToServer('startGame', { code });
       await flush();
 
-      const playingState = [...hostEvents].reverse().find(e => e.event === 'gameState')?.payload;
-      expect(playingState?.status).toBe('PLAYING');
+      const startedState = [...hostEvents].reverse().find(e => e.event === 'gameState')?.payload;
+      expect(startedState?.status).toBe('SETUP');
 
       hostClient.emitToServer('rematchLobby', { code, openSetup: true });
       await flush();

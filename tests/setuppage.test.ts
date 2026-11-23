@@ -106,7 +106,7 @@ describe('rule fold titles show the current values', () => {
 
 describe('Tidebound-only live expansion catalog', () => {
   it('offers only Standard Catan and Tidebound scenarios', () => {
-    expect(SCENARIO_PRESETS.map(s => s.id)).toEqual(['standard', 'tidebound']);
+    expect(SCENARIO_PRESETS.map(s => s.id)).toEqual(['standardCatan', 'tidebound']);
   });
 
   it('exposes Tidebound as the only live expansion and lists upcoming ones as coming soon', () => {

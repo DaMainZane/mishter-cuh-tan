@@ -320,6 +320,24 @@ export function switchLobbyTab(tab: string): void {
   if (cardsTab) cardsTab.style.display = tab === 'cards' ? 'flex' : 'none';
 }
 
+export function setPainterTab(tab: 'tiles' | 'numbers' | 'ports'): void {
+  const dock = document.getElementById('lobbyToolbar');
+  if (dock) dock.dataset.painterTab = tab;
+  for (const key of ['tiles', 'numbers', 'ports'] as const) {
+    const btn = document.getElementById(`painterTab-${key}`);
+    if (btn) {
+      const on = key === tab;
+      btn.classList.toggle('active', on);
+      btn.setAttribute('aria-selected', String(on));
+    }
+  }
+}
+
+function syncPainterStageClass(isOpen: boolean): void {
+  const stage = document.getElementById('boardStage');
+  if (stage) stage.classList.toggle('is-painter-open', isOpen && state?.status === 'LOBBY');
+}
+
 /** Host: open the world setup page (true) or go on to the board (false). While it is open nobody new can join. */
 export function setSetupOpen(open: boolean): void {
   if (!state || state.status !== 'LOBBY') return;
@@ -328,6 +346,7 @@ export function setSetupOpen(open: boolean): void {
     // Landing on the board: show the painter dock.
     const dock = document.getElementById('lobbyToolbar');
     if (dock) dock.style.display = 'flex';
+    syncPainterStageClass(true);
   }
   socket.emit('setSetup', { code: state.code, open });
   playTone(open ? 460 : 560, 0.05);
@@ -346,6 +365,7 @@ export function toggleLobbyToolbar(): void {
     if (menu) menu.style.display = 'none';
   }
   el.style.display = show ? 'flex' : 'none';
+  syncPainterStageClass(show);
 }
 
 /** After "Back to lobby" (and Play again): close the game menu and fold the dock away. The settings button brings the dock back. */
@@ -354,6 +374,7 @@ export function collapseLobbyUi(): void {
   if (menu) menu.style.display = 'none';
   const dock = document.getElementById('lobbyToolbar');
   if (dock) dock.style.display = 'none';
+  syncPainterStageClass(false);
 }
 
 export function toggleGameMenu(forceShow?: boolean): void {
@@ -363,6 +384,7 @@ export function toggleGameMenu(forceShow?: boolean): void {
   if (shouldShow) {
     const dock = document.getElementById('lobbyToolbar');
     if (dock) dock.style.display = 'none';
+    syncPainterStageClass(false);
   }
   menu.style.display = shouldShow ? 'flex' : 'none';
   playTone(500, 0.05);

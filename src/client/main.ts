@@ -11,9 +11,10 @@ import {
 } from './store';
 import { renderAll } from './render/index';
 import {
-  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations, panBoardPreview, endBoardPan,
+  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations,
+  panBoardPreview, zoomBoardPreview, endBoardPan,
   triggerAwardAnimation, onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
-  onRoadHover, onRoadMove, onRoadLeave, hexAtClientPoint
+  onRoadHover, onRoadMove, onRoadLeave, hexAtClientPoint, portEdgeAtClientPoint, handleBoardCanvasClick
 } from './render/board';
 import { respondToTrade, confirmTradeWith, cancelTrade, startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed } from './render/trade';
 import { initCursors } from './cursors';
@@ -44,7 +45,7 @@ import {
 } from './render/overlay';
 import {
   createRoom, joinRoom, spectateRoom, toggleSpectate, selectSpectateTarget, rejoinSavedRoom, downloadTrainingLog, saveSessionInfo, clearSavedRoom, syncRejoinButton,
-  copyInviteLink, copyInviteCodeOnly, shareInviteCode, pasteInviteCode, toggleMobileSidebar, switchLobbyTab, toggleLobbyToolbar, toggleGameMenu,
+  copyInviteLink, copyInviteCodeOnly, shareInviteCode, pasteInviteCode, toggleMobileSidebar, switchLobbyTab, setPainterTab, toggleLobbyToolbar, toggleGameMenu,
   setBrush, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, pushSettings, schedulePushSettings, addBot, removeBot, startGame, rematchLobby, backToWorldSetup, switchVictoryTab,
   toggleVictoryMapInspect, setBuildMode, mainTurnButton, rollDice, buyDevCard, cycleAvatar, cycleBotTier, collapseLobbyUi, setSetupOpen
 } from './actions';
@@ -73,7 +74,7 @@ function onSetLogTab(tab: 'live' | 'chat' | 'history'): void {
 // Inline onclick="..." handlers in index.html and in generated markup resolve against window.
 Object.assign(window as any, {
   createRoom, joinRoom, spectateRoom, toggleSpectate, selectSpectateTarget, rejoinSavedRoom, downloadTrainingLog, copyInviteLink, copyInviteCodeOnly, shareInviteCode, pasteInviteCode, toggleMobileSidebar, toggleSound, toggleTheme, resetCamera, toggleLobbyToolbar, toggleGameMenu,
-  switchLobbyTab, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, addBot, removeBot, startGame, rematchLobby, backToWorldSetup,
+  switchLobbyTab, setPainterTab, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, addBot, removeBot, startGame, rematchLobby, backToWorldSetup,
   switchVictoryTab, toggleVictoryMapInspect, setBrush, pushSettings,
   executeBankTrade, proposePlayerTrade, rollDice, confirmInlineAction, closeInlineDrawer,
   toggleTradeDrawer, buyDevCard, setBuildMode, mainTurnButton, sendChat,
@@ -367,7 +368,7 @@ function init(): void {
 
     setCamZoom(newZoom);
     setCamPan(newPanX, newPanY);
-    rerenderBoard();
+    zoomBoardPreview(rect);
   }, { passive: false });
 
   let lastLobbyPaintedHexId: number | null = null;
@@ -382,9 +383,17 @@ function init(): void {
       state.hostId === socket.id &&
       (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
     );
+    const isLobbyPortBrush = Boolean(
+      state &&
+      state.status === 'LOBBY' &&
+      state.hostId === socket.id &&
+      activeBrush.type === 'port'
+    );
     const paintedHexId = isLobbyHexBrush && e.button === 0 && !e.altKey ? hexAtClientPoint(e.clientX, e.clientY) : null;
+    const paintedPortEdgeId = isLobbyPortBrush && e.button === 0 && !e.altKey ? portEdgeAtClientPoint(e.clientX, e.clientY) : null;
     const isLobbyPaintTarget = Boolean(
       paintedHexId !== null ||
+      paintedPortEdgeId !== null ||
       (state &&
         state.status === 'LOBBY' &&
         state.hostId === socket.id &&
@@ -409,6 +418,8 @@ function init(): void {
       lastLobbyPaintedHexId = paintedHexId;
       if (paintedHexId !== null) {
         onHexInteract(paintedHexId, e);
+      } else if (paintedPortEdgeId !== null) {
+        onEdgeInteract(paintedPortEdgeId);
       }
     }
   });
@@ -490,9 +501,16 @@ function init(): void {
         state.hostId === socket.id &&
         (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
       );
+      const isLobbyPortBrush = Boolean(
+        state.status === 'LOBBY' &&
+        state.hostId === socket.id &&
+        activeBrush.type === 'port'
+      );
       const paintedHexId = isLobbyHexBrush ? hexAtClientPoint(t.clientX, t.clientY) : null;
+      const paintedPortEdgeId = isLobbyPortBrush ? portEdgeAtClientPoint(t.clientX, t.clientY) : null;
       const isLobbyPaintTarget = Boolean(
         paintedHexId !== null ||
+        paintedPortEdgeId !== null ||
         (state.status === 'LOBBY' &&
           state.hostId === socket.id &&
           activeBrush.type &&
@@ -514,6 +532,8 @@ function init(): void {
         lastLobbyPaintedHexId = paintedHexId;
         if (paintedHexId !== null) {
           onHexInteract(paintedHexId);
+        } else if (paintedPortEdgeId !== null) {
+          onEdgeInteract(paintedPortEdgeId);
         }
       }
     }
@@ -555,7 +575,7 @@ function init(): void {
 
       setCamZoom(newZoom);
       setCamPan(newPanX, newPanY);
-      rerenderBoard();
+      panBoardPreview(rect);
       return;
     }
 
@@ -596,7 +616,7 @@ function init(): void {
 
   const endTouchGesture = (e: TouchEvent) => {
     if (e.touches.length === 0) {
-      if (isPanning) endBoardPan();
+      if (isPanning || touchPinchDist > 0) endBoardPan();
       setIsPanning(false);
       isTouchPainting = false;
       touchPinchDist = 0;
@@ -604,6 +624,7 @@ function init(): void {
       panSvgRect = null;
       document.getElementById('boardPanShield')?.classList.remove('on');
     } else if (e.touches.length === 1) {
+      if (touchPinchDist > 0) endBoardPan();
       touchPinchDist = 0;
       const t = e.touches[0];
       panStart.x = t.clientX;
@@ -627,13 +648,17 @@ function init(): void {
     // Design UI Philosophy (Interaction 1): "Small targets, big hit areas. Vertices, road edges and ports stay visually small,
     // but their tap area is at least 44px (invisible hit slop). Where areas overlap, the nearest target wins."
     if (target && (target.id === 'boardSvg' || target.closest('#boardSvg')) && !(e as any).__nearestResolved) {
-      const candidates = document.querySelectorAll<SVGGraphicsElement>(
-        '#boardVerticesLayer g[onclick]:not([onclick=""]), #roadSpotsLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""]), #boardPortsLayer g[onclick]:not([onclick=""])'
+      // Only a tiny handful of placed SVG elements remain clickable (#boardVerticesLayer buildings, #boardPieceSpotsLayer, #boardPiratesLayer, placed bridges).
+      const clickedOnclickEl = target.closest<SVGGraphicsElement>('[onclick]:not([onclick=""])');
+      if (clickedOnclickEl) return;
+
+      const svgCandidates = document.querySelectorAll<SVGGraphicsElement>(
+        '#boardVerticesLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""]), #boardPiratesLayer g[onclick]:not([onclick=""])'
       );
       let nearestEl: SVGGraphicsElement | null = null;
       let nearestDist = 22; // 22px radius = 44px diameter minimum hit slop
-      for (let i = 0; i < candidates.length; i++) {
-        const el = candidates[i];
+      for (let i = 0; i < svgCandidates.length; i++) {
+        const el = svgCandidates[i];
         const r = el.getBoundingClientRect();
         if (r.width === 0 && r.height === 0) continue;
         const cx = r.left + r.width / 2;
@@ -644,13 +669,19 @@ function init(): void {
           nearestEl = el;
         }
       }
-      const clickedOnclickEl = target.closest<SVGGraphicsElement>('g[onclick]:not([onclick=""])');
-      if (nearestEl && nearestEl !== clickedOnclickEl) {
+      if (nearestEl) {
         e.stopPropagation();
         e.preventDefault();
         const synth = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY });
         (synth as any).__nearestResolved = true;
         nearestEl.dispatchEvent(synth);
+        return;
+      }
+
+      // Check all 2D-canvas interactive spots (settlement spots, road/bridge spots, ports, feed spots, robber/net hexes) via fast math hit-testing
+      if (handleBoardCanvasClick(e.clientX, e.clientY, e)) {
+        e.stopPropagation();
+        e.preventDefault();
       }
     }
   }, true);

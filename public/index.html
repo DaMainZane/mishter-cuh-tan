@@ -307,23 +307,25 @@
         <div class="host-waiting-card">Host is creating world</div>
       </div>
 
-      <!-- Lobby dock: map painter -->
-      <div id="lobbyToolbar">
+      <!-- Lobby dock: compact segmented map painter -->
+      <div id="lobbyToolbar" data-painter-tab="tiles">
         <div class="dock-head">
-          <div class="tabs">
-            <button class="tab active" id="tabBtnMap" onclick="switchLobbyTab('map')">Map painter</button>
+          <div class="tabs painter-tabs" role="tablist" aria-label="Map painter brushes">
+            <button type="button" class="tab active" id="painterTab-tiles" role="tab" aria-selected="true" onclick="setPainterTab('tiles')">Tiles</button>
+            <button type="button" class="tab" id="painterTab-numbers" role="tab" aria-selected="false" onclick="setPainterTab('numbers')">Nums</button>
+            <button type="button" class="tab" id="painterTab-ports" role="tab" aria-selected="false" onclick="setPainterTab('ports')">Ports</button>
           </div>
           <div class="dock-actions">
-            <button id="btnDockSpectate" class="btn sm" onclick="toggleSpectate()" title="Switch between playing in a seat and spectating"><span data-icon="eye" data-size="16"></span><span>Spectate</span></button>
-            <button class="btn sm" onclick="setSetupOpen(true)" title="Back to bots, presets, map and rules"><span data-icon="sliders" data-size="16"></span>World setup</button>
-            <button class="btn sm primary" onclick="startGame()"><span data-icon="play" data-size="16"></span>Start</button>
+            <button type="button" id="btnDockSpectate" class="btn sm dock-icon-btn" onclick="toggleSpectate()" title="Switch between playing in a seat and spectating"><span data-icon="eye" data-size="15"></span><span class="dock-act-lbl">Spectate</span></button>
+            <button type="button" class="btn sm dock-icon-btn" onclick="setSetupOpen(true)" title="World setup (Players, World, Rules)"><span data-icon="sliders" data-size="15"></span><span class="dock-act-lbl">Setup</span></button>
+            <button type="button" class="btn sm primary dock-start-btn" onclick="startGame()" title="Start game"><span data-icon="play" data-size="14"></span><span>Start</span></button>
+            <button type="button" class="btn sm dock-close-btn" onclick="toggleLobbyToolbar()" title="Hide map painter" aria-label="Hide map painter"><span data-icon="close" data-size="15"></span></button>
           </div>
         </div>
 
-        <!-- Map painter -->
+        <!-- Map painter: single active brush row -->
         <div id="lobbyTabMap" class="dock-body">
-          <div class="tool-row">
-            <span class="tool-label">Tiles</span>
+          <div class="tool-row painter-group" data-group="tiles" role="tabpanel" aria-labelledby="painterTab-tiles">
             <button class="brush-btn swatch t-wood" title="Wood" onclick="setBrush('terrain','wood',this)"><span data-glyph="wood"></span></button>
             <button class="brush-btn swatch t-brick" title="Brick" onclick="setBrush('terrain','brick',this)"><span data-glyph="brick"></span></button>
             <button class="brush-btn swatch t-sheep" title="Sheep" onclick="setBrush('terrain','sheep',this)"><span data-glyph="sheep"></span></button>
@@ -332,12 +334,10 @@
             <button class="brush-btn swatch t-gold" title="Gold" onclick="setBrush('terrain','gold',this)"><span data-glyph="gold"></span></button>
             <button class="brush-btn swatch t-desert" title="Desert" onclick="setBrush('terrain','desert',this)"><span data-glyph="desert"></span></button>
             <button class="brush-btn swatch t-fog" title="Fog" onclick="setBrush('terrain','fog',this)"><span data-glyph="fog"></span></button>
-            <button class="brush-btn swatch t-water" title="Ocean (erase)" onclick="setBrush('terrain','water',this)"><span data-icon="waves" data-size="22"></span></button>
-            <span class="tool-sep"></span>
+            <button class="brush-btn swatch t-water" title="Ocean (erase)" onclick="setBrush('terrain','water',this)"><span data-icon="waves" data-size="20"></span></button>
             <button class="brush-btn swatch t-any" title="Place robber" onclick="setBrush('robber','robber',this)"><span data-robber></span></button>
           </div>
-          <div class="tool-row">
-            <span class="tool-label">Numbers</span>
+          <div class="tool-row painter-group" data-group="numbers" role="tabpanel" aria-labelledby="painterTab-numbers">
             <button class="brush-btn" onclick="setBrush('number','2',this)">2</button>
             <button class="brush-btn" onclick="setBrush('number','3',this)">3</button>
             <button class="brush-btn" onclick="setBrush('number','4',this)">4</button>
@@ -348,17 +348,16 @@
             <button class="brush-btn" onclick="setBrush('number','10',this)">10</button>
             <button class="brush-btn" onclick="setBrush('number','11',this)">11</button>
             <button class="brush-btn" onclick="setBrush('number','12',this)">12</button>
-            <button class="brush-btn swatch t-any" title="Clear number" onclick="setBrush('number','none',this)"><span data-icon="close" data-size="18"></span></button>
+            <button class="brush-btn swatch t-any" title="Clear number" onclick="setBrush('number','none',this)"><span data-icon="close" data-size="16"></span></button>
           </div>
-          <div class="tool-row">
-            <span class="tool-label">Ports</span>
+          <div class="tool-row painter-group" data-group="ports" role="tabpanel" aria-labelledby="painterTab-ports">
             <button class="brush-btn swatch has-ratio t-any" title="3:1 any resource" onclick="setBrush('port','3:1',this)"><span class="ratio">3:1</span></button>
             <button class="brush-btn swatch has-ratio t-wood" title="Wood 2:1" onclick="setBrush('port','wood',this)"><span data-glyph="wood"></span><span class="ratio">2:1</span></button>
             <button class="brush-btn swatch has-ratio t-brick" title="Brick 2:1" onclick="setBrush('port','brick',this)"><span data-glyph="brick"></span><span class="ratio">2:1</span></button>
             <button class="brush-btn swatch has-ratio t-sheep" title="Sheep 2:1" onclick="setBrush('port','sheep',this)"><span data-glyph="sheep"></span><span class="ratio">2:1</span></button>
             <button class="brush-btn swatch has-ratio t-wheat" title="Wheat 2:1" onclick="setBrush('port','wheat',this)"><span data-glyph="wheat"></span><span class="ratio">2:1</span></button>
             <button class="brush-btn swatch has-ratio t-ore" title="Ore 2:1" onclick="setBrush('port','ore',this)"><span data-glyph="ore"></span><span class="ratio">2:1</span></button>
-            <button class="brush-btn swatch t-any" title="Remove port" onclick="setBrush('port','none',this)"><span data-icon="close" data-size="18"></span></button>
+            <button class="brush-btn swatch t-any" title="Remove port" onclick="setBrush('port','none',this)"><span data-icon="close" data-size="16"></span></button>
           </div>
         </div>
 

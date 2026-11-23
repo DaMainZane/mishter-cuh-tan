@@ -194,6 +194,10 @@ export function clearHexOverlays(): void {
   clientHexOverlays.clear();
 }
 
+export function getClientHexOverlay(hexId: number): HexOverlayEntry | undefined {
+  return clientHexOverlays.get(hexId);
+}
+
 /** Renders the hex tint & pattern SVG markup for `#boardOverlayLayer`. */
 export function renderHexOverlaysMarkup(
   hexes: any[],
