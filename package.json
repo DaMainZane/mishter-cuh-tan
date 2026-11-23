@@ -1,6 +1,6 @@
 {
   "name": "hexsettlers-online",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Customizable Online Multiplayer Catan Board Game with Gold Tiles",
   "main": "dist/main.js",
   "engines": {

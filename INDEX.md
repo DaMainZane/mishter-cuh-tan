@@ -220,7 +220,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `render/setup.ts` | world setup page (host only, between the name page and the board): Players / World / Rules tabs, tile preview, roster, scenario cards, compact DLC rows, rule fold values |
 | `render/sidebar.ts` | right sidebar (merged live log & turn history with RS card icons and click-to-filter, chat leaf, bank, player rows) |
 | `render/techpanel.ts` | tech panel (hub-and-spoke tree: a hub, one ring of techs per tier, one spoke per branch, all generated from the server's `techTree` rows; costs as mini resource cards; hover for the description; plus the Harbor charters (raise a whole port to 2:1) and Ground work controls) and the Tech button in the action bar |
-| `render/terrainCanvas.ts` | 2D canvas terrain renderer (viewport-culled hexes, coastlines, resource glyphs, number tokens, and math hex hit-testing) |
+| `render/terrainCanvas.ts` | 2D canvas board renderer (full-board static atlas + crisp vector zoom for terrain, coastlines, ports, fish, overlays, and frustum-culled build spots) |
 | `render/trade.ts` | active trade offer stack (top right), per-offer timers, trade responses and counter-offer editor |
 | `render/turnclock.ts` | turn clock readout and countdown bar in the turn pill, plus the top-right ocean game timer & round number HUD |
 | `socket.ts` | the single socket.io connection shared by all client modules |

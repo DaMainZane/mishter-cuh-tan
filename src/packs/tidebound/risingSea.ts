@@ -250,6 +250,27 @@ const RISING_SEA_PIP_COUNT: Record<number, number> = {
   2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1
 };
 
+const risingSeaSetsByCtx = new WeakMap<Ctx, { frontier: Set<number>; lowest: Set<number> }>();
+
+function getRisingSeaSetsForCtx(ctx: Ctx): { frontier: Set<number>; lowest: Set<number> } {
+  let cached = risingSeaSetsByCtx.get(ctx);
+  if (cached) return cached;
+  const frontierIds = risingSeaFrontierHexIds(ctx.g, ctx.reg);
+  const frontier = new Set(frontierIds);
+  let minElev = Infinity;
+  for (const id of frontierIds) {
+    const e = hexElevation(ctx.g.board.hexes[id]);
+    if (e < minElev) minElev = e;
+  }
+  const lowest = new Set<number>();
+  for (const id of frontierIds) {
+    if (hexElevation(ctx.g.board.hexes[id]) === minElev) lowest.add(id);
+  }
+  cached = { frontier, lowest };
+  risingSeaSetsByCtx.set(ctx, cached);
+  return cached;
+}
+
 /**
  * Bot goal (T13a): adjusts `scoreVertex` (`vertexDelta`) for permanent rising-sea drowning exposure.
  * Already-drowned tiles lose their base production score, lowest-elevation frontier tiles are discounted by the
@@ -264,8 +285,7 @@ export const risingSeaBotGoal: BotGoalDef = {
     const v = g.board.vertices[vertexId];
     if (!v) return 0;
 
-    const frontier = new Set(risingSeaFrontierHexIds(g, reg));
-    const lowest = new Set(lowestElevationFrontierHexIds(g, reg));
+    const { frontier, lowest } = getRisingSeaSetsForCtx(ctx);
     const level = risingSeaLevelOf(g);
     const rateWeight = 0.35 + level * 0.1;
 

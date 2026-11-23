@@ -525,6 +525,45 @@ const TIDE_PIP_COUNT: Record<number, number> = {
   2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 8: 5, 9: 4, 10: 3, 11: 2, 12: 1
 };
 
+interface TideZoneLookup {
+  coast: Set<number>;
+  inner: Set<number>;
+}
+
+const tideZoneByCtx = new WeakMap<Ctx, TideZoneLookup>();
+
+function getTideZoneForCtx(ctx: Ctx): TideZoneLookup {
+  let cached = tideZoneByCtx.get(ctx);
+  if (cached) return cached;
+  const { g, reg } = ctx;
+  const clusters: TideCluster[] = (g.ext?.tidebound?.tides as TideState | undefined)?.clusters ?? buildTideClusters(g, reg);
+  const coast = new Set<number>();
+  const inner = new Set<number>();
+  for (const c of clusters) {
+    for (const id of c.hexIds) coast.add(id);
+    for (const id of c.inner ?? []) inner.add(id);
+  }
+  cached = { coast, inner };
+  tideZoneByCtx.set(ctx, cached);
+  return cached;
+}
+
+function tideFloodShareFromLookup(g: GameState, reg: Registry, hexId: number, inCoast: boolean, inInner: boolean): number {
+  if (!inCoast && !inInner) return 0;
+  const hex = g.board.hexes[hexId];
+  if (!hex || hex.ext?.hidden || !reg.tiles.get(hex.type)?.land) return 0;
+  const level = tideLevelOf(g);
+  const def = tideLevelDef(level);
+  const elev = hexElevation(hex);
+  const normalReaches = inCoast || (inInner && def.reach >= 2);
+  const normalFloods = normalReaches && def.strength >= elev;
+  const springFloods = (inCoast || inInner) && def.springStrength >= elev;
+
+  const normalShare = normalFloods ? def.duration / def.period : 0;
+  const springShare = springFloods ? (1 - normalShare) * (1 / def.springEvery) : 0;
+  return Math.min(1, normalShare + springShare);
+}
+
 /**
  * Expected fraction of rounds (0..1) in which `hexId` is flooded by Tides at the game's current `tideLevel`,
  * accounting for coast vs inner ring and `hexElevation` resistance. Pure: never mutates `g.ext`.
@@ -546,18 +585,7 @@ export function tideFloodShareForHex(g: GameState, reg: Registry, hexId: number)
       break;
     }
   }
-  if (!inCoast && !inInner) return 0;
-
-  const level = tideLevelOf(g);
-  const def = tideLevelDef(level);
-  const elev = hexElevation(hex);
-  const normalReaches = inCoast || (inInner && def.reach >= 2);
-  const normalFloods = normalReaches && def.strength >= elev;
-  const springFloods = (inCoast || inInner) && def.springStrength >= elev;
-
-  const normalShare = normalFloods ? def.duration / def.period : 0;
-  const springShare = springFloods ? (1 - normalShare) * (1 / def.springEvery) : 0;
-  return Math.min(1, normalShare + springShare);
+  return tideFloodShareFromLookup(g, reg, hexId, inCoast, inInner);
 }
 
 /**
@@ -575,12 +603,7 @@ export const tidesBotGoal: BotGoalDef = {
     const v = g.board.vertices[vertexId];
     if (!v) return 0;
 
-    const clusters: TideCluster[] = (g.ext?.tidebound?.tides as TideState | undefined)?.clusters ?? buildTideClusters(g, reg);
-    const tideZone = new Set<number>();
-    for (const c of clusters) {
-      for (const id of c.hexIds) tideZone.add(id);
-      for (const id of c.inner ?? []) tideZone.add(id);
-    }
+    const { coast, inner } = getTideZoneForCtx(ctx);
 
     let delta = 0;
     let landCount = 0;
@@ -591,7 +614,9 @@ export const tidesBotGoal: BotGoalDef = {
       if (!hex || hex.ext?.hidden || !reg.tiles.get(hex.type)?.land) continue;
       landCount++;
       const pips = TIDE_PIP_COUNT[hex.number || 0] || 0;
-      const share = tideFloodShareForHex(g, reg, hId);
+      const inCoast = coast.has(hId);
+      const inInner = !inCoast && inner.has(hId);
+      const share = tideFloodShareFromLookup(g, reg, hId, inCoast, inInner);
       minPortFloodShare = Math.min(minPortFloodShare, share);
 
       if (pips > 0 && share > 0) {
@@ -601,7 +626,7 @@ export const tidesBotGoal: BotGoalDef = {
         delta -= pips * 0.2;
       }
       const elev = hexElevation(hex);
-      if (tideZone.has(hId) && elev >= 2 && share < 0.35) {
+      if ((inCoast || inInner) && elev >= 2 && share < 0.35) {
         delta += 0.4 * (elev - 1);
       }
     }

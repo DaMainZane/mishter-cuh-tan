@@ -11,9 +11,10 @@ import {
 } from './store';
 import { renderAll } from './render/index';
 import {
-  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations, panBoardPreview, endBoardPan,
+  rerenderBoard, resetCamera, getBoardBounds, triggerFlyingResourceAnimations, triggerCardTransferAnimations,
+  panBoardPreview, zoomBoardPreview, endBoardPan,
   triggerAwardAnimation, onHexInteract, onHexClick, onHexEnter, onEdgeInteract, clickVertex, clickNetSpot, clickFeedSpot, clickHarborSpot, clickEdge,
-  onRoadHover, onRoadMove, onRoadLeave, hexAtClientPoint
+  onRoadHover, onRoadMove, onRoadLeave, hexAtClientPoint, portEdgeAtClientPoint, handleBoardCanvasClick
 } from './render/board';
 import { respondToTrade, confirmTradeWith, cancelTrade, startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed } from './render/trade';
 import { initCursors } from './cursors';
@@ -367,7 +368,7 @@ function init(): void {
 
     setCamZoom(newZoom);
     setCamPan(newPanX, newPanY);
-    rerenderBoard();
+    zoomBoardPreview(rect);
   }, { passive: false });
 
   let lastLobbyPaintedHexId: number | null = null;
@@ -382,9 +383,17 @@ function init(): void {
       state.hostId === socket.id &&
       (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
     );
+    const isLobbyPortBrush = Boolean(
+      state &&
+      state.status === 'LOBBY' &&
+      state.hostId === socket.id &&
+      activeBrush.type === 'port'
+    );
     const paintedHexId = isLobbyHexBrush && e.button === 0 && !e.altKey ? hexAtClientPoint(e.clientX, e.clientY) : null;
+    const paintedPortEdgeId = isLobbyPortBrush && e.button === 0 && !e.altKey ? portEdgeAtClientPoint(e.clientX, e.clientY) : null;
     const isLobbyPaintTarget = Boolean(
       paintedHexId !== null ||
+      paintedPortEdgeId !== null ||
       (state &&
         state.status === 'LOBBY' &&
         state.hostId === socket.id &&
@@ -409,6 +418,8 @@ function init(): void {
       lastLobbyPaintedHexId = paintedHexId;
       if (paintedHexId !== null) {
         onHexInteract(paintedHexId, e);
+      } else if (paintedPortEdgeId !== null) {
+        onEdgeInteract(paintedPortEdgeId);
       }
     }
   });
@@ -457,6 +468,43 @@ function init(): void {
     if (hasDraggedMap) {
       setHasDraggedMap(false);
       if (!target?.closest('#myHandPanel, #activeTradeModal, #inlineDrawerWrap, #gameSettingsMenu')) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (target && (target.id === 'boardSvg' || target.closest('#boardSvg')) && !(e as any).__nearestResolved) {
+      const clickedOnclickEl = target.closest<SVGGraphicsElement>('[onclick]:not([onclick=""])');
+      if (clickedOnclickEl) return;
+
+      const svgCandidates = document.querySelectorAll<SVGGraphicsElement>(
+        '#boardVerticesLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""]), #boardPiratesLayer g[onclick]:not([onclick=""])'
+      );
+      let nearestEl: SVGGraphicsElement | null = null;
+      let nearestDist = 22;
+      for (let i = 0; i < svgCandidates.length; i++) {
+        const el = svgCandidates[i];
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+        if (dist <= nearestDist) {
+          nearestDist = dist;
+          nearestEl = el;
+        }
+      }
+      if (nearestEl) {
+        e.stopPropagation();
+        e.preventDefault();
+        const synth = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY });
+        (synth as any).__nearestResolved = true;
+        nearestEl.dispatchEvent(synth);
+        return;
+      }
+
+      if (handleBoardCanvasClick(e.clientX, e.clientY, e)) {
         e.stopPropagation();
         e.preventDefault();
       }

@@ -1,4 +1,4 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/icons, client/pieceModel, client/pieceui, +11 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/icons, client/pieceModel, client/pieceui, +12 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
@@ -24,12 +24,13 @@ import {
   addInFlightResource, releaseInFlightResource, addInFlightDev, releaseInFlightDev
 } from '../store';
 import { renderHand } from './hand';
-import { fishTileOutlineMarkup, overlayPatternDefsMarkup, renderElevationMarkup, renderHexOverlaysMarkup } from './overlay';
+import { getClientHexOverlay, overlayPatternDefsMarkup, syncOverlayManifest } from './overlay';
 import { renderSidebar, visibleRect } from './sidebar';
 import { esc } from '../util';
-import { openBridgePicker } from './bridgepicker';
-import { syncBuildMenu } from './buildmenu';
+import { clickPlacedBridge, openBridgePicker } from './bridgepicker';
+import { openBuildMenu, syncBuildMenu } from './buildmenu';
 import { renderPiratesMarkup } from './pirates';
+import { upgradePortClick } from './techpanel';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
 import { edgeOptions, hexCandidates, hexOptions, vertexOptions } from '../buildMenu';
@@ -40,6 +41,15 @@ import {
   drawBoardTerrainCanvas,
   findHexAtWorldPoint,
   screenToWorld,
+  type CanvasEdgeSpot,
+  type CanvasFeedSpot,
+  type CanvasFishLike,
+  type CanvasHexOverlayLike,
+  type CanvasHexSpot,
+  type CanvasInteractiveSpots,
+  type CanvasPortLike,
+  type CanvasPortSpot,
+  type CanvasVertexSpot,
   type TerrainHexLike
 } from './terrainCanvas';
 
@@ -78,19 +88,30 @@ let cameraRafPending = false;
 // difference instead of a new viewBox, so the browser moves one painted layer instead of repainting every SVG node each frame.
 let committedPanX = 0;
 let committedPanY = 0;
+let committedZoom = 1;
 let panFramePending = false;
+let zoomCommitTimer: ReturnType<typeof setTimeout> | null = null;
 
+let staticCanvasVersion = 0;
 let cachedCanvasHexes: TerrainHexLike[] = [];
 let cachedLandPathD = '';
 let cachedWaterPathD = '';
 let cachedCanPaintHex = false;
 let cachedAnimatingFogIds = new Set<number>();
+let cachedCanvasPorts: CanvasPortLike[] = [];
+let cachedCanvasFish: CanvasFishLike[] = [];
+let cachedCanvasOverlays: CanvasHexOverlayLike[] = [];
+let cachedInteractiveSpots: CanvasInteractiveSpots = {};
+let lastOverlayKey = '';
+let lastFishKey = '';
+let coastalEdgeIndices: number[] = [];
+let cachedCoastalBoardKey = '';
 
 // Layer dirty-keys so gameplay updates (rolls, trades, builds, selections) do not rebuild static hex terrain or ports.
 let lastTerrainKey = '';
 let lastPortsKey = '';
 let lastPlacedRoadsKey = '';
-// The overlay layer is only rewritten when its markup changes, so the flood warning's fading flash is not restarted by every state update.
+// The overlay layer is only rewritten when its markup changes.
 let lastOverlayHtml = '';
 // Same for the fish icons on the sea (T7c): rewritten only when their markup changes.
 let lastFishHtml = '';
@@ -130,7 +151,8 @@ export function getBoardBounds(): { centerX0: number; centerY0: number; contentW
   }
   const firstHex = state.board.hexes[0];
   const lastHex = state.board.hexes[state.board.hexes.length - 1];
-  const key = `${state.code}_${state.status}_${state.board.hexes.length}_${firstHex?.x ?? 0}_${lastHex?.x ?? 0}`;
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth <= 900;
+  const key = `${state.code}_${state.status}_${isMobileView ? 'm' : 'd'}_${state.board.hexes.length}_${firstHex?.x ?? 0}_${lastHex?.x ?? 0}`;
   if (key === cachedBoundsKey) return cachedBounds;
 
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -143,9 +165,9 @@ export function getBoardBounds(): { centerX0: number; centerY0: number; contentW
     });
   });
 
-  const topExtra = state.status === 'LOBBY' ? 210 : 115;
-  const bottomExtra = 165;
-  const sidePad = 130;
+  const topExtra = isMobileView ? 250 : (state.status === 'LOBBY' ? 210 : 115);
+  const bottomExtra = isMobileView ? 235 : 165;
+  const sidePad = isMobileView ? 215 : 130;
 
   const contentX = minX - sidePad;
   const contentY = minY - topExtra;
@@ -166,31 +188,23 @@ export function updateCameraViewBox(): void {
   if (!state || !state.board) return;
   const svg = document.getElementById('boardSvg');
   if (!svg) return;
+  if (zoomCommitTimer !== null) {
+    clearTimeout(zoomCommitTimer);
+    zoomCommitTimer = null;
+  }
   const { centerX0, centerY0, contentW, contentH } = getBoardBounds();
   const baseW = contentW * camZoom;
   const baseH = contentH * camZoom;
   const baseX = (centerX0 - camPanX) - baseW / 2;
   const baseY = (centerY0 - camPanY) - baseH / 2;
   svg.setAttribute('viewBox', `${baseX.toFixed(1)} ${baseY.toFixed(1)} ${baseW.toFixed(1)} ${baseH.toFixed(1)}`);
+  if (svg.style.transform) svg.style.transform = '';
+  if (svg.style.transformOrigin) svg.style.transformOrigin = '';
   committedPanX = camPanX;
   committedPanY = camPanY;
+  committedZoom = camZoom;
   const panLayer = document.getElementById('boardPan');
   if (panLayer?.style.transform) panLayer.style.transform = '';
-
-  if (cachedCanvasHexes.length > 0) {
-    drawBoardTerrainCanvas({
-      hexes: cachedCanvasHexes,
-      landPath: cachedLandPathD,
-      waterPath: cachedWaterPathD,
-      isLobby: state.status === 'LOBBY',
-      canPaintHex: cachedCanPaintHex,
-      bounds: { centerX0, centerY0, contentW, contentH },
-      camZoom,
-      camPanX,
-      camPanY,
-      animatingFogHexIds: cachedAnimatingFogIds
-    });
-  }
 
   // Scale settlements, cities, robber, shipwrecks, pirates, and roads up as the camera zooms out (or on larger boards).
   // Scoped to the vertex/spot, dynamic/wreck/pirate, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
@@ -214,6 +228,28 @@ export function updateCameraViewBox(): void {
     for (const id of ['roadHighlightLayer', 'roadRimsLayer', 'roadBodiesLayer', 'roadHitsLayer', 'roadSpotsLayer']) {
       document.getElementById(id)?.style.setProperty('--road-scale', rs);
     }
+  }
+
+  cachedInteractiveSpots.roadScale = roadScale;
+
+  if (cachedCanvasHexes.length > 0) {
+    drawBoardTerrainCanvas({
+      hexes: cachedCanvasHexes,
+      landPath: cachedLandPathD,
+      waterPath: cachedWaterPathD,
+      isLobby: state.status === 'LOBBY',
+      canPaintHex: cachedCanPaintHex,
+      bounds: { centerX0, centerY0, contentW, contentH },
+      camZoom,
+      camPanX,
+      camPanY,
+      animatingFogHexIds: cachedAnimatingFogIds,
+      staticVersion: staticCanvasVersion,
+      ports: cachedCanvasPorts,
+      fishGrounds: cachedCanvasFish,
+      hexOverlays: cachedCanvasOverlays,
+      interactiveSpots: cachedInteractiveSpots
+    });
   }
 }
 
@@ -384,90 +420,20 @@ function tokenMarkup(n: number): string {
     </g>`;
 }
 
-// Trading port dock strictly aligned to the coastal hex edge (tangent T along v1->v2, outward normal N).
-function portMarkup(e: any, v1: any, v2: any, h: any, owned: boolean, isLobbyHost: boolean, node: PortNode | null): string {
+/** Computes the port badge center `(sx, sy)` outward along the coastal hex edge normal. */
+function portBadgeCenter(v1: any, v2: any, h: any): { sx: number; sy: number } {
   const mx = (v1.x + v2.x) / 2;
   const my = (v1.y + v2.y) / 2;
   const dx = mx - h.x;
   const dy = my - h.y;
   const nLen = Math.hypot(dx, dy) || 1;
-  const nx = dx / nLen;
-  const ny = dy / nLen;
-
-  const ex = v2.x - v1.x;
-  const ey = v2.y - v1.y;
-  const eLen = Math.hypot(ex, ey) || 1;
-  const tx = ex / eLen;
-  const ty = ey / eLen;
-
-  // Two sturdy planked piers that run the full length of the coastal hex side (anchored near its two corners)
-  // and reach straight out along the outward normal. Narrower at the tip, like a landing.
-  const D0 = -4.5;                       // the drawn tile edge sits just inside the geometric edge
-  const D1 = 35;                         // pier tip
-  const hw0 = Math.max(14, eLen / 2 - 7);
-  const hw1 = hw0 * 0.55;
-  const b1x = mx - tx * hw0 + nx * D0;
-  const b1y = my - ty * hw0 + ny * D0;
-  const b2x = mx + tx * hw0 + nx * D0;
-  const b2y = my + ty * hw0 + ny * D0;
-
-  const t1x = mx - tx * hw1 + nx * D1;
-  const t1y = my - ty * hw1 + ny * D1;
-  const t2x = mx + tx * hw1 + nx * D1;
-  const t2y = my + ty * hw1 + ny * D1;
-
-  // Cross-planks parallel to the hex edge
-  const planks = [7, 16, 25].map(d => {
-    const f = (d - D0) / (D1 - D0);
-    const halfW = hw0 * (1 - f) + hw1 * f;
-    const px = mx + nx * d;
-    const py = my + ny * d;
-    return `<line class="port-plank" x1="${(px - tx * halfW).toFixed(1)}" y1="${(py - ty * halfW).toFixed(1)}" x2="${(px + tx * halfW).toFixed(1)}" y2="${(py + ty * halfW).toFixed(1)}" />`;
-  }).join('');
-
-  const sx = mx + nx * 42;
-  const sy = my + ny * 42;
-
-  const pLvl = Math.max(state.portLevels?.[e.v1] || 0, state.portLevels?.[e.v2] || 0);
-  const any = e.port === '3:1';
-  const kind: string = any ? 'any' : e.port;
-  // A harbor (level 2) replaces the port sprite: a dark badge with an anchor and a 1:1 pill (BUG: the harbor looked the same as the port).
-  const isHarborPort = pLvl >= 2;
-  const badgeFill = isHarborPort ? 'var(--pier-dark)' : any ? 'var(--token)' : (RES_META[kind]?.color || 'var(--token)');
-  const badgeBorder = isHarborPort ? 'var(--accent)' : any ? 'var(--pier-dark)' : (RES_META[kind]?.border || 'var(--pier-dark)');
-  const ratioText = pLvl >= 2 ? '1:1' : pLvl === 1 || !any ? '2:1' : '3:1';
-  const label = isHarborPort
-    ? `<g class="port-harbor-icon" transform="translate(${(sx - 10).toFixed(1)}, ${(sy - 17).toFixed(1)})">${uiIcon('harbor', 20)}</g>
-       <rect class="port-ratio-pill" x="${(sx - 13).toFixed(1)}" y="${(sy + 5).toFixed(1)}" width="26" height="12" rx="6" />
-       <text class="port-text" x="${sx.toFixed(1)}" y="${(sy + 14).toFixed(1)}" font-size="8.8">${ratioText}</text>`
-    : any
-    ? `<text class="port-text" x="${sx.toFixed(1)}" y="${(sy + 4.5).toFixed(1)}" font-size="13">${ratioText}</text>`
-    : `${getBoardIconSvg(kind, Number(sx.toFixed(1)), Number((sy - 4.5).toFixed(1)), 0.56)}
-       <rect class="port-ratio-pill" x="${(sx - 13).toFixed(1)}" y="${(sy + 5).toFixed(1)}" width="26" height="12" rx="6" />
-       <text class="port-text" x="${sx.toFixed(1)}" y="${(sy + 14).toFixed(1)}" font-size="8.8">${ratioText}</text>`;
-
-  const canPaintPort = isLobbyHost && activeBrush.type === 'port';
-  return `
-    <g data-paintable="${canPaintPort ? '1' : ''}" onclick="${canPaintPort ? `onEdgeInteract(${e.id})` : ''}" style="${canPaintPort ? 'cursor:pointer' : ''}">
-      <polygon class="port-dock-apron" points="${b1x.toFixed(1)},${b1y.toFixed(1)} ${b2x.toFixed(1)},${b2y.toFixed(1)} ${t2x.toFixed(1)},${t2y.toFixed(1)} ${t1x.toFixed(1)},${t1y.toFixed(1)}" />
-      ${planks}
-      <line class="port-pier-rim" x1="${b1x.toFixed(1)}" y1="${b1y.toFixed(1)}" x2="${t1x.toFixed(1)}" y2="${t1y.toFixed(1)}" style="stroke-width:11;stroke-linecap:round" />
-      <line class="port-pier-rim" x1="${b2x.toFixed(1)}" y1="${b2y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" style="stroke-width:11;stroke-linecap:round" />
-      <line class="port-pier" x1="${b1x.toFixed(1)}" y1="${b1y.toFixed(1)}" x2="${t1x.toFixed(1)}" y2="${t1y.toFixed(1)}" style="stroke-width:6.5;stroke-linecap:round" />
-      <line class="port-pier" x1="${b2x.toFixed(1)}" y1="${b2y.toFixed(1)}" x2="${t2x.toFixed(1)}" y2="${t2y.toFixed(1)}" style="stroke-width:6.5;stroke-linecap:round" />
-      <circle class="port-post" cx="${b1x.toFixed(1)}" cy="${b1y.toFixed(1)}" r="5.2" />
-      <circle class="port-post" cx="${b2x.toFixed(1)}" cy="${b2y.toFixed(1)}" r="5.2" />
-      ${owned ? `<circle class="port-ring" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="24" />` : ''}
-      <circle class="port-badge-outer${isHarborPort ? ' harbor' : ''}" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="21" />
-      <circle class="port-badge" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="17.5" style="fill:${badgeFill};stroke:${badgeBorder}" />
-      ${label}
-      ${node ? `<g class="port-node${node.dim ? ' hot-dim' : ''}" onclick="${node.call}" style="cursor:pointer"><circle class="port-node-ring" cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="26" /><circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="26" fill="transparent" /></g>` : ''}
-    </g>`;
+  return { sx: mx + (dx / nLen) * 42, sy: my + (dy / nLen) * 42 };
 }
 
-/** The port is the node for a harbor upgrade and a port raise (not the city on it): the click it sends, and whether you cannot pay for any of it yet. */
+/** The port is the node for a harbor upgrade and a port raise (not the city on it): what click it sends, and whether you cannot pay for any of it yet. */
 interface PortNode {
-  call: string;
+  kind: 'harbor' | 'upgrade_port' | 'menu';
+  vertexId: number;
   dim: boolean;
 }
 
@@ -598,7 +564,19 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     }
   }
 
-  // 1. Static / Terrain Layer: rendered onto #boardTerrainCanvas with viewport culling (0 SVG DOM nodes in #boardTerrainLayer).
+  // 1. Static / Terrain Layer: rendered onto #boardTerrainCanvas (0 SVG DOM nodes in #boardTerrainLayer).
+  const playerById = new Map<string, any>();
+  for (const p of state.players) playerById.set(p.id, p);
+
+  if (cachedCoastalBoardKey !== cachedGeomBoardKey) {
+    cachedCoastalBoardKey = cachedGeomBoardKey;
+    coastalEdgeIndices = [];
+    for (let i = 0; i < edges.length; i++) {
+      if (edges[i].hexIds.length === 1) coastalEdgeIndices.push(i);
+    }
+  }
+
+  let staticChanged = false;
   const canPaintHex = isLobbyHost && (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber');
   const terrainSigParts: string[] = [
     cachedGeomBoardKey,
@@ -614,6 +592,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
 
   if (terrainKey !== lastTerrainKey) {
     lastTerrainKey = terrainKey;
+    staticChanged = true;
     let landPathD = '';
     let waterPathD = '';
     const nextCanvasHexes: TerrainHexLike[] = [];
@@ -654,9 +633,14 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.terrainLayer.style.pointerEvents = 'none';
   }
 
-  updateCameraViewBox();
+  // Interactive spots collected for the fast frustum-culled 2D canvas pass (eliminates thousands of SVG DOM nodes on big maps).
+  const nextHexSpots: CanvasHexSpot[] = [];
+  const nextFeedSpots: CanvasFeedSpot[] = [];
+  const nextPortSpots: CanvasPortSpot[] = [];
+  const nextEdgeSpots: CanvasEdgeSpot[] = [];
+  const nextVertexSpots: CanvasVertexSpot[] = [];
 
-  // 2. Dynamic Hex Overlay Layer: rolled hex dimming, robber target highlights, and the robber piece.
+  // 2. Dynamic Hex Layer: ONLY the single robber SVG piece stays in SVG; rolled dimming, robber targets, and net spots render on 2D Canvas.
   const robberAnim = getPieceAnimAttrs('robber_move', now);
   let hexDynHtml = '';
   const isRobberPhase = isMyTurn && state.phase === 'ROBBER';
@@ -669,17 +653,11 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     const canClickRobber = isRobberPhase && h.id !== robberHexId;
     const hasRobber = h.id === robberHexId;
 
-    if (!isRolledHex && !canClickRobber && !hasRobber) continue;
-
     if (isRolledHex) {
-      hexDynHtml += `<polygon class="hex-rolled" points="${geom.innerPoly}" style="${rollDimStyle}" />`;
+      nextHexSpots.push({ hexId: h.id, x: h.x, y: h.y, innerPoly: geom.innerPoly, kind: 'rolled' });
     }
     if (canClickRobber) {
-      hexDynHtml += `
-        <g onclick="onHexClick(${h.id}, event)" style="cursor:pointer">
-          <polygon class="hex-tint" points="${geom.innerPoly}" />
-          <polygon class="hex-target" points="${geom.innerPoly}" />
-        </g>`;
+      nextHexSpots.push({ hexId: h.id, x: h.x, y: h.y, innerPoly: geom.innerPoly, kind: 'robber' });
     }
     if (hasRobber) {
       hexDynHtml += `
@@ -693,35 +671,68 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
         </g>`;
     }
   }
-  // Fishing nets: in net mode the sea tiles the server listed (`netSpots`, hex ids) are drawn as clickable tiles; a click puts the net on that tile.
+  // Fishing nets: in net mode the sea tiles the server listed (`netSpots`, hex ids) render on Canvas and click via math hit-testing.
   const netSpotSet = isMyTurn && buildMode === 'net' && state.phase === 'MAIN' && me && (me.netsLeft ?? 0) > 0 && canClientAffordPiece(me, 'net')
     ? new Set<number>(me.netSpots ?? [])
     : null;
   if (netSpotSet) {
     for (const id of [...netSpotSet].sort((a, b) => a - b)) {
+      const h = hexes[id];
       const geom = hexGeomCache.get(id);
-      if (!geom) continue;
-      hexDynHtml += `
-        <g onclick="clickNetSpot(${id})" style="cursor:pointer">
-          <polygon points="${geom.innerPoly}" style="fill:var(--accent);fill-opacity:0.16;stroke:var(--accent);stroke-width:3;stroke-dasharray:9 6;stroke-linejoin:round" />
-        </g>`;
+      if (!h || !geom) continue;
+      nextHexSpots.push({ hexId: id, x: h.x, y: h.y, innerPoly: geom.innerPoly, kind: 'net' });
     }
   }
   if (hexDynHtml !== lastHexDynamicHtml) {
     lastHexDynamicHtml = hexDynHtml;
     layers.hexDynamicLayer.innerHTML = hexDynHtml;
   }
-  // Tide overlays (flooded tint, warning a turn ahead), or the elevation heat map when the player switched it on (T6).
+
+  // 2b. Overlays (Tidebound flood/warning/drowned, elevation heat map, base overlays): rendered on 2D Canvas (0 SVG DOM nodes).
+  syncOverlayManifest();
   const elevation = state.tide?.elevation ?? null;
-  const overlayHtml = elevationView && elevation
-    ? renderElevationMarkup(hexes, id => hexGeomCache.get(id)?.innerPoly, elevation)
-    : renderHexOverlaysMarkup(hexes, id => hexGeomCache.get(id)?.innerPoly, (state as any).hexOverlays ?? null);
-  if (overlayHtml !== lastOverlayHtml) {
-    lastOverlayHtml = overlayHtml;
-    layers.overlayLayer.innerHTML = overlayHtml;
+  const serverOverlays = (state as any).hexOverlays ?? null;
+  const overlaySigParts: string[] = [cachedGeomBoardKey, elevationView && elevation ? 'elev' : 'ov'];
+  const nextOverlays: CanvasHexOverlayLike[] = [];
+  if (elevationView && elevation) {
+    for (const h of hexes) {
+      if (!h || h.type === 'water' || h.fog || h.type === 'fog') continue;
+      if (elevation[h.id] === undefined) continue;
+      const e = Math.max(1, Math.min(3, Math.round(Number(elevation[h.id]))));
+      if (!Number.isFinite(e)) continue;
+      const poly = hexGeomCache.get(h.id)?.innerPoly;
+      if (!poly) continue;
+      const kind = `elev-${e}`;
+      overlaySigParts.push(`${h.id}:${kind}`);
+      nextOverlays.push({ hexId: h.id, x: h.x, y: h.y, innerPoly: poly, kind });
+    }
+  } else {
+    for (const h of hexes) {
+      if (!h || h.type === 'water' || h.fog || h.type === 'fog') continue;
+      const entry =
+        getClientHexOverlay(h.id) ||
+        (serverOverlays && serverOverlays[h.id]) ||
+        (h.overlay && typeof h.overlay === 'object' ? h.overlay : typeof h.overlay === 'string' ? { kind: h.overlay } : null);
+      if (!entry || !entry.kind) continue;
+      const poly = hexGeomCache.get(h.id)?.innerPoly;
+      if (!poly) continue;
+      const label = entry.label ?? (entry.kind === 'flood' ? 'Flooded' : entry.kind === 'flood-warn' ? 'Flood warning' : undefined);
+      overlaySigParts.push(`${h.id}:${entry.kind}:${label || ''}`);
+      nextOverlays.push({ hexId: h.id, x: h.x, y: h.y, innerPoly: poly, kind: entry.kind, label });
+    }
+  }
+  const overlayKey = overlaySigParts.join('|');
+  if (overlayKey !== lastOverlayKey) {
+    lastOverlayKey = overlayKey;
+    cachedCanvasOverlays = nextOverlays;
+    staticChanged = true;
+  }
+  if (lastOverlayHtml !== '' || layers.overlayLayer.innerHTML !== '') {
+    lastOverlayHtml = '';
+    layers.overlayLayer.innerHTML = '';
   }
 
-  // Fishing nets: a net sits on one sea tile and fishes only that tile, so it is drawn over that tile, under the fish icons. The tiles are public (`netTiles` of every player).
+  // Fishing nets: a net sits on one sea tile and fishes only that tile (few placed nets, stays crisp in SVG).
   let netsHtml = '';
   let newNetTile = false;
   const seenNetTiles = new Set<number>();
@@ -744,8 +755,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.netsLayer.innerHTML = netsHtml;
   }
 
-  // Fishing grounds (T7c, T7e) & shared hex icon slot layout (Bugs 5, 9, 17):
-  // When a fish icon shares a sea tile with a pirate or sea wreck, each icon shifts into its predetermined slot so they never overlap.
+  // Fishing grounds (T7c, T7e): rendered on 2D Canvas (0 SVG DOM nodes in #boardFishLayer).
   const fishIcons: Record<number, number> = state.fishIcons ?? {};
   const feedSpotSet = isMyTurn && buildMode === 'feed' && state.phase === 'MAIN' && me && canClientAffordFeed(me)
     ? new Set<number>(me.feedSpots ?? [])
@@ -758,13 +768,13 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   const seaWreckHexIds = new Set<number>(wrecks.filter(w => w.site === 'sea').map(w => w.hexId));
   const pirateHexIds = new Set<number>(pirates.map(p => p.hexId));
 
-  let fishHtml = '';
+  const fishSigParts: string[] = [cachedGeomBoardKey];
+  const nextFish: CanvasFishLike[] = [];
   for (const id of [...fishIds].sort((a, b) => a - b)) {
     const h = hexes[id];
     if (!h || h.fog) continue;
     const hasIcon = fishIcons[id] !== undefined;
     const left = hasIcon ? fishIcons[id] : 0;
-    const inner = fishGroundMarkup(left);
     const { fishOffset } = hexIconLayout({
       hasFish: true,
       hasSeaWreck: seaWreckHexIds.has(id),
@@ -772,20 +782,22 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     });
     const fx = Number(h.x) + fishOffset.dx;
     const fy = Number(h.y) + fishOffset.dy;
-    if (hasIcon) fishHtml += fishTileOutlineMarkup(hexGeomCache.get(id)?.tilePoly);
+    const tilePoly = hasIcon ? hexGeomCache.get(id)?.tilePoly : undefined;
+    fishSigParts.push(`${id}:${hasIcon ? 1 : 0}:${left}:${fx.toFixed(1)},${fy.toFixed(1)}`);
+    nextFish.push({ hexId: id, fx, fy, left, hasIcon, tilePoly });
     if (feedSpotSet?.has(id)) {
-      fishHtml += `
-        <g transform="translate(${fx.toFixed(1)}, ${fy.toFixed(1)})" class="fish-spot" onclick="clickFeedSpot(${id})" style="cursor:pointer">
-          <circle class="fish-ring" r="30" />
-          <g transform="scale(1.25)" class="${hasIcon ? '' : 'fish-new'}">${inner}</g>
-        </g>`;
-    } else {
-      fishHtml += `<g transform="translate(${fx.toFixed(1)}, ${fy.toFixed(1)}) scale(1.25)" style="pointer-events:none"><title>Fishing ground: ${Math.max(0, left)} of 4 boosts left</title>${inner}</g>`;
+      nextFeedSpots.push({ hexId: id, fx, fy, isNew: !hasIcon });
     }
   }
-  if (fishHtml !== lastFishHtml) {
-    lastFishHtml = fishHtml;
-    layers.fishLayer.innerHTML = fishHtml;
+  const fishKey = fishSigParts.join('|');
+  if (fishKey !== lastFishKey) {
+    lastFishKey = fishKey;
+    cachedCanvasFish = nextFish;
+    staticChanged = true;
+  }
+  if (lastFishHtml !== '' || layers.fishLayer.innerHTML !== '') {
+    lastFishHtml = '';
+    layers.fishLayer.innerHTML = '';
   }
 
   // Shipwrecks (T9, Bugs 5, 9, 17): sea wrecks sit on the ocean tile (or top-right slot when sharing with fish/pirate);
@@ -854,7 +866,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.wrecksLayer.innerHTML = wrecksHtml;
   }
 
-  // Pirates (T10): one ship per pirate on its sea tile with a strength badge. On your main-phase turn the ones you can drive off (the server's `pirateDrives`) get a ring and a click.
+  // Pirates (T10): one ship per pirate on its sea tile with a strength badge.
   const piratesHtml = renderPiratesMarkup(
     pirates,
     hexes,
@@ -868,9 +880,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   }
 
   // BUG 5: on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a hotspot that opens the build menu.
-  // A build mode from the bar keeps the direct click (the piece is already chosen).
   const menuCtx = isMyTurn && state.phase === 'MAIN' && !buildMode && me ? buildMenuContext(me) : null;
-  // Harbor mode (toolbar): the ports of the cities you can upgrade are the nodes, or the ports you can raise when only Harbor charters are known.
   const harborModeOn = isMyTurn && state.phase === 'MAIN' && !!me && buildMode === 'harbor';
   const harborModeSet = harborModeOn && canClientAffordHarbor(me) ? new Set<number>(me.harborSpots ?? []) : null;
   const raiseModeSet = harborModeOn && !me.harborCost
@@ -880,51 +890,66 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     for (const vid of [e.v1, e.v2]) {
       const b = vertices[vid]?.building;
       if (!b || b.owner !== socket.id) continue;
-      if (harborModeSet?.has(vid)) return { call: `clickHarborSpot(${vid})`, dim: false };
-      if (raiseModeSet?.has(vid)) return { call: `upgradePortClick(${vid})`, dim: false };
+      if (harborModeSet?.has(vid)) return { kind: 'harbor', vertexId: vid, dim: false };
+      if (raiseModeSet?.has(vid)) return { kind: 'upgrade_port', vertexId: vid, dim: false };
       if (!menuCtx) continue;
       const opts = vertexOptions(menuCtx, vid).filter(o => o.id === 'harbor' || o.id === 'upgrade_port');
-      if (opts.length > 0) return { call: `openBuildMenu('vertex', ${vid})`, dim: !opts.some(o => o.affordable) };
+      if (opts.length > 0) return { kind: 'menu', vertexId: vid, dim: !opts.some(o => o.affordable) };
     }
     return null;
   };
 
-  // 3. Ports Layer: rebuilds only when coastal ports, port ownership, port nodes, or lobby port brush changes.
+  // 3. Ports Layer: rendered on 2D Canvas (0 SVG DOM nodes in #boardPortsLayer).
   const canPaintPort = isLobbyHost && activeBrush.type === 'port';
-  const portsSigParts: string[] = [cachedGeomBoardKey, canPaintPort ? '1' : '0'];
-  for (const e of edges) {
-    if (e.hexIds.length !== 1) continue;
+  const portsSigParts: string[] = [cachedGeomBoardKey];
+  const nextPorts: CanvasPortLike[] = [];
+  for (let ci = 0; ci < coastalEdgeIndices.length; ci++) {
+    const e = edges[coastalEdgeIndices[ci]];
+    const v1 = vertices[e.v1], v2 = vertices[e.v2];
+    if (!v1 || !v2) continue;
+    const h = hexes[e.hexIds[0]];
+    if (!h) continue;
+
     if (e.port) {
-      const v1 = vertices[e.v1], v2 = vertices[e.v2];
-      const owned = Boolean(v1 && v2 && [v1, v2].some((v: any) => v.building && v.building.owner === socket.id));
+      const owned = Boolean((v1.building && v1.building.owner === socket.id) || (v2.building && v2.building.owner === socket.id));
       const pLvl = Math.max(state.portLevels?.[e.v1] || 0, state.portLevels?.[e.v2] || 0);
-      const nodeSig = portNodeFor(e);
-      portsSigParts.push(`${e.id}:${e.port}:${owned ? '1' : '0'}:${pLvl}:${nodeSig ? nodeSig.call + (nodeSig.dim ? 'd' : '') : ''}`);
+      const { sx, sy } = portBadgeCenter(v1, v2, h);
+      portsSigParts.push(`${e.id}:${e.port}:${owned ? 1 : 0}:${pLvl}`);
+      nextPorts.push({
+        edgeId: e.id,
+        v1x: v1.x, v1y: v1.y,
+        v2x: v2.x, v2y: v2.y,
+        hx: h.x, hy: h.y,
+        port: e.port,
+        owned,
+        level: pLvl,
+        sx, sy
+      });
+      if (canPaintPort) {
+        nextPortSpots.push({ edgeId: e.id, sx, sy, kind: 'paint' });
+      } else {
+        const node = portNodeFor(e);
+        if (node) {
+          nextPortSpots.push({ edgeId: e.id, sx, sy, kind: node.kind, vertexId: node.vertexId, dim: node.dim });
+        }
+      }
+    } else if (canPaintPort) {
+      nextPortSpots.push({
+        edgeId: e.id,
+        sx: (v1.x + v2.x) / 2,
+        sy: (v1.y + v2.y) / 2,
+        kind: 'paint'
+      });
     }
   }
   const portsKey = portsSigParts.join('|');
   if (portsKey !== lastPortsKey) {
     lastPortsKey = portsKey;
-    let portsHtml = '';
-    for (const e of edges) {
-      if (e.hexIds.length !== 1) continue;
-      const v1 = vertices[e.v1], v2 = vertices[e.v2];
-      if (!v1 || !v2) continue;
-
-      const mx = (v1.x + v2.x) / 2, my = (v1.y + v2.y) / 2;
-      const h = hexes[e.hexIds[0]];
-
-      if (e.port) {
-        const owned = [v1, v2].some((v: any) => v.building && v.building.owner === socket.id);
-        portsHtml += portMarkup(e, v1, v2, h, owned, isLobbyHost, portNodeFor(e));
-      } else if (canPaintPort) {
-        portsHtml += `
-          <circle data-paintable="1" cx="${mx}" cy="${my}" r="9" style="fill:rgba(255,255,255,0.5);stroke:var(--accent);stroke-width:2;cursor:pointer"
-            onclick="onEdgeInteract(${e.id})" />
-        `;
-      }
-    }
-    layers.portsLayer.innerHTML = portsHtml;
+    cachedCanvasPorts = nextPorts;
+    staticChanged = true;
+  }
+  if (layers.portsLayer.innerHTML !== '') {
+    layers.portsLayer.innerHTML = '';
   }
 
   // 4. Placed Roads Layers: rebuilds only when placed roads/bridges, blocking buildings, or road drop/collapse animations change.
@@ -955,7 +980,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       if (!e || e.road) continue;
       const v1 = vertices[e.v1], v2 = vertices[e.v2];
       if (!v1 || !v2) continue;
-      const owner = state.players.find(p => p.id === c.owner);
+      const owner = playerById.get(c.owner);
       const col = owner?.color || '#888';
       const isRickety = c.pieceType === 'rickety_bridge';
       const isBridge = c.pieceType === 'bridge' || isRickety;
@@ -1000,12 +1025,11 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const v1 = vertices[e.v1], v2 = vertices[e.v2];
       if (!v1 || !v2) continue;
       const ownerId = e.road;
-      const owner = state.players.find(p => p.id === ownerId);
+      const owner = playerById.get(ownerId);
       const col = owner?.color || '#888';
       const isRickety = e.pieceType === 'rickety_bridge';
       const isBridge = e.pieceType === 'bridge' || isRickety;
 
-      // Extend endpoint to vertex if another road/bridge of the same player meets there (and no enemy building blocks it)
       const blocked1 = v1.building && v1.building.owner !== ownerId;
       const blocked2 = v2.building && v2.building.owner !== ownerId;
       const conn1 = !blocked1 && (
@@ -1028,7 +1052,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       const my = (v1.y + v2.y) / 2;
       const anim = getPieceAnimAttrs(`road_${e.id}`, now);
 
-      // R8.7: an edge piece that the manifest describes is drawn from its shape (the generic path; the bridge code below stays until R8.8 migrates it).
       const genericEdge = placedEdgeMarkup(e.pieceType, col, { x: x1, y: y1 }, { x: x2, y: y2 });
       if (genericEdge) {
         if (anim.isAnimating) {
@@ -1087,75 +1110,146 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     layers.roadHitsLayer.innerHTML = roadHitsHtml;
   }
 
-  // 5. Road & Bridge Spots Layer (buildable edges)
-  const staticSpots = vertices.length > 120;
-  let roadSpotsHtml = '';
-  for (const e of edges) {
-    if (e.road) continue;
-    const v1 = vertices[e.v1], v2 = vertices[e.v2];
-    if (!v1 || !v2) continue;
-    if (menuCtx) {
-      const opts = edgeOptions(menuCtx, e.id);
-      if (opts.length === 0) continue;
-      const mx = (v1.x + v2.x) / 2, my = (v1.y + v2.y) / 2;
-      const cls = `${staticSpots ? ' spot-static' : ''}${hotDim(opts)}`;
-      roadSpotsHtml += `
-        <g onclick="openBuildMenu('edge', ${e.id})" style="cursor:pointer">
-          <line class="road-spot-line hotspot${cls}" x1="${v1.x}" y1="${v1.y}" x2="${v2.x}" y2="${v2.y}" />
-          <circle class="road-spot-dot hotspot${cls}" cx="${mx}" cy="${my}" r="8" />
-        </g>
-      `;
-      continue;
+  // Fast O(myPieces) candidate vertex/edge sets for MAIN phase (avoids scanning 5,000+ edges & 3,700+ vertices on big maps)
+  const myId = socket.id;
+  let myCandidateEdges: Set<number> | null = null;
+  let myCandidateVertices: Set<number> | null = null;
+  if (isMyTurn && state.phase === 'MAIN' && me) {
+    myCandidateEdges = new Set<number>();
+    myCandidateVertices = new Set<number>();
+    for (const v of vertices) {
+      if (v.building && v.building.owner === myId) {
+        for (const eid of v.edgeIds) myCandidateEdges.add(eid);
+      }
     }
-    const allowRoad = !buildMode || buildMode === 'road';
-    const allowBridge = !buildMode || buildMode === 'bridge';
-    if (isMyTurn && ((allowRoad && canClientPlaceRoad(e, me)) || (allowBridge && canClientPlaceBridge(e, me)))) {
-      const mx = (v1.x + v2.x) / 2, my = (v1.y + v2.y) / 2;
-      roadSpotsHtml += `
-        <g onclick="clickEdge(${e.id})" style="cursor:pointer">
-          <line class="road-spot-line${staticSpots ? ' spot-static' : ''}" x1="${v1.x}" y1="${v1.y}" x2="${v2.x}" y2="${v2.y}" />
-          <circle class="road-spot-dot${staticSpots ? ' spot-static' : ''}" cx="${mx}" cy="${my}" r="8" />
-        </g>
-      `;
-    }
-  }
-  // Your rickety bridges you can pay to upgrade get a marker (click opens the upgrade popup; clicking the bridge itself does too).
-  if (isMyTurn && state.phase === 'MAIN' && me && canClientAffordBridgeUpgrade(me)) {
     for (const e of edges) {
-      if (e.pieceType !== 'rickety_bridge' || e.road !== socket.id) continue;
-      const v1 = vertices[e.v1], v2 = vertices[e.v2];
-      if (!v1 || !v2) continue;
-      const mx = (v1.x + v2.x) / 2, my = (v1.y + v2.y) / 2;
-      roadSpotsHtml += `
-        <g onclick="clickPlacedBridge(${e.id})" style="cursor:pointer">
-          <circle class="bridge-upgrade-dot" cx="${mx}" cy="${my}" r="10" />
-        </g>
-      `;
+      if (e.road !== myId) continue;
+      for (const vid of [e.v1, e.v2]) {
+        const v = vertices[vid];
+        if (!v) continue;
+        if (!v.building) myCandidateVertices.add(vid);
+        if (!v.building || v.building.owner === myId) {
+          for (const oe of v.edgeIds) myCandidateEdges.add(oe);
+        }
+      }
     }
-  }
-  if (roadSpotsHtml !== lastRoadSpotsHtml) {
-    lastRoadSpotsHtml = roadSpotsHtml;
-    layers.roadSpotsLayer.innerHTML = roadSpotsHtml;
+    // Include any server-provided manifest piece spots so generic pack pieces always show up
+    if (me.pieces) {
+      for (const ent of manifestEntries()) {
+        const spots = me.pieces[ent.id]?.spots;
+        if (!spots) continue;
+        if (ent.slot === 'vertex') {
+          for (const vid of spots) myCandidateVertices.add(vid);
+        } else if (ent.slot === 'edge' || ent.slot === 'edge:ocean') {
+          for (const eid of spots) myCandidateEdges.add(eid);
+        }
+      }
+    }
   }
 
-  // 6. Vertices Layer: settlements, cities, and settlement spots
+  // 5. Road & Bridge Spots: rendered on 2D Canvas (0 SVG DOM nodes in #roadSpotsLayer).
+  if (isMyTurn && me) {
+    if (menuCtx && myCandidateEdges) {
+      for (const eid of myCandidateEdges) {
+        const e = edges[eid];
+        if (!e || e.road) continue;
+        const v1 = vertices[e.v1], v2 = vertices[e.v2];
+        if (!v1 || !v2) continue;
+        const opts = edgeOptions(menuCtx, e.id);
+        if (opts.length === 0) continue;
+        nextEdgeSpots.push({
+          edgeId: e.id,
+          x1: v1.x, y1: v1.y,
+          x2: v2.x, y2: v2.y,
+          mx: (v1.x + v2.x) / 2,
+          my: (v1.y + v2.y) / 2,
+          kind: 'menu',
+          dim: !opts.some(o => o.affordable)
+        });
+      }
+    } else if (state.phase === 'SETUP_ROAD' && state.lastSetupVertexId != null) {
+      const setupV = vertices[state.lastSetupVertexId];
+      if (setupV) {
+        for (const eid of setupV.edgeIds) {
+          const e = edges[eid];
+          if (!e || e.road) continue;
+          if (!canClientPlaceRoad(e, me)) continue;
+          const v1 = vertices[e.v1], v2 = vertices[e.v2];
+          if (!v1 || !v2) continue;
+          nextEdgeSpots.push({
+            edgeId: e.id,
+            x1: v1.x, y1: v1.y,
+            x2: v2.x, y2: v2.y,
+            mx: (v1.x + v2.x) / 2,
+            my: (v1.y + v2.y) / 2,
+            kind: 'direct'
+          });
+        }
+      }
+    } else if (state.phase === 'MAIN' && myCandidateEdges) {
+      const allowRoad = (!buildMode || buildMode === 'road') && me.roadsLeft > 0 && (me.freeRoads > 0 || canClientAffordPiece(me, 'road'));
+      const allowBridge = (!buildMode || buildMode === 'bridge') && (me.bridgesLeft ?? 0) > 0 &&
+        (canClientAffordPiece(me, 'bridge') || (isRicketyEnabled(me) && canClientAffordPiece(me, 'rickety_bridge')));
+      if (allowRoad || allowBridge) {
+        for (const eid of myCandidateEdges) {
+          const e = edges[eid];
+          if (!e || e.road) continue;
+          const ok = (allowRoad && e.hexIds.length > 0 && canClientPlaceRoad(e, me)) ||
+            (allowBridge && e.hexIds.length === 0 && canClientPlaceBridge(e, me));
+          if (!ok) continue;
+          const v1 = vertices[e.v1], v2 = vertices[e.v2];
+          if (!v1 || !v2) continue;
+          nextEdgeSpots.push({
+            edgeId: e.id,
+            x1: v1.x, y1: v1.y,
+            x2: v2.x, y2: v2.y,
+            mx: (v1.x + v2.x) / 2,
+            my: (v1.y + v2.y) / 2,
+            kind: 'direct'
+          });
+        }
+      }
+    }
+    if (state.phase === 'MAIN' && canClientAffordBridgeUpgrade(me)) {
+      for (const e of edges) {
+        if (e.pieceType !== 'rickety_bridge' || e.road !== myId) continue;
+        const v1 = vertices[e.v1], v2 = vertices[e.v2];
+        if (!v1 || !v2) continue;
+        nextEdgeSpots.push({
+          edgeId: e.id,
+          x1: v1.x, y1: v1.y,
+          x2: v2.x, y2: v2.y,
+          mx: (v1.x + v2.x) / 2,
+          my: (v1.y + v2.y) / 2,
+          kind: 'bridge_upgrade'
+        });
+      }
+    }
+  }
+  if (lastRoadSpotsHtml !== '' || layers.roadSpotsLayer.innerHTML !== '') {
+    lastRoadSpotsHtml = '';
+    layers.roadSpotsLayer.innerHTML = '';
+  }
+
+  // 6. Vertices Layer: ONLY placed settlements & cities stay in SVG (~4-40 nodes); all empty settlement spots render on 2D Canvas.
   const robberVictimSet = new Set<string>(state.robberVictims || []);
   let verticesHtml = '';
   const canAffordCity = me ? canClientAffordPiece(me, 'city') : false;
+  const canAffordSettle = me ? canClientAffordPiece(me, 'settlement') : false;
+  const skipEmptySpots = buildMode === 'net' || buildMode === 'feed' || buildMode === 'harbor' || isPieceMode(buildMode);
+
   for (const v of vertices) {
     if (v.building) {
-      const owner = state.players.find(p => p.id === v.building.owner);
+      const owner = playerById.get(v.building.owner);
       const col = owner?.color || '#888';
       const canUpgrade = isMyTurn && state.phase === 'MAIN' && buildMode !== 'harbor' &&
-        v.building.owner === socket.id && v.building.type === 'settlement' &&
+        v.building.owner === myId && v.building.type === 'settlement' &&
         me && canAffordCity && me.citiesLeft > 0;
       const canRobThisBuilding = isMyTurn && state.phase === 'ROBBER_STEAL' &&
         v.hexIds.includes(robberHexId) && robberVictimSet.has(v.building.owner);
       const isCity = v.building.type === 'city';
       const isClickable = canUpgrade || canRobThisBuilding;
-      // BUG 5: with the build menu on, your own building is a hotspot when it offers a city (affordable or not).
-      // The harbor upgrade and the port raise are on the port (`portNodeFor`), not on the building.
-      const menuOpts = menuCtx && v.building.owner === socket.id
+      const menuOpts = menuCtx && v.building.owner === myId
         ? vertexOptions(menuCtx, v.id).filter(o => o.id !== 'harbor' && o.id !== 'upgrade_port')
         : [];
       const showRing = menuCtx ? menuOpts.length > 0 : (!isCity && canUpgrade);
@@ -1180,25 +1274,31 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
           </g>
         </g>
       `;
-    } else if (menuCtx) {
-      const opts = vertexOptions(menuCtx, v.id);
-      if (opts.length === 0) continue;
-      verticesHtml += `
-        <g onclick="openBuildMenu('vertex', ${v.id})" style="cursor:pointer">
-          <circle cx="${v.x}" cy="${v.y}" r="20" fill="transparent" />
-          <circle cx="${v.x}" cy="${v.y}" r="11" class="spot-pulse hotspot${staticSpots ? ' spot-static' : ''}${hotDim(opts)}" />
-        </g>
-      `;
-    } else if (isMyTurn && (buildMode === 'net' || buildMode === 'feed' || buildMode === 'harbor' || isPieceMode(buildMode))) {
-      // Net, feed and harbor mode draw no empty-vertex spots: a net and the feed pick sea tiles (drawn on the hex layer), so no settlement spots here either.
-      continue;
-    } else if (isMyTurn && canClientPlaceSettlement(v, me)) {
-      verticesHtml += `
-        <g onclick="clickVertex(${v.id})" style="cursor:pointer">
-          <circle cx="${v.x}" cy="${v.y}" r="20" fill="transparent" />
-          <circle cx="${v.x}" cy="${v.y}" r="11" class="spot-pulse${staticSpots ? ' spot-static' : ''}" />
-        </g>
-      `;
+    } else if (isMyTurn && state.phase === 'SETUP_SETTLEMENT' && me && me.settlementsLeft > 0 && !skipEmptySpots) {
+      if (v.hexIds && v.hexIds.length > 0) {
+        let adjBlocked = false;
+        for (let k = 0; k < v.adjacentVertices.length; k++) {
+          if (vertices[v.adjacentVertices[k]]?.building) { adjBlocked = true; break; }
+        }
+        if (!adjBlocked) {
+          nextVertexSpots.push({ vertexId: v.id, x: v.x, y: v.y, kind: 'direct' });
+        }
+      }
+    }
+  }
+
+  // MAIN phase empty vertex hotspots (O(myPieces) via myCandidateVertices)
+  if (isMyTurn && state.phase === 'MAIN' && me && myCandidateVertices && !skipEmptySpots) {
+    for (const vid of myCandidateVertices) {
+      const v = vertices[vid];
+      if (!v || v.building) continue;
+      if (menuCtx) {
+        const opts = vertexOptions(menuCtx, vid);
+        if (opts.length === 0) continue;
+        nextVertexSpots.push({ vertexId: vid, x: v.x, y: v.y, kind: 'menu', dim: !opts.some(o => o.affordable) });
+      } else if (canAffordSettle && me.settlementsLeft > 0 && canClientPlaceSettlement(v, me)) {
+        nextVertexSpots.push({ vertexId: vid, x: v.x, y: v.y, kind: 'direct' });
+      }
     }
   }
 
@@ -1210,22 +1310,42 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   // BUG 5: the open build menu follows this render (its options and prices), and closes when the menu is off.
   syncBuildMenu(menuCtx);
 
-  // 7. Generic spots of manifest pieces and actions (R8.7): the spots of the active build mode, from the server's `pieces[id].spots`. Empty until a piece has a visual.
-  // BUG: a sea tile you can feed (under your net) or put a net on is a hotspot of the build menu, like a corner or an edge.
-  let hexSpotsHtml = '';
+  // 7. Generic spots of manifest pieces and actions (R8.7): hex menu spots go to Canvas; manifest piece spots stay in #boardPieceSpotsLayer.
   if (menuCtx) {
     for (const id of hexCandidates(menuCtx)) {
       const h = hexes[id];
       const opts = h && !h.fog ? hexOptions(menuCtx, id) : [];
       if (opts.length === 0) continue;
-      hexSpotsHtml += `<g transform="translate(${h.x}, ${h.y})" onclick="openBuildMenu('hex', ${id})" style="cursor:pointer"><circle r="22" fill="transparent" /><circle class="road-spot-dot hotspot${staticSpots ? ' spot-static' : ''}${opts.some(o => o.affordable) ? '' : ' hot-dim'}" r="8" /></g>`;
+      const geom = hexGeomCache.get(id);
+      nextHexSpots.push({
+        hexId: id,
+        x: h.x,
+        y: h.y,
+        innerPoly: geom?.innerPoly || '',
+        kind: 'menu',
+        dim: !opts.some(o => o.affordable)
+      });
     }
   }
-  const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn) + hexSpotsHtml;
+  const pieceSpotsHtml = pieceSpotsMarkup(me, isMyTurn);
   if (pieceSpotsHtml !== lastPieceSpotsHtml) {
     lastPieceSpotsHtml = pieceSpotsHtml;
     layers.pieceSpotsLayer.innerHTML = pieceSpotsHtml;
   }
+
+  if (staticChanged) {
+    staticCanvasVersion++;
+  }
+  cachedInteractiveSpots = {
+    vertices: nextVertexSpots,
+    edges: nextEdgeSpots,
+    ports: nextPortSpots,
+    feeds: nextFeedSpots,
+    hexes: nextHexSpots,
+    roadScale: lastRoadScale > 0 ? lastRoadScale : ROAD_BASE_SCALE
+  };
+
+  updateCameraViewBox();
 }
 
 // Updates camera viewBox smoothly via requestAnimationFrame on pan/zoom without reconstructing the SVG DOM.
@@ -1239,24 +1359,97 @@ export function rerenderBoard(): void {
 }
 
 /**
- * Updates the 2D terrain canvas and lightweight SVG piece overlay directly on each animation frame during a drag,
- * eliminating unpainted edge gaps and mid-drag chunk pop-in.
+ * Updates the 2D canvas immediately (<0.5ms, zero chunk loading) and moves the lightweight SVG piece overlay
+ * on the GPU compositor (`translate` + `scale`) during BOTH pan drags and zooms so SVG viewBox is never mutated mid-gesture.
  */
-export function panBoardPreview(_rect?: DOMRect): void {
+export function panBoardPreview(rect?: DOMRect): void {
   if (!state || panFramePending) return;
   panFramePending = true;
   requestAnimationFrame(() => {
     panFramePending = false;
-    updateCameraViewBox();
+    if (!state || !state.board) return;
+    const svg = document.getElementById('boardSvg');
+    if (!svg) return;
+    const bounds = getBoardBounds();
+    if (cachedCanvasHexes.length > 0) {
+      drawBoardTerrainCanvas({
+        hexes: cachedCanvasHexes,
+        landPath: cachedLandPathD,
+        waterPath: cachedWaterPathD,
+        isLobby: state.status === 'LOBBY',
+        canPaintHex: cachedCanPaintHex,
+        bounds,
+        camZoom,
+        camPanX,
+        camPanY,
+        animatingFogHexIds: cachedAnimatingFogIds,
+        staticVersion: staticCanvasVersion,
+        ports: cachedCanvasPorts,
+        fishGrounds: cachedCanvasFish,
+        hexOverlays: cachedCanvasOverlays,
+        interactiveSpots: cachedInteractiveSpots
+      });
+    }
+    const viewW = rect?.width || svg.clientWidth || 1000;
+    const viewH = rect?.height || svg.clientHeight || 800;
+    const cam = computeCanvasCamera(bounds, camZoom, camPanX, camPanY, viewW, viewH);
+    const dxPx = (camPanX - committedPanX) * cam.scale;
+    const dyPx = (camPanY - committedPanY) * cam.scale;
+    const scaleRatio = committedZoom / Math.max(0.001, camZoom);
+    svg.style.transformOrigin = '50% 50%';
+    if (Math.abs(scaleRatio - 1) > 0.0005) {
+      svg.style.transform = `translate(${dxPx.toFixed(2)}px, ${dyPx.toFixed(2)}px) scale(${scaleRatio.toFixed(5)})`;
+    } else {
+      svg.style.transform = `translate(${dxPx.toFixed(2)}px, ${dyPx.toFixed(2)}px)`;
+    }
   });
 }
 
-/** The drag ended: flush any pending camera update. */
+/** Smooth 60 FPS GPU-composited wheel zoom preview; commits crisp SVG viewBox once zooming settles. */
+export function zoomBoardPreview(rect?: DOMRect): void {
+  panBoardPreview(rect);
+  if (zoomCommitTimer !== null) clearTimeout(zoomCommitTimer);
+  zoomCommitTimer = setTimeout(() => {
+    zoomCommitTimer = null;
+    endBoardPan();
+  }, 130);
+}
+
+/** The pan or zoom gesture ended: flush any pending SVG camera viewBox commit. */
 export function endBoardPan(): void {
+  if (zoomCommitTimer !== null) {
+    clearTimeout(zoomCommitTimer);
+    zoomCommitTimer = null;
+  }
   const panLayer = document.getElementById('boardPan');
-  if (state?.board && (camPanX !== committedPanX || camPanY !== committedPanY || panLayer?.style.transform)) {
+  const svg = document.getElementById('boardSvg');
+  if (
+    state?.board &&
+    (camPanX !== committedPanX || camPanY !== committedPanY || camZoom !== committedZoom || panLayer?.style.transform || svg?.style.transform)
+  ) {
     updateCameraViewBox();
   }
+}
+
+function clientPointToWorld(clientX: number, clientY: number): { wx: number; wy: number; worldPerPx: number } | null {
+  if (!state?.board) return null;
+  const svg = document.getElementById('boardSvg');
+  if (!svg) return null;
+  const rect = svg.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
+  const bounds = getBoardBounds();
+  const cam = computeCanvasCamera(bounds, camZoom, camPanX, camPanY, rect.width, rect.height);
+  const pt = screenToWorld(clientX - rect.left, clientY - rect.top, cam);
+  return { wx: pt.x, wy: pt.y, worldPerPx: cam.worldPerPx };
+}
+
+function pointToSegmentDist(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  if (len2 <= 1e-6) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / len2));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
 }
 
 /**
@@ -1264,15 +1457,169 @@ export function endBoardPan(): void {
  * (replaces 1,300+ `<polygon data-paintable="1">` DOM nodes in Lobby).
  */
 export function hexAtClientPoint(clientX: number, clientY: number): number | null {
-  if (!state?.board || cachedCanvasHexes.length === 0) return null;
-  const svg = document.getElementById('boardSvg');
-  if (!svg) return null;
-  const rect = svg.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return null;
-  const bounds = getBoardBounds();
-  const cam = computeCanvasCamera(bounds, camZoom, camPanX, camPanY, rect.width, rect.height);
-  const worldPt = screenToWorld(clientX - rect.left, clientY - rect.top, cam);
-  return findHexAtWorldPoint(worldPt.x, worldPt.y, cachedCanvasHexes);
+  if (cachedCanvasHexes.length === 0) return null;
+  const info = clientPointToWorld(clientX, clientY);
+  if (!info) return null;
+  return findHexAtWorldPoint(info.wx, info.wy, cachedCanvasHexes);
+}
+
+/** Returns the coastal port edge ID underneath `(clientX, clientY)` when lobby port painting is active. */
+export function portEdgeAtClientPoint(clientX: number, clientY: number): number | null {
+  const ports = cachedInteractiveSpots.ports;
+  if (!ports || ports.length === 0) return null;
+  const info = clientPointToWorld(clientX, clientY);
+  if (!info) return null;
+  const maxDist = Math.max(24, 22 * info.worldPerPx);
+  let bestId: number | null = null;
+  let bestDist = maxDist;
+  for (let i = 0; i < ports.length; i++) {
+    const p = ports[i];
+    if (p.kind !== 'paint') continue;
+    const d = Math.hypot(info.wx - p.sx, info.wy - p.sy);
+    if (d <= bestDist) {
+      bestDist = d;
+      bestId = p.edgeId;
+    }
+  }
+  return bestId;
+}
+
+/**
+ * Handles clicks/taps on all 2D-canvas-rendered interactive spots (settlement/build spots, road/bridge spots,
+ * port upgrades, feed spots, robber targets, net spots, and lobby port brushes) with 44px hit slop (nearest wins).
+ */
+export function handleBoardCanvasClick(clientX: number, clientY: number, ev?: MouseEvent): boolean {
+  const info = clientPointToWorld(clientX, clientY);
+  if (!info) return false;
+  const { wx, wy, worldPerPx } = info;
+  const hitSlopWorld = 22 * worldPerPx; // 44px diameter minimum touch target
+
+  // Track best point-like target (vertices, edges, port rings, feed rings, menu hex dots) by screen-pixel distance
+  let bestPxDist = Infinity;
+  let bestAction: (() => void) | null = null;
+
+  const consider = (worldDist: number, maxWorldR: number, biasPx: number, action: () => void) => {
+    if (worldDist > maxWorldR) return;
+    const pxDist = worldDist / worldPerPx + biasPx;
+    if (pxDist < bestPxDist) {
+      bestPxDist = pxDist;
+      bestAction = action;
+    }
+  };
+
+  // 1. Vertex spots (slight -2px tie-break bias so corners win over adjacent edges right at the corner)
+  const vSpots = cachedInteractiveSpots.vertices;
+  if (vSpots && vSpots.length > 0) {
+    const maxR = Math.max(20, hitSlopWorld);
+    for (let i = 0; i < vSpots.length; i++) {
+      const vs = vSpots[i];
+      const d = Math.hypot(wx - vs.x, wy - vs.y);
+      if (d <= maxR) {
+        consider(d, maxR, -2, () => {
+          if (vs.kind === 'menu') openBuildMenu('vertex', vs.vertexId);
+          else clickVertex(vs.vertexId);
+        });
+      }
+    }
+  }
+
+  // 2. Edge spots (roads, bridges, rickety bridge upgrade dots)
+  const eSpots = cachedInteractiveSpots.edges;
+  if (eSpots && eSpots.length > 0) {
+    const maxR = Math.max(16, hitSlopWorld);
+    for (let i = 0; i < eSpots.length; i++) {
+      const es = eSpots[i];
+      const d = es.kind === 'bridge_upgrade'
+        ? Math.hypot(wx - es.mx, wy - es.my)
+        : pointToSegmentDist(wx, wy, es.x1, es.y1, es.x2, es.y2);
+      if (d <= maxR) {
+        consider(d, maxR, 0, () => {
+          if (es.kind === 'bridge_upgrade') clickPlacedBridge(es.edgeId);
+          else if (es.kind === 'menu') openBuildMenu('edge', es.edgeId);
+          else clickEdge(es.edgeId);
+        });
+      }
+    }
+  }
+
+  // 3. Port spots (harbor / port-raise / menu; lobby port paint is handled on mousedown/touchstart)
+  const pSpots = cachedInteractiveSpots.ports;
+  if (pSpots && pSpots.length > 0) {
+    const maxR = Math.max(26, hitSlopWorld);
+    for (let i = 0; i < pSpots.length; i++) {
+      const ps = pSpots[i];
+      if (ps.kind === 'paint') continue;
+      const d = Math.hypot(wx - ps.sx, wy - ps.sy);
+      if (d <= maxR) {
+        consider(d, maxR, 0, () => {
+          if (ps.kind === 'harbor' && ps.vertexId !== undefined) clickHarborSpot(ps.vertexId);
+          else if (ps.kind === 'upgrade_port' && ps.vertexId !== undefined) upgradePortClick(ps.vertexId);
+          else if (ps.kind === 'menu' && ps.vertexId !== undefined) openBuildMenu('vertex', ps.vertexId);
+        });
+      }
+    }
+  }
+
+  // 4. Feed-the-sea spots
+  const fSpots = cachedInteractiveSpots.feeds;
+  if (fSpots && fSpots.length > 0) {
+    const maxR = Math.max(30, hitSlopWorld);
+    for (let i = 0; i < fSpots.length; i++) {
+      const fs = fSpots[i];
+      const d = Math.hypot(wx - fs.fx, wy - fs.fy);
+      if (d <= maxR) {
+        consider(d, maxR, 0, () => clickFeedSpot(fs.hexId));
+      }
+    }
+  }
+
+  // 5. Hex spots (menu hex dots checked as points; robber / net checked by exact hex containment)
+  const hSpots = cachedInteractiveSpots.hexes;
+  if (hSpots && hSpots.length > 0) {
+    const dotMaxR = Math.max(22, hitSlopWorld);
+    let hasAreaTarget = false;
+    for (let i = 0; i < hSpots.length; i++) {
+      const hs = hSpots[i];
+      if (hs.kind === 'menu') {
+        const d = Math.hypot(wx - hs.x, wy - hs.y);
+        if (d <= dotMaxR) {
+          consider(d, dotMaxR, 0, () => openBuildMenu('hex', hs.hexId));
+        }
+      } else if (hs.kind === 'robber' || hs.kind === 'net') {
+        hasAreaTarget = true;
+      }
+    }
+
+    if (bestAction) {
+      (bestAction as () => void)();
+      return true;
+    }
+
+    if (hasAreaTarget && cachedCanvasHexes.length > 0) {
+      const hitHexId = findHexAtWorldPoint(wx, wy, cachedCanvasHexes);
+      if (hitHexId !== null) {
+        for (let i = 0; i < hSpots.length; i++) {
+          const hs = hSpots[i];
+          if (hs.hexId !== hitHexId) continue;
+          if (hs.kind === 'robber') {
+            onHexClick(hitHexId, ev);
+            return true;
+          }
+          if (hs.kind === 'net') {
+            clickNetSpot(hitHexId);
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  if (bestAction) {
+    (bestAction as () => void)();
+    return true;
+  }
+  return false;
 }
 
 export function resetCamera(): void {
@@ -1761,10 +2108,18 @@ function getTransferTargetEl(actorId: string, resource: string, kind: string): H
   }
   if (actorId === 'bank') {
     if (resource === 'dev' || kind === 'buyDev') {
+      const mobDev = document.getElementById('mobBankDevDeck');
+      if (mobDev && mobDev.offsetWidth > 0) return mobDev;
       return document.getElementById('bankDevDeckItem') || document.getElementById('bankBar');
     }
+    const mobRes = document.getElementById(`mobBankRes_${resource}`);
+    if (mobRes && mobRes.offsetWidth > 0) return mobRes;
+    const mobileBtn = document.getElementById('btnMobileSidebar');
+    if (mobileBtn && mobileBtn.offsetWidth > 0) return mobileBtn;
     return document.getElementById(`bankRes_${resource}`) || document.getElementById('bankBar');
   }
+  const mobilePill = document.getElementById(`mobilePlayerPill_${actorId}`);
+  if (mobilePill && mobilePill.offsetWidth > 0) return mobilePill;
   return document.getElementById(`playerRow_${actorId}`);
 }
 
@@ -1936,7 +2291,8 @@ export function triggerFlyingResourceAnimations(productions: any[]): void {
     if (prod.playerId === socket.id) {
       targetEl = document.querySelector<HTMLElement>(`#myHandPanel .card-${prod.resource}`) || document.getElementById('myHandPanel');
     } else {
-      targetEl = document.getElementById(`playerRow_${prod.playerId}`);
+      const mobilePill = document.getElementById(`mobilePlayerPill_${prod.playerId}`);
+      targetEl = (mobilePill && mobilePill.offsetWidth > 0) ? mobilePill : document.getElementById(`playerRow_${prod.playerId}`);
     }
     if (!targetEl) return;
     const rect = visibleRect(targetEl);
