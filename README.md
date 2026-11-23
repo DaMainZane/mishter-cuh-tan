@@ -2,14 +2,20 @@
 
 A customizable Catan-style board game for private groups (up to 8 players), playable as a native **Android APK** or in phone and PC browsers with **serverless P2P invite codes** (no backend required). Includes bots with three difficulty tiers, a seeded map generator with a map menu, custom map presets, full trading with counter offers, gold and fog modes, and the **Tidebound** expansion.
 
-## Download Android APK
+## Play & Download (v1.1)
 
-- **[Download `project-colonist-custom-1.0.apk` (v1.0)](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest/download/project-colonist-custom-1.0.apk)** · [View all releases](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest)
+- **Android APK (v1.1):** **[Download `project-colonist-custom-1.1.apk`](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest/download/project-colonist-custom-1.1.apk)** · [View all releases](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest)
+- **iPhone & Web PWA (Free, no App Store needed):** **[Open `damainzane.github.io/mishter-cuh-tan`](https://damainzane.github.io/mishter-cuh-tan/)**
 
 **How to install on Android:**
-1. Tap the download link above on your Android phone (or download on PC and transfer the `.apk` file).
-2. Open `project-colonist-custom-1.0.apk` and allow installing from unknown sources if prompted.
-3. Launch **Colonist Custom** — create a room to get a 5-character invite code, or enter a friend's invite code to join via P2P.
+1. Tap the `.apk` download link above on your Android phone (or download on PC and transfer it).
+2. Open `project-colonist-custom-1.1.apk` and allow installing from unknown sources if prompted.
+3. Launch **Colonist Custom** — create a room to get a 5-character invite code, or enter a friend's invite code to cross-play.
+
+**How to install on iPhone (iOS PWA):**
+1. Open **[https://damainzane.github.io/mishter-cuh-tan/](https://damainzane.github.io/mishter-cuh-tan/)** in Safari.
+2. Tap **Share** (`↑`) → **Add to Home Screen** → **Add**.
+3. Open **Colonist Custom** from your Home Screen — it launches fullscreen and cross-plays directly with Android APK & browser players via 5-character invite codes.
 
 Current state: see `change log.md` and `HANDOFF.md`. Next work: see `Backlog Priority.md`.
 
