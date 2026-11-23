@@ -267,14 +267,19 @@ export function copyInviteCodeOnly(): void {
   playTone(660, 0.08);
 }
 
+const PUBLIC_PWA_BASE_URL = 'https://damainzane.github.io/mishter-cuh-tan/';
+
 export function shareInviteCode(): void {
   if (!state?.code) return;
   const code = state.code;
   const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
-  const url = isHttp ? `${window.location.origin}/?room=${code}` : '';
-  const shareText = url
-    ? `Join my Colonist Custom game! Enter Invite Code: ${code} or open ${url}`
-    : `Join my Colonist Custom game! Enter Invite Code: ${code}`;
+  const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+  const baseUrl = isHttp && !isLocalHost
+    ? `${window.location.origin}${window.location.pathname.replace(/index\.html$/i, '')}`
+    : PUBLIC_PWA_BASE_URL;
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+  const url = `${normalizedBase}?room=${code}`;
+  const shareText = `Join my Colonist Custom game! Enter Invite Code: ${code} or open ${url}`;
 
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     navigator.share({

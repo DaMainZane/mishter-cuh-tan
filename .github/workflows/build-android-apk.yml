@@ -1,0 +1,102 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - mobile-port
+    paths-ignore:
+      - 'README.md'
+      - 'HANDOFF.md'
+      - 'change log.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mobile-port
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck & build web bundle
+        run: |
+          npm run typecheck
+          npm run build
+
+      - name: Generate & configure Capacitor Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+          node scripts/configure-android.mjs
+
+      - name: Build Android APK (debug-signed)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Package versioned APK
+        id: pkg
+        run: |
+          FULL_VER=$(node -p "require('./package.json').version")
+          SHORT_VER=$(node -p "require('./package.json').version.replace(/\.0$/, '')")
+          APK_NAME="project-colonist-custom-${SHORT_VER}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$APK_NAME"
+          ls -lh "$APK_NAME"
+          echo "full_ver=${FULL_VER}" >> "$GITHUB_OUTPUT"
+          echo "short_ver=${SHORT_VER}" >> "$GITHUB_OUTPUT"
+          echo "apk_name=${APK_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: colonist-custom-android-apk
+          path: ${{ steps.pkg.outputs.apk_name }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ steps.pkg.outputs.full_ver }}
+          SHORT_VER: ${{ steps.pkg.outputs.short_ver }}
+          APK_NAME: ${{ steps.pkg.outputs.apk_name }}
+        run: |
+          NOTES=$(cat <<EOF
+          ## Colonist Custom v${SHORT_VER} (Android APK + iPhone PWA)
+
+          Serverless P2P multiplayer Catan-style board game with bots, Tidebound expansion, compact mobile HUD & trading UI, custom map painter, and the v1.1 big-map performance overhaul (57–58 FPS at Tidebound radius 20 without chunk loading).
+
+          ### Install on Android
+          1. Download **\`${APK_NAME}\`** below.
+          2. Open it on your Android phone (allow installing from unknown sources if prompted).
+          3. Launch **Colonist Custom** — create a room to get a 5-character invite code, or enter a friend's invite code to cross-play.
+
+          ### Play / Install on iPhone (Free PWA)
+          Open **https://damainzane.github.io/mishter-cuh-tan/** in Safari → tap **Share** → **Add to Home Screen** (cross-plays directly with the Android APK via 5-character invite codes).
+          EOF
+          )
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_NAME" --clobber
+            gh release edit "$TAG" --title "Colonist Custom v${SHORT_VER} — Android APK" --notes "$NOTES" --latest
+          else
+            gh release create "$TAG" "$APK_NAME" --target "$GITHUB_SHA" --title "Colonist Custom v${SHORT_VER} — Android APK" --notes "$NOTES" --latest
+          fi
