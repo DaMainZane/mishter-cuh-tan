@@ -2,7 +2,7 @@
 import { playTone } from './audio';
 import { socket } from './socket';
 import {
-  state, activeBrush, buildMode, setBuildModeValue, setDrawerMode,
+  state, mapOptions, activeBrush, buildMode, setBuildModeValue, setDrawerMode,
   setVictoryTab, setHideVictoryOverlay, spectateTargetId, setSpectateTargetId
 } from './store';
 import { renderAll, renderVictoryScreen } from './render/index';
@@ -113,17 +113,73 @@ function getRequiredPlayerName(): string | null {
   return name;
 }
 
+function extractRoomCode(raw: string): string {
+  const text = String(raw || '').trim();
+  const matchParam = text.match(/[?&]room=([A-Za-z0-9]{4,8})/i);
+  if (matchParam) return matchParam[1].toUpperCase();
+  const matchToken = text.match(/\b([A-Za-z0-9]{5,6})\b/);
+  if (matchToken && text.length > 8) return matchToken[1].toUpperCase();
+  return text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+}
+
+export function pasteInviteCode(): void {
+  const input = document.getElementById('roomCodeInput') as HTMLInputElement | null;
+  if (!navigator.clipboard?.readText) {
+    input?.focus();
+    showToast('Long-press the invite code box to paste.');
+    return;
+  }
+  navigator.clipboard.readText().then(
+    (clip) => {
+      const code = extractRoomCode(clip);
+      if (input && code) {
+        input.value = code;
+        playTone(620, 0.06);
+        showToast(`Invite code ${code} pasted!`);
+      } else {
+        showToast('No invite code found in clipboard.');
+      }
+    },
+    () => {
+      input?.focus();
+      showToast('Tap and hold the invite code box to paste.');
+    }
+  );
+}
+
+function tryEnterMobileFullscreen(): void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (window.innerWidth > 900) return;
+  try {
+    const docEl = document.documentElement as any;
+    if (!document.fullscreenElement && typeof docEl.requestFullscreen === 'function') {
+      docEl.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+    }
+  } catch {}
+}
+
 export function createRoom(spectate = false): void {
   const name = getRequiredPlayerName();
   if (!name) return;
+  tryEnterMobileFullscreen();
   socket.emit('createRoom', { name, clientId: getClientId(), spectate });
 }
 
 export function joinRoom(): void {
   const name = getRequiredPlayerName();
   if (!name) return;
+  tryEnterMobileFullscreen();
+  const codeInput = document.getElementById('roomCodeInput') as HTMLInputElement | null;
+  const code = extractRoomCode(codeInput?.value || '');
+  if (codeInput) codeInput.value = code;
+  const embeddedHost = (globalThis as any).__HEX_EMBEDDED_HOST__;
+  if (!code && embeddedHost && embeddedHost.getRoomCodes().length === 0) {
+    showToast('Enter your friend\'s 5-character Invite Code to join.');
+    codeInput?.focus();
+    return;
+  }
   socket.emit('joinRoom', {
-    code: (document.getElementById('roomCodeInput') as HTMLInputElement).value,
+    code,
     name,
     clientId: getClientId()
   });
@@ -132,8 +188,17 @@ export function joinRoom(): void {
 export function spectateRoom(): void {
   const name = getRequiredPlayerName();
   if (!name) return;
+  const codeInput = document.getElementById('roomCodeInput') as HTMLInputElement | null;
+  const code = extractRoomCode(codeInput?.value || '');
+  if (codeInput) codeInput.value = code;
+  const embeddedHost = (globalThis as any).__HEX_EMBEDDED_HOST__;
+  if (!code && embeddedHost && embeddedHost.getRoomCodes().length === 0) {
+    showToast('Enter an Invite Code to spectate a friend\'s room.');
+    codeInput?.focus();
+    return;
+  }
   socket.emit('spectateRoom', {
-    code: (document.getElementById('roomCodeInput') as HTMLInputElement).value,
+    code,
     name,
     clientId: getClientId()
   });
@@ -166,6 +231,22 @@ export function rejoinSavedRoom(): void {
 }
 
 export function downloadTrainingLog(): void {
+  const embeddedHost = (globalThis as any).__HEX_EMBEDDED_HOST__;
+  if (embeddedHost && typeof embeddedHost.exportTrainingLogs === 'function') {
+    const jsonl = embeddedHost.exportTrainingLogs(state?.code);
+    const blob = new Blob([jsonl || ''], { type: 'application/x-ndjson;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bot-training-${state?.code || 'all'}.jsonl`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    playTone(600, 0.08);
+    showToast('Downloading AI bot training log (.jsonl)');
+    return;
+  }
   const roomQuery = state?.code ? `?room=${encodeURIComponent(state.code)}&format=jsonl` : '?format=jsonl';
   const a = document.createElement('a');
   a.href = `/api/bot-training-logs${roomQuery}`;
@@ -177,14 +258,56 @@ export function downloadTrainingLog(): void {
   showToast('Downloading AI bot training log (.jsonl)');
 }
 
-export function copyInviteLink(): void {
-  if (!state) return;
-  const url = `${window.location.origin}/?room=${state.code}`;
-  navigator.clipboard.writeText(url).then(
-    () => showToast('Invite link copied'),
-    () => showToast(url)
+export function copyInviteCodeOnly(): void {
+  if (!state?.code) return;
+  navigator.clipboard?.writeText(state.code).then(
+    () => showToast(`Invite code ${state.code} copied!`),
+    () => showToast(`Invite code: ${state.code}`)
+  );
+  playTone(660, 0.08);
+}
+
+export function shareInviteCode(): void {
+  if (!state?.code) return;
+  const code = state.code;
+  const isHttp = window.location.protocol === 'http:' || window.location.protocol === 'https:';
+  const url = isHttp ? `${window.location.origin}/?room=${code}` : '';
+  const shareText = url
+    ? `Join my Colonist Custom game! Enter Invite Code: ${code} or open ${url}`
+    : `Join my Colonist Custom game! Enter Invite Code: ${code}`;
+
+  if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    navigator.share({
+      title: `Colonist Custom — Room ${code}`,
+      text: shareText,
+      ...(url ? { url } : {})
+    }).catch(() => {
+      copyInviteCodeOnly();
+    });
+    playTone(660, 0.1);
+    return;
+  }
+  navigator.clipboard?.writeText(url || code).then(
+    () => showToast(`Invite code ${code} copied to clipboard!`),
+    () => showToast(`Invite code: ${code}`)
   );
   playTone(660, 0.1);
+}
+
+export function copyInviteLink(): void {
+  shareInviteCode();
+}
+
+export function toggleMobileSidebar(forceOpen?: boolean): void {
+  const sidebar = document.querySelector<HTMLElement>('.right-sidebar');
+  const backdrop = document.getElementById('mobileSidebarBackdrop');
+  if (!sidebar) return;
+  const isOpen = forceOpen !== undefined ? forceOpen : !sidebar.classList.contains('mob-open');
+  sidebar.classList.toggle('mob-open', isOpen);
+  if (backdrop) {
+    backdrop.classList.toggle('on', isOpen);
+  }
+  playTone(isOpen ? 540 : 440, 0.04);
 }
 
 export function switchLobbyTab(tab: string): void {
@@ -278,7 +401,8 @@ export function applyScenario(scenarioId: string): void {
     wheelSettingsTimer = null;
   }
   lastWheelEditAt = 0;
-  const targetRadius = scenarioId === 'standardCatan' ? 2 : 5;
+  const sc = mapOptions?.scenarios?.find(s => s.id === scenarioId);
+  const targetRadius = sc?.boardRadius ?? (scenarioId === 'standardCatan' ? 2 : 7);
   const radiusEl = document.getElementById('setRadius') as HTMLInputElement | null;
   if (radiusEl) radiusEl.value = String(targetRadius);
   socket.emit('applyScenario', { code: state.code, scenarioId });
@@ -287,6 +411,8 @@ export function applyScenario(scenarioId: string): void {
 
 export function toggleDlc(dlcId: string): void {
   if (!state || !requireHost('change DLC settings')) return;
+  const available = mapOptions?.dlcs?.length ? mapOptions.dlcs.some(d => d.id === dlcId) : dlcId === 'tidebound';
+  if (!available) return;
   const curDlc = state.settings?.dlc && typeof state.settings.dlc === 'object' ? { ...state.settings.dlc } : {};
   curDlc[dlcId] = !curDlc[dlcId];
   const newSettings: Record<string, any> = { dlc: curDlc };
@@ -300,6 +426,8 @@ export function toggleDlc(dlcId: string): void {
 export function toggleAddon(addonId: string): void {
   if (!state || !requireHost('change addon settings')) return;
   const packId = addonId.split('.')[0];
+  const available = mapOptions?.dlcs?.length ? mapOptions.dlcs.some(d => d.id === packId) : packId === 'tidebound';
+  if (!available) return;
   const curDlc = state.settings?.dlc && typeof state.settings.dlc === 'object' ? { ...state.settings.dlc } : {};
   if (!curDlc[packId]) curDlc[packId] = true;
   const curAddons = state.settings?.addons && typeof state.settings.addons === 'object' ? { ...state.settings.addons } : {};
@@ -354,23 +482,13 @@ export function enableAddonWithDeps(addonId: string): void {
     curAddons[id] = true;
   };
   enableRecursive(addonId);
-  // Also enable known cross-addon and cross-DLC deps
+  // Also enable declared Tidebound addon dependencies
   const knownDeps: Record<string, string[]> = {
-    'heartland.harvest_festival': ['heartland.estates'],
-    'tidebound.harbors': ['tidebound.ships'],
-    'tidebound.rising_sea': ['tidebound.bridges'],
-    'bulwark.gates': ['bulwark.walls'],
-    'bulwark.garrison': ['bulwark.walls'],
-    'ledger.contracts': ['ledger.coins'],
-    'ledger.loans': ['ledger.coins'],
-    'wayfarers.relics': ['wayfarers.outposts'],
-    'crimson.siege': ['bulwark.walls'],
-    'crimson.bounties': ['crimson.raiders'],
-    'whispers.rumors': ['whispers.pacts'],
-    'whispers.overthrow': ['whispers.pacts'],
-    'wildlands.plague': ['wildlands.seasons']
+    'tidebound.rickety_bridges': ['tidebound.bridges']
   };
-  for (const dep of knownDeps[addonId] || []) {
+  const addonInfo = mapOptions?.addons?.find(a => a.id === addonId);
+  const deps = addonInfo?.deps?.length ? addonInfo.deps : (knownDeps[addonId] || []);
+  for (const dep of deps) {
     enableRecursive(dep);
   }
   socket.emit('updateSettings', { code: state.code, newSettings: { dlc: curDlc, addons: curAddons } });
@@ -460,8 +578,22 @@ export function removeBot(): void { if (requireHost('remove bots')) socket.emit(
 export function startGame(): void { if (requireHost('start the game')) socket.emit('startGame', { code: state.code }); }
 
 export function rematchLobby(): void {
+  toggleGameMenu(false);
   setHideVictoryOverlay(false);
   socket.emit('rematchLobby', { code: state.code });
+}
+
+export function backToWorldSetup(): void {
+  if (!state) return;
+  if (!requireHost('return to world setup')) return;
+  toggleGameMenu(false);
+  if (state.status === 'LOBBY') {
+    setSetupOpen(true);
+    return;
+  }
+  setHideVictoryOverlay(false);
+  socket.emit('rematchLobby', { code: state.code, openSetup: true });
+  playTone(460, 0.06);
 }
 
 export function switchVictoryTab(tab: string): void {

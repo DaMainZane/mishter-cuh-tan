@@ -45,6 +45,87 @@ const serverOptions = {
   plugins: watching ? [restartServer] : []
 };
 
+const browserNodeShimPlugin = {
+  name: 'browser-node-shim',
+  setup(b) {
+    b.onResolve({ filter: /^(node:)?fs$/ }, () => ({
+      path: 'fs',
+      namespace: 'browser-node-shim'
+    }));
+    b.onResolve({ filter: /^(node:)?path$/ }, () => ({
+      path: 'path',
+      namespace: 'browser-node-shim'
+    }));
+    b.onLoad({ filter: /^fs$/, namespace: 'browser-node-shim' }, () => ({
+      contents: `
+        const PREFIX = 'hex_fs:';
+        const store = new Map();
+        const getItem = (k) => {
+          try { return localStorage.getItem(PREFIX + k) ?? store.get(k) ?? null; } catch { return store.get(k) ?? null; }
+        };
+        const setItem = (k, v) => {
+          store.set(k, String(v));
+          try { localStorage.setItem(PREFIX + k, String(v)); } catch {}
+        };
+        const existsSync = (p) => getItem(p) !== null;
+        const readFileSync = (p) => {
+          const val = getItem(p);
+          if (val === null) throw new Error('ENOENT: ' + p);
+          return val;
+        };
+        const writeFileSync = (p, data) => setItem(p, data);
+        const mkdirSync = () => {};
+        const readdirSync = (dir) => {
+          const clean = String(dir).replace(/\\/+$/, '') + '/';
+          const out = new Set();
+          for (const k of store.keys()) {
+            if (k.startsWith(clean)) out.add(k.slice(clean.length).split('/')[0]);
+          }
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const rawKey = localStorage.key(i) || '';
+              if (rawKey.startsWith(PREFIX + clean)) {
+                out.add(rawKey.slice((PREFIX + clean).length).split('/')[0]);
+              }
+            }
+          } catch {}
+          return [...out];
+        };
+        const promises = {
+          mkdir: async () => {},
+          appendFile: async () => {}
+        };
+        export default { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, promises };
+        export { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, promises };
+      `,
+      loader: 'js'
+    }));
+    b.onLoad({ filter: /^path$/, namespace: 'browser-node-shim' }, () => ({
+      contents: `
+        const join = (...parts) => parts.filter(Boolean).join('/').replace(/\\/+/g, '/');
+        export default { join, resolve: join };
+        export { join, join as resolve };
+      `,
+      loader: 'js'
+    }));
+  }
+};
+
+const hostOptions = {
+  entryPoints: ['src/server/p2pHost.ts'],
+  outfile: 'dist/public/host.js',
+  bundle: true,
+  platform: 'browser',
+  format: 'iife',
+  target: 'es2020',
+  sourcemap: true,
+  logLevel: 'info',
+  banner: {
+    js: 'globalThis.process = globalThis.process || { cwd: () => "/", env: {} };'
+  },
+  plugins: [browserNodeShimPlugin]
+};
+
 const clientOptions = {
   entryPoints: ['src/client/main.ts'],
   outfile: 'dist/public/app.js',
@@ -59,6 +140,9 @@ const clientOptions = {
 copyStatic();
 
 if (watching) {
+  const hostCtx = await context(hostOptions);
+  await hostCtx.rebuild();
+  await hostCtx.watch();
   const clientCtx = await context(clientOptions);
   await clientCtx.rebuild();
   await clientCtx.watch();
@@ -82,5 +166,6 @@ if (watching) {
   process.on('SIGTERM', cleanup);
 } else {
   await build(serverOptions);
+  await build(hostOptions);
   await build(clientOptions);
 }

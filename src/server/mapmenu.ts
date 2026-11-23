@@ -59,77 +59,15 @@ export const SCENARIO_PRESETS: ScenarioPresetView[] = [
     fateTokens: 1
   },
   {
-    id: 'kingdoms',
-    label: 'Kingdoms',
-    description: 'Bulwark + Warlords on a large continent (walls, castles, garrisons, diplomacy and sieges).',
-    quickStart: 'balancedContinent',
-    boardRadius: 5,
+    id: 'tidebound',
+    label: 'Tidebound',
+    description: 'Islands across wide seas with bridges, tides, rising sea, harbors, fishing, shipwrecks and pirates.',
+    quickStart: 'islandHopper',
+    boardRadius: 7,
     vpToWin: 12,
-    dlc: { bulwark: true, warlords: true },
+    dlc: { tidebound: true },
     eventsOn: true,
     fateTokens: 2
-  },
-  {
-    id: 'drownedWorld',
-    label: 'Drowned World',
-    description: 'Tidebound + Wild Earth on islands (bridges, tides, rising sea, floods and storms).',
-    quickStart: 'archipelago',
-    boardRadius: 5,
-    vpToWin: 12,
-    dlc: { tidebound: true, wildearth: true },
-    eventsOn: true,
-    fateTokens: 2
-  },
-  {
-    id: 'partyNight',
-    label: 'Party Night',
-    description: 'Rowdy Tavern only (Hat Day, Drunk Robber, Karaoke 7, duels, drinking game and instigation).',
-    quickStart: 'balancedContinent',
-    boardRadius: 5,
-    vpToWin: 10,
-    dlc: { rowdy: true },
-    eventsOn: true,
-    fateTokens: 2
-  },
-  {
-    id: 'merchantRepublic',
-    label: 'Merchant Republic',
-    description: 'Guildhall + Tidebound (harbors, bridges, sheep economy, landmarks, caravans and debt).',
-    quickStart: 'archipelago',
-    boardRadius: 5,
-    vpToWin: 12,
-    dlc: { guildhall: true, tidebound: true },
-    eventsOn: true,
-    fateTokens: 2
-  },
-  {
-    id: 'cataclysm',
-    label: 'Cataclysm',
-    description: 'Wild Earth with high event action (volcanoes, meteors, seasons, plague and aftermath).',
-    quickStart: 'realisticContinent',
-    boardRadius: 5,
-    vpToWin: 12,
-    dlc: { wildearth: true },
-    eventsOn: true,
-    fateTokens: 3
-  },
-  {
-    id: 'everythingBagel',
-    label: 'Everything Bagel',
-    description: 'All 6 DLCs enabled together (Tidebound, Bulwark, Warlords, Wild Earth, Guildhall, Rowdy Tavern).',
-    quickStart: 'fogContinents',
-    boardRadius: 5,
-    vpToWin: 15,
-    dlc: {
-      tidebound: true,
-      bulwark: true,
-      warlords: true,
-      wildearth: true,
-      guildhall: true,
-      rowdy: true
-    },
-    eventsOn: true,
-    fateTokens: 3
   }
 ];
 

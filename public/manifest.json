@@ -1,0 +1,19 @@
+{
+  "name": "Colonist Custom: Mobile P2P Multiplayer Catan",
+  "short_name": "Colonist Custom",
+  "description": "Free, open-source multiplayer Catan-style board game with P2P invite codes, bots, and map painter",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#e4e0d5",
+  "theme_color": "#d9893b",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

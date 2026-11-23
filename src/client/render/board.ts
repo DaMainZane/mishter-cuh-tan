@@ -130,7 +130,8 @@ export function getBoardBounds(): { centerX0: number; centerY0: number; contentW
   }
   const firstHex = state.board.hexes[0];
   const lastHex = state.board.hexes[state.board.hexes.length - 1];
-  const key = `${state.code}_${state.status}_${state.board.hexes.length}_${firstHex?.x ?? 0}_${lastHex?.x ?? 0}`;
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth <= 900;
+  const key = `${state.code}_${state.status}_${isMobileView ? 'm' : 'd'}_${state.board.hexes.length}_${firstHex?.x ?? 0}_${lastHex?.x ?? 0}`;
   if (key === cachedBoundsKey) return cachedBounds;
 
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -143,9 +144,9 @@ export function getBoardBounds(): { centerX0: number; centerY0: number; contentW
     });
   });
 
-  const topExtra = state.status === 'LOBBY' ? 210 : 115;
-  const bottomExtra = 165;
-  const sidePad = 130;
+  const topExtra = isMobileView ? 250 : (state.status === 'LOBBY' ? 210 : 115);
+  const bottomExtra = isMobileView ? 235 : 165;
+  const sidePad = isMobileView ? 215 : 130;
 
   const contentX = minX - sidePad;
   const contentY = minY - topExtra;
@@ -172,6 +173,7 @@ export function updateCameraViewBox(): void {
   const baseX = (centerX0 - camPanX) - baseW / 2;
   const baseY = (centerY0 - camPanY) - baseH / 2;
   svg.setAttribute('viewBox', `${baseX.toFixed(1)} ${baseY.toFixed(1)} ${baseW.toFixed(1)} ${baseH.toFixed(1)}`);
+  if (svg.style.transform) svg.style.transform = '';
   committedPanX = camPanX;
   committedPanY = camPanY;
   const panLayer = document.getElementById('boardPan');
@@ -1239,22 +1241,46 @@ export function rerenderBoard(): void {
 }
 
 /**
- * Updates the 2D terrain canvas and lightweight SVG piece overlay directly on each animation frame during a drag,
- * eliminating unpainted edge gaps and mid-drag chunk pop-in.
+ * Updates the pre-rendered 2D terrain canvas atlas (<0.2ms, zero chunk pop-in) and translates the SVG piece overlay
+ * on the GPU compositor during a drag so Tidebound and big-radius maps never re-rasterize SVG nodes mid-drag.
  */
-export function panBoardPreview(_rect?: DOMRect): void {
+export function panBoardPreview(rect?: DOMRect): void {
   if (!state || panFramePending) return;
   panFramePending = true;
   requestAnimationFrame(() => {
     panFramePending = false;
-    updateCameraViewBox();
+    if (!state || !state.board) return;
+    const svg = document.getElementById('boardSvg');
+    if (!svg) return;
+    const bounds = getBoardBounds();
+    if (cachedCanvasHexes.length > 0) {
+      drawBoardTerrainCanvas({
+        hexes: cachedCanvasHexes,
+        landPath: cachedLandPathD,
+        waterPath: cachedWaterPathD,
+        isLobby: state.status === 'LOBBY',
+        canPaintHex: cachedCanPaintHex,
+        bounds,
+        camZoom,
+        camPanX,
+        camPanY,
+        animatingFogHexIds: cachedAnimatingFogIds
+      });
+    }
+    const viewW = rect?.width || svg.clientWidth || 1000;
+    const viewH = rect?.height || svg.clientHeight || 800;
+    const cam = computeCanvasCamera(bounds, camZoom, camPanX, camPanY, viewW, viewH);
+    const dxPx = (camPanX - committedPanX) * cam.scale;
+    const dyPx = (camPanY - committedPanY) * cam.scale;
+    svg.style.transform = `translate(${dxPx.toFixed(2)}px, ${dyPx.toFixed(2)}px)`;
   });
 }
 
 /** The drag ended: flush any pending camera update. */
 export function endBoardPan(): void {
   const panLayer = document.getElementById('boardPan');
-  if (state?.board && (camPanX !== committedPanX || camPanY !== committedPanY || panLayer?.style.transform)) {
+  const svg = document.getElementById('boardSvg');
+  if (state?.board && (camPanX !== committedPanX || camPanY !== committedPanY || panLayer?.style.transform || svg?.style.transform)) {
     updateCameraViewBox();
   }
 }
@@ -1761,10 +1787,18 @@ function getTransferTargetEl(actorId: string, resource: string, kind: string): H
   }
   if (actorId === 'bank') {
     if (resource === 'dev' || kind === 'buyDev') {
+      const mobDev = document.getElementById('mobBankDevDeck');
+      if (mobDev && mobDev.offsetWidth > 0) return mobDev;
       return document.getElementById('bankDevDeckItem') || document.getElementById('bankBar');
     }
+    const mobRes = document.getElementById(`mobBankRes_${resource}`);
+    if (mobRes && mobRes.offsetWidth > 0) return mobRes;
+    const mobileBtn = document.getElementById('btnMobileSidebar');
+    if (mobileBtn && mobileBtn.offsetWidth > 0) return mobileBtn;
     return document.getElementById(`bankRes_${resource}`) || document.getElementById('bankBar');
   }
+  const mobilePill = document.getElementById(`mobilePlayerPill_${actorId}`);
+  if (mobilePill && mobilePill.offsetWidth > 0) return mobilePill;
   return document.getElementById(`playerRow_${actorId}`);
 }
 
@@ -1936,7 +1970,8 @@ export function triggerFlyingResourceAnimations(productions: any[]): void {
     if (prod.playerId === socket.id) {
       targetEl = document.querySelector<HTMLElement>(`#myHandPanel .card-${prod.resource}`) || document.getElementById('myHandPanel');
     } else {
-      targetEl = document.getElementById(`playerRow_${prod.playerId}`);
+      const mobilePill = document.getElementById(`mobilePlayerPill_${prod.playerId}`);
+      targetEl = (mobilePill && mobilePill.offsetWidth > 0) ? mobilePill : document.getElementById(`playerRow_${prod.playerId}`);
     }
     if (!targetEl) return;
     const rect = visibleRect(targetEl);

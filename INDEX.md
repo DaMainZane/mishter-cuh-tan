@@ -151,6 +151,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `main.ts` | server entry (Express and Socket.io, /health, bot training log endpoints, serves the client) |
 | `mapmenu.ts` | map menu data (the registry's map options, quick starts, DLC/addon catalog and scenarios as plain JSON) |
 | `net.ts` | socket broadcast (sends each human player their own view, clears one-shot effects, wakes the bots) |
+| `p2pHost.ts` | embedded browser/mobile host server adapter (runs the authoritative server and bots locally in-app for P2P player-hosted rooms) |
 | `persistence.ts` | S0.15 cross-game bot memory & player profile persistence (Service 19; JSON disk store + portable base64url export/import for Render free tier) |
 | `presets.ts` | custom map presets (the lobby map as plain JSON: save, validate, rebuild) |
 | `rooms.ts` | rooms (registry of rooms, lobby roster, status, helpers over the engine game) |
@@ -223,7 +224,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `render/terrainCanvas.ts` | 2D canvas terrain renderer (viewport-culled hexes, coastlines, resource glyphs, number tokens, and math hex hit-testing) |
 | `render/trade.ts` | active trade offer stack (top right), per-offer timers, trade responses and counter-offer editor |
 | `render/turnclock.ts` | turn clock readout and countdown bar in the turn pill, plus the top-right ocean game timer & round number HUD |
-| `socket.ts` | the single socket.io connection shared by all client modules |
+| `socket.ts` | unified P2P and local-host socket transport (WebRTC PeerJS + BroadcastChannel + embedded host server for serverless invite-code multiplayer) |
 | `store.ts` | shared mutable client UI state (game state, build and drawer modes, camera, selections) with setters |
 | `techView.ts` | tech tree pan and zoom (pure view maths: clamp, zoom about a point, pan, and when the costs show) |
 | `types.ts` | loose client-side view types (PlayerView, GameState, Resources) |
@@ -304,3 +305,4 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `fishSpend.test.ts` | Spending a stack of fish at once (`client/fishSpend.ts`): one pick per fish, limited by the bank, add and remove picks, the list sent as `spend_fish` |
 | `panPreview.test.ts` | Drag-pan layer preview (`client/panPreview.ts`, BUG 1): off-screen board edges in pixels (`hiddenEdges`), unpainted strip width when translated (`missingAfterOffset`), and mid-drag repaint threshold (`needsRepaint`, never repaints when the whole board fits) |
 | `terrainCanvas.test.ts` | 2D terrain canvas (`client/render/terrainCanvas.ts`): camera transform parity with SVG `xMidYMid meet`, viewport frustum culling (`isHexVisible`), world-to-screen inversion (`screenToWorld`), polygon hit-testing (`findHexAtWorldPoint`), and `#boardTerrainCanvas` mount |
+| `mobileP2P.test.ts` | Embedded P2P host server adapter (`server/p2pHost.ts`): virtual room creation, explicit invite-code joins while in world setup, and `rematchLobby({ openSetup: true })` |

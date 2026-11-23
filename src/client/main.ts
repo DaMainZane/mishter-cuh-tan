@@ -44,8 +44,8 @@ import {
 } from './render/overlay';
 import {
   createRoom, joinRoom, spectateRoom, toggleSpectate, selectSpectateTarget, rejoinSavedRoom, downloadTrainingLog, saveSessionInfo, clearSavedRoom, syncRejoinButton,
-  copyInviteLink, switchLobbyTab, toggleLobbyToolbar, toggleGameMenu,
-  setBrush, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, pushSettings, schedulePushSettings, addBot, removeBot, startGame, rematchLobby, switchVictoryTab,
+  copyInviteLink, copyInviteCodeOnly, shareInviteCode, pasteInviteCode, toggleMobileSidebar, switchLobbyTab, toggleLobbyToolbar, toggleGameMenu,
+  setBrush, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, pushSettings, schedulePushSettings, addBot, removeBot, startGame, rematchLobby, backToWorldSetup, switchVictoryTab,
   toggleVictoryMapInspect, setBuildMode, mainTurnButton, rollDice, buyDevCard, cycleAvatar, cycleBotTier, collapseLobbyUi, setSetupOpen
 } from './actions';
 import {
@@ -72,8 +72,8 @@ function onSetLogTab(tab: 'live' | 'chat' | 'history'): void {
 
 // Inline onclick="..." handlers in index.html and in generated markup resolve against window.
 Object.assign(window as any, {
-  createRoom, joinRoom, spectateRoom, toggleSpectate, selectSpectateTarget, rejoinSavedRoom, downloadTrainingLog, copyInviteLink, toggleSound, toggleTheme, resetCamera, toggleLobbyToolbar, toggleGameMenu,
-  switchLobbyTab, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, addBot, removeBot, startGame, rematchLobby,
+  createRoom, joinRoom, spectateRoom, toggleSpectate, selectSpectateTarget, rejoinSavedRoom, downloadTrainingLog, copyInviteLink, copyInviteCodeOnly, shareInviteCode, pasteInviteCode, toggleMobileSidebar, toggleSound, toggleTheme, resetCamera, toggleLobbyToolbar, toggleGameMenu,
+  switchLobbyTab, applyPreset, applyScenario, toggleDlc, toggleAddon, enableAddonWithDeps, previewTideLevel, setTideLevel, previewRisingSeaLevel, setRisingSeaLevel, addBot, removeBot, startGame, rematchLobby, backToWorldSetup,
   switchVictoryTab, toggleVictoryMapInspect, setBrush, pushSettings,
   executeBankTrade, proposePlayerTrade, rollDice, confirmInlineAction, closeInlineDrawer,
   toggleTradeDrawer, buyDevCard, setBuildMode, mainTurnButton, sendChat,
@@ -452,6 +452,167 @@ function init(): void {
     panSvgRect = null;
     document.getElementById('boardPanShield')?.classList.remove('on');
   });
+
+  // ---- Mobile multi-touch pan, 2-finger pinch-to-zoom, and lobby brush drag ----
+  let touchPinchDist = 0;
+  let touchPinchMidX = 0;
+  let touchPinchMidY = 0;
+  let isTouchPainting = false;
+
+  stage.addEventListener('touchstart', (e: TouchEvent) => {
+    const target = e.target as Element | null;
+    if (target && target !== stage && !target.closest('#boardSvg')) return;
+    if (!state || !state.board) return;
+
+    const svg = document.getElementById('boardSvg');
+    panSvgRect = svg ? svg.getBoundingClientRect() : null;
+    cachedWheelRect = panSvgRect;
+    cachedWheelRectTime = performance.now();
+
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      if (isPanning) endBoardPan();
+      setIsPanning(false);
+      isTouchPainting = false;
+      setHasDraggedMap(true);
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      touchPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) || 1;
+      touchPinchMidX = (t0.clientX + t1.clientX) / 2;
+      touchPinchMidY = (t0.clientY + t1.clientY) / 2;
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      const isLobbyHexBrush = Boolean(
+        state.status === 'LOBBY' &&
+        state.hostId === socket.id &&
+        (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
+      );
+      const paintedHexId = isLobbyHexBrush ? hexAtClientPoint(t.clientX, t.clientY) : null;
+      const isLobbyPaintTarget = Boolean(
+        paintedHexId !== null ||
+        (state.status === 'LOBBY' &&
+          state.hostId === socket.id &&
+          activeBrush.type &&
+          target?.closest('[data-paintable="1"]'))
+      );
+
+      setHasDraggedMap(false);
+      panOrigin.x = t.clientX;
+      panOrigin.y = t.clientY;
+
+      if (!isLobbyPaintTarget) {
+        setIsPanning(true);
+        isTouchPainting = false;
+        panStart.x = t.clientX;
+        panStart.y = t.clientY;
+      } else {
+        setIsPanning(false);
+        isTouchPainting = true;
+        lastLobbyPaintedHexId = paintedHexId;
+        if (paintedHexId !== null) {
+          onHexInteract(paintedHexId);
+        }
+      }
+    }
+  }, { passive: false });
+
+  stage.addEventListener('touchmove', (e: TouchEvent) => {
+    if (!state || !state.board) return;
+    const rect = panSvgRect || cachedWheelRect;
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+    if (e.touches.length === 2 && touchPinchDist > 0) {
+      e.preventDefault();
+      const t0 = e.touches[0];
+      const t1 = e.touches[1];
+      const newDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY) || 1;
+      const newMidX = (t0.clientX + t1.clientX) / 2;
+      const newMidY = (t0.clientY + t1.clientY) / 2;
+
+      const { contentW, contentH } = getBoardBounds();
+      const baseUnitPerPx = Math.max(contentW / rect.width, contentH / rect.height);
+      const oldZoom = camZoom;
+      const scaleRatio = touchPinchDist / newDist;
+      const newZoom = Math.max(0.05, Math.min(4.5, oldZoom * scaleRatio));
+
+      const offsetX = newMidX - (rect.left + rect.width / 2);
+      const offsetY = newMidY - (rect.top + rect.height / 2);
+      const oldWorldPerPx = oldZoom * baseUnitPerPx;
+      const newWorldPerPx = newZoom * baseUnitPerPx;
+
+      const midDx = newMidX - touchPinchMidX;
+      const midDy = newMidY - touchPinchMidY;
+
+      const newPanX = camPanX + offsetX * (newWorldPerPx - oldWorldPerPx) + midDx * newWorldPerPx;
+      const newPanY = camPanY + offsetY * (newWorldPerPx - oldWorldPerPx) + midDy * newWorldPerPx;
+
+      touchPinchDist = newDist;
+      touchPinchMidX = newMidX;
+      touchPinchMidY = newMidY;
+
+      setCamZoom(newZoom);
+      setCamPan(newPanX, newPanY);
+      rerenderBoard();
+      return;
+    }
+
+    if (e.touches.length === 1) {
+      const t = e.touches[0];
+      if (isPanning) {
+        if (!hasDraggedMap && Math.hypot(t.clientX - panOrigin.x, t.clientY - panOrigin.y) > 8) {
+          setHasDraggedMap(true);
+          document.getElementById('boardPanShield')?.classList.add('on');
+          onRoadLeave();
+        }
+        if (hasDraggedMap) {
+          e.preventDefault();
+          const { contentW, contentH } = getBoardBounds();
+          const worldPerPx = camZoom * Math.max(contentW / (rect.width || 1), contentH / (rect.height || 1));
+          const dx = t.clientX - panStart.x;
+          const dy = t.clientY - panStart.y;
+          panStart.x = t.clientX;
+          panStart.y = t.clientY;
+          setCamPan(camPanX + dx * worldPerPx, camPanY + dy * worldPerPx);
+          panBoardPreview(rect);
+        }
+      } else if (
+        isTouchPainting &&
+        state.status === 'LOBBY' &&
+        state.hostId === socket.id &&
+        (activeBrush.type === 'terrain' || activeBrush.type === 'number' || activeBrush.type === 'robber')
+      ) {
+        e.preventDefault();
+        const hexId = hexAtClientPoint(t.clientX, t.clientY);
+        if (hexId !== null && hexId !== lastLobbyPaintedHexId) {
+          lastLobbyPaintedHexId = hexId;
+          onHexEnter(hexId);
+        }
+      }
+    }
+  }, { passive: false });
+
+  const endTouchGesture = (e: TouchEvent) => {
+    if (e.touches.length === 0) {
+      if (isPanning) endBoardPan();
+      setIsPanning(false);
+      isTouchPainting = false;
+      touchPinchDist = 0;
+      lastLobbyPaintedHexId = null;
+      panSvgRect = null;
+      document.getElementById('boardPanShield')?.classList.remove('on');
+    } else if (e.touches.length === 1) {
+      touchPinchDist = 0;
+      const t = e.touches[0];
+      panStart.x = t.clientX;
+      panStart.y = t.clientY;
+      setIsPanning(true);
+    }
+  };
+  stage.addEventListener('touchend', endTouchGesture);
+  stage.addEventListener('touchcancel', endTouchGesture);
   stage.addEventListener('click', (e: MouseEvent) => {
     const target = e.target as Element | null;
     if (hasDraggedMap) {
@@ -460,8 +621,98 @@ function init(): void {
         e.stopPropagation();
         e.preventDefault();
       }
+      return;
+    }
+
+    // Design UI Philosophy (Interaction 1): "Small targets, big hit areas. Vertices, road edges and ports stay visually small,
+    // but their tap area is at least 44px (invisible hit slop). Where areas overlap, the nearest target wins."
+    if (target && (target.id === 'boardSvg' || target.closest('#boardSvg')) && !(e as any).__nearestResolved) {
+      const candidates = document.querySelectorAll<SVGGraphicsElement>(
+        '#boardVerticesLayer g[onclick]:not([onclick=""]), #roadSpotsLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""]), #boardPortsLayer g[onclick]:not([onclick=""])'
+      );
+      let nearestEl: SVGGraphicsElement | null = null;
+      let nearestDist = 22; // 22px radius = 44px diameter minimum hit slop
+      for (let i = 0; i < candidates.length; i++) {
+        const el = candidates[i];
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+        if (dist <= nearestDist) {
+          nearestDist = dist;
+          nearestEl = el;
+        }
+      }
+      const clickedOnclickEl = target.closest<SVGGraphicsElement>('g[onclick]:not([onclick=""])');
+      if (nearestEl && nearestEl !== clickedOnclickEl) {
+        e.stopPropagation();
+        e.preventDefault();
+        const synth = new MouseEvent('click', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY });
+        (synth as any).__nearestResolved = true;
+        nearestEl.dispatchEvent(synth);
+      }
     }
   }, true);
+
+  // Design UI Philosophy (Interaction 2): "Bottom sheets swipe down to dismiss. The back gesture closes the top sheet or menu first and never exits the game by accident."
+  const bindSwipeToDismiss = (el: HTMLElement | null, dir: 'down' | 'right', onDismiss: () => void) => {
+    if (!el) return;
+    let startX = 0;
+    let startY = 0;
+    let atTop = true;
+    el.addEventListener('touchstart', (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      const scroller = el.querySelector<HTMLElement>('#inlineDrawer, .dock-body, #logFeed, #chatFeed') || el;
+      atTop = scroller.scrollTop <= 4;
+    }, { passive: true });
+    el.addEventListener('touchend', (e: TouchEvent) => {
+      if (e.changedTouches.length !== 1) return;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (dir === 'down' && atTop && dy > 56 && Math.abs(dy) > Math.abs(dx) * 1.35) {
+        onDismiss();
+      } else if (dir === 'right' && dx > 56 && Math.abs(dx) > Math.abs(dy) * 1.35) {
+        onDismiss();
+      }
+    }, { passive: true });
+  };
+
+  bindSwipeToDismiss(document.getElementById('inlineDrawerWrap'), 'down', () => closeInlineDrawer());
+  bindSwipeToDismiss(document.getElementById('lobbyToolbar'), 'down', () => collapseLobbyUi());
+  bindSwipeToDismiss(document.querySelector<HTMLElement>('.right-sidebar'), 'right', () => toggleMobileSidebar(false));
+
+  try {
+    window.history.pushState({ hexGameGuard: true }, '');
+  } catch {}
+  window.addEventListener('popstate', () => {
+    if (!state) return;
+    const sidebar = document.querySelector<HTMLElement>('.right-sidebar');
+    const settingsMenu = document.getElementById('gameSettingsMenu');
+    const inlineWrap = document.getElementById('inlineDrawerWrap');
+    const lobbyBar = document.getElementById('lobbyToolbar');
+    const buildMenuEl = document.getElementById('buildMenu');
+    const bridgePickerEl = document.getElementById('bridgePicker');
+
+    if (buildMenuEl && buildMenuEl.style.display !== 'none' && buildMenuEl.innerHTML.trim() !== '') {
+      closeBuildMenu();
+    } else if (bridgePickerEl && bridgePickerEl.style.display !== 'none') {
+      closeBridgePicker();
+    } else if (sidebar && sidebar.classList.contains('mob-open')) {
+      toggleMobileSidebar(false);
+    } else if (settingsMenu && settingsMenu.style.display !== 'none') {
+      toggleGameMenu(false);
+    } else if (inlineWrap && inlineWrap.style.display !== 'none') {
+      closeInlineDrawer();
+    } else if (lobbyBar && lobbyBar.style.display !== 'none' && window.innerWidth <= 900) {
+      collapseLobbyUi();
+    }
+    try {
+      window.history.pushState({ hexGameGuard: true }, '');
+    } catch {}
+  });
   stage.addEventListener('contextmenu', e => e.preventDefault());
   initCursors();
   initDebugMode();

@@ -592,6 +592,92 @@ export function renderSidebar(): void {
   stackEl.innerHTML = playerRowsHtml + specRowsHtml;
   stackEl.scrollTop = stackTop;
 
+  const mobileBankEl = document.getElementById('mobileBankStrip');
+  if (mobileBankEl) {
+    mobileBankEl.innerHTML = `
+      <span class="mob-bank-ico" title="Bank">${uiIcon('bank', 15)}</span>
+      ${RESOURCES.map(r => `
+        <div class="mob-bank-chip card-${r}" id="mobBankRes_${r}">
+          <span class="mob-bank-cnt">${b[r]}</span>
+          ${getMiniSvg(r)}
+        </div>
+      `).join('')}
+      <div class="mob-bank-chip card-dev" id="mobBankDevDeck">
+        <span class="mob-bank-cnt">${state.devDeckCount}</span>
+        ${uiIcon('devcard', 11)}
+      </div>
+    `;
+  }
+
+  const mobileStripEl = document.getElementById('mobilePlayersStrip');
+  if (mobileStripEl) {
+    const shortPhase = ({
+      SETUP_SETTLEMENT: 'Place Settle',
+      SETUP_ROAD: 'Place Road',
+      ROLL: 'Roll Dice',
+      GOLD_PICK: 'Pick Gold',
+      DISCARD: 'Discarding',
+      ROBBER: 'Move Robber',
+      ROBBER_STEAL: 'Rob Player',
+      MAIN: 'Your Turn'
+    } as Record<string, string>)[state.phase] || 'Turn';
+
+    mobileStripEl.innerHTML = state.players.map((p, idx) => {
+      const isVictim = canPickVictim && victimSet.has(p.id);
+      const isTurn = idx === state.turnIndex && state.status !== 'LOBBY';
+      const shownResCount = Math.max(0, p.resourceCount - (inFlightPlayerResCount[p.id] || 0));
+      const shownDevCount = Math.max(0, p.devCardCount - (inFlightPlayerDevCount[p.id] || 0));
+      const overLimit = shownResCount > (p.discardLimit ?? state.settings.cardDiscardLimit);
+      const pub = p.publicVp ?? p.vp;
+      const pillClick = isVictim
+        ? `onclick="chooseRobberVictim('${esc(p.id)}')"`
+        : isSpectatingGame
+        ? `onclick="selectSpectateTarget('${esc(p.id)}')"`
+        : `onclick="toggleMobileSidebar(true)"`;
+      const turnFootLabel = p.id === socket.id ? shortPhase : (state.phase === 'MAIN' ? 'Thinking...' : shortPhase);
+      const turnFootHtml = isTurn
+        ? `<div class="mob-p-turn-foot ${p.id === socket.id ? 'mine' : ''}">${esc(turnFootLabel)}</div>`
+        : '';
+      return `<div class="mob-p-col">
+        <div class="mob-p-card ${isTurn ? 'is-turn' : ''} ${isVictim ? 'can-rob' : ''}" id="mobilePlayerPill_${esc(p.id)}" ${pillClick}>
+          <div class="mob-p-head" style="background:${esc(p.color)}">
+            <span class="mob-p-vp-badge">${pub}</span>
+            <span class="mob-p-head-name">${esc(p.name)}</span>
+          </div>
+          <div class="mob-p-body">
+            <div class="mob-p-row-stats">
+              <span class="mob-p-stat ${overLimit ? 'warn' : ''}" title="Resource cards">${uiIcon('cards', 10)}<b>${shownResCount}</b></span>
+              <span class="mob-p-stat dev" title="Dev cards">${uiIcon('devcard', 10)}<b>${shownDevCount}</b></span>
+              <span class="mob-p-stat" title="Knights">${uiIcon('sword', 10)}<b>${p.knightsPlayed}</b></span>
+              <span class="mob-p-stat" title="Longest road">${uiIcon('road', 10)}<b>${p.longestRoadLength}</b></span>
+            </div>
+            <div class="mob-p-row-pieces">
+              <span class="mob-p-piece" title="Roads left"><i class="mob-piece-road" style="background:${esc(p.color)}"></i>${p.roadsLeft ?? 15}</span>
+              <span class="mob-p-piece" title="Settlements left"><i class="mob-piece-dot" style="background:${esc(p.color)}"></i>${p.settlementsLeft ?? 5}</span>
+              <span class="mob-p-piece" title="Cities left"><i class="mob-piece-sq" style="background:${esc(p.color)}"></i>${p.citiesLeft ?? 4}</span>
+            </div>
+          </div>
+        </div>
+        ${turnFootHtml}
+      </div>`;
+    }).join('');
+  }
+
+  const mobileCodeEl = document.getElementById('mobileInviteCodeText');
+  if (mobileCodeEl && state.code) {
+    mobileCodeEl.textContent = state.code;
+  }
+
+  const mobileUnreadEl = document.getElementById('mobileChatUnreadBadge');
+  if (mobileUnreadEl) {
+    if (unreadChats > 0) {
+      mobileUnreadEl.textContent = String(unreadChats);
+      mobileUnreadEl.style.display = 'inline-flex';
+    } else {
+      mobileUnreadEl.style.display = 'none';
+    }
+  }
+
   const turnKey = state.status === 'LOBBY' || state.status === 'GAMEOVER' ? '' : String(state.currentPlayerId ?? state.turnIndex);
   if (turnKey !== lastTurnKey) {
     const hadTurn = lastTurnKey !== '';

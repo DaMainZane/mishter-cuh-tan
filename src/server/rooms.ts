@@ -1,4 +1,4 @@
-// MODULE: rooms (registry of rooms, lobby roster, status, helpers over the engine game) | DEPENDS ON: server/bots/tiers, server/bots/trainingLog, server/lobby, server/runtime, server/turnClock, server/types, +1 more | USED BY: server/bots/scheduler, server/game, server/net, server/socket, server/view
+// MODULE: rooms (registry of rooms, lobby roster, status, helpers over the engine game) | DEPENDS ON: server/bots/tiers, server/bots/trainingLog, server/lobby, server/runtime, server/turnClock, server/types, +1 more | USED BY: server/bots/scheduler, server/game, server/net, server/p2pHost, server/socket, server/view
 import { AVATARS, PLAYER_COLORS } from '../shared';
 import type { PlayerState } from '../shared';
 import { generateLobbyMap } from './lobby';

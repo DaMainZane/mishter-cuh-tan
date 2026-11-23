@@ -211,23 +211,30 @@ export function mergeSettingsDetailed(input: any, old: Settings): { settings: Se
   const gameSpeed = old.gameSpeed ?? 0.5;
 
   // DLC and addon toggles come first: they decide which map picks and params exist (an addon's perk is known only while it is on).
-  const dlc: Record<string, boolean> = { ...(old.dlc ?? {}) };
+  // Only expansions and addons registered in the shipped packs can be enabled.
+  const dlc: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(old.dlc ?? {})) {
+    if (registry.dlcs.has(k) && typeof v === 'boolean') dlc[k] = v;
+  }
   if (s.dlc && typeof s.dlc === 'object' && !Array.isArray(s.dlc)) {
     let n = 0;
     for (const [k, v] of Object.entries(s.dlc)) {
       if (++n > 32) break;
-      if (typeof k === 'string' && k.length > 0 && k.length <= 40 && typeof v === 'boolean') {
+      if (typeof k === 'string' && registry.dlcs.has(k) && typeof v === 'boolean') {
         dlc[k] = v;
       }
     }
   }
 
-  const addons: Record<string, boolean> = { ...(old.addons ?? {}) };
+  const addons: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(old.addons ?? {})) {
+    if (registry.addons.has(k) && typeof v === 'boolean') addons[k] = v;
+  }
   if (s.addons && typeof s.addons === 'object' && !Array.isArray(s.addons)) {
     let n = 0;
     for (const [k, v] of Object.entries(s.addons)) {
       if (++n > 128) break;
-      if (typeof k === 'string' && k.length > 0 && k.length <= 64 && typeof v === 'boolean') {
+      if (typeof k === 'string' && registry.addons.has(k) && typeof v === 'boolean') {
         addons[k] = v;
       }
     }

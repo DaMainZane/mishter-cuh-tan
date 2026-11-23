@@ -164,7 +164,10 @@ const UI_ICONS: Record<string, string> = {
   grain: `<path d="M12 21V5"/><ellipse ${FILL} cx="12" cy="5.5" rx="1.8" ry="3"/><ellipse ${FILL} cx="8.8" cy="10" rx="1.7" ry="2.8" transform="rotate(-28 8.8 10)"/><ellipse ${FILL} cx="15.2" cy="10" rx="1.7" ry="2.8" transform="rotate(28 15.2 10)"/><ellipse ${FILL} cx="8.8" cy="15" rx="1.7" ry="2.8" transform="rotate(-28 8.8 15)"/><ellipse ${FILL} cx="15.2" cy="15" rx="1.7" ry="2.8" transform="rotate(28 15.2 15)"/>`,
   rock: `<polygon ${FILL} points="4,19 6.5,9 11,5 16.5,6 20,12 19,19"/>`,
   eye: `<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>`,
-  tech: `<path d="M12 9.5V5.1M14.1 13.2l3.9 2.3M9.9 13.2L6 15.5"/><circle cx="12" cy="12" r="2.6" ${FILL}/><circle cx="12" cy="3.6" r="1.7"/><circle cx="19.3" cy="16.2" r="1.7"/><circle cx="4.7" cy="16.2" r="1.7"/>`
+  tech: `<path d="M12 9.5V5.1M14.1 13.2l3.9 2.3M9.9 13.2L6 15.5"/><circle cx="12" cy="12" r="2.6" ${FILL}/><circle cx="12" cy="3.6" r="1.7"/><circle cx="19.3" cy="16.2" r="1.7"/><circle cx="4.7" cy="16.2" r="1.7"/>`,
+  gear: `<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
+  log: `<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4.5"/>`,
+  chat: `<path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5 7.6 7.6 0 0 1-3.4-.8L4 20l1.4-4.2A7.5 7.5 0 1 1 20 11.5z"/>`
 };
 
 export function uiIcon(name: string, size = 20): string {
@@ -477,22 +480,18 @@ export function buildOverlappingStackHtml(
   extraStyle = ''
 ): string {
   const visibleSlices = Math.min(Math.max(1, count), 4);
-  const offsetStep = 7;
-  const cardW = 48;
-  const totalWidth = cardW + (visibleSlices - 1) * offsetStep;
-
   let slicesHtml = '';
   for (let i = 0; i < visibleSlices; i++) {
     const isFront = i === visibleSlices - 1;
     slicesHtml += `
-      <div class="stack-slice ${cardClass}" style="left:${i * offsetStep}px; ${isFront ? extraStyle : ''}">
+      <div class="stack-slice ${cardClass}" style="left:calc(${i} * var(--card-step, 7px)); ${isFront ? extraStyle : ''}">
         ${isFront ? innerSvgHtml : ''}
         ${isFront ? `<span class="card-count">${count}</span>` : ''}
       </div>`;
   }
 
   return `
-    <div class="stacked-group" style="width:${totalWidth}px;" ${onClickStr ? `onclick="${onClickStr}"` : ''} title="${titleStr}">
+    <div class="stacked-group" style="width:calc(var(--card-w) + ${visibleSlices - 1} * var(--card-step, 7px));" ${onClickStr ? `onclick="${onClickStr}"` : ''} title="${titleStr}">
       ${slicesHtml}
     </div>`;
 }

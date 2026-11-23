@@ -30,10 +30,15 @@ let tideSeenKey = '';
 function syncTideUi(): void {
   const tide = state.tide ?? null;
   const elevBtn = document.getElementById('btnElevation');
+  const menuElevBtn = document.getElementById('btnMenuElevation');
+  const hasElev = !!tide?.elevation;
   if (elevBtn) {
-    const has = !!tide?.elevation;
-    elevBtn.style.display = has ? '' : 'none';
-    elevBtn.classList.toggle('on', has && elevationView);
+    elevBtn.style.display = hasElev ? '' : 'none';
+    elevBtn.classList.toggle('on', hasElev && elevationView);
+  }
+  if (menuElevBtn) {
+    menuElevBtn.style.display = hasElev ? '' : 'none';
+    menuElevBtn.classList.toggle('primary', hasElev && elevationView);
   }
   if (!tide || state.status === 'LOBBY' || state.status === 'GAMEOVER') {
     tideSeenKey = '';
@@ -66,6 +71,19 @@ export function renderAll(): void {
   // "Back to lobby" means nothing while you are already there.
   const backBtn = document.getElementById('btnBackToLobby');
   if (backBtn) backBtn.style.display = state.status === 'LOBBY' ? 'none' : '';
+
+  const menuWorldSetupBtn = document.getElementById('btnMenuWorldSetup');
+  if (menuWorldSetupBtn) {
+    menuWorldSetupBtn.style.display = state.hostId === socket.id ? '' : 'none';
+  }
+  const menuPainterBtn = document.getElementById('btnMenuMapPainter');
+  if (menuPainterBtn) {
+    menuPainterBtn.style.display = state.status === 'LOBBY' && state.hostId === socket.id ? '' : 'none';
+  }
+  const menuInviteCodeEl = document.getElementById('menuInviteCodeVal');
+  if (menuInviteCodeEl && state.code) {
+    menuInviteCodeEl.textContent = state.code;
+  }
 
   const dockSpecBtn = document.getElementById('btnDockSpectate');
   if (dockSpecBtn) {

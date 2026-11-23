@@ -1,4 +1,4 @@
-// MODULE: bot scheduler (waits a game-speed-scaled delay, then lets one bot act, after every broadcast) | DEPENDS ON: packs/base/trading, server/bots/brain, server/bots/tiers, server/game, server/net, server/rooms, +4 more | USED BY: server/main, server/view
+// MODULE: bot scheduler (waits a game-speed-scaled delay, then lets one bot act, after every broadcast) | DEPENDS ON: packs/base/trading, server/bots/brain, server/bots/tiers, server/game, server/net, server/rooms, +4 more | USED BY: server/main, server/p2pHost, server/view
 import { getPlayer, legalActions } from '../../shared';
 import { openTrades } from '../../packs/base/trading';
 import { runAction } from '../game';

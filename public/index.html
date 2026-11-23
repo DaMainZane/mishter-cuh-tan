@@ -2,17 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Colonist Custom: Online Catan with Bots and a Map Painter</title>
-  <meta name="description" content="Customizable online multiplayer Catan with bots, full trading and a custom map painter" />
-  <meta property="og:title" content="Colonist Custom: Online Catan with Bots and a Map Painter" />
-  <meta property="og:description" content="Customizable online multiplayer Catan with bots, full trading and a custom map painter" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#d9893b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.json" />
+  <title>Colonist Custom: Mobile P2P Multiplayer Catan</title>
+  <meta name="description" content="Customizable online multiplayer Catan with P2P invite codes, bots, full trading and a custom map painter" />
+  <meta property="og:title" content="Colonist Custom: Mobile P2P Multiplayer Catan" />
+  <meta property="og:description" content="Customizable online multiplayer Catan with P2P invite codes, bots, full trading and a custom map painter" />
   <script>
     // Apply the saved theme before first paint so the page never flashes the wrong one.
     try { var t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
   </script>
-  <script src="/socket.io/socket.io.js"></script>
-  <link rel="stylesheet" href="/app.css" />
+  <script src="/socket.io/socket.io.js" onerror="this.remove()"></script>
+  <link rel="stylesheet" href="./app.css" />
 </head>
 <body>
 
@@ -26,10 +31,18 @@
         <input id="playerNameInput" class="text-input" type="text" placeholder="Enter your nickname..." maxlength="15" autocomplete="off" />
         <button id="rejoinLastGameBtn" class="btn primary" style="display:none;" onclick="rejoinSavedRoom()"><span data-icon="refresh" data-size="18"></span><span id="rejoinLastGameLbl">Reconnect</span></button>
         <button class="btn primary" onclick="createRoom()"><span data-icon="plus" data-size="18"></span>Create game</button>
-        <!-- Filled from an invite link (?room=CODE). Otherwise Join takes the newest open lobby. -->
-        <input id="roomCodeInput" type="hidden" />
-        <button class="btn" onclick="joinRoom()"><span data-icon="users" data-size="18"></span>Join game</button>
-        <button class="btn" onclick="spectateRoom()"><span data-icon="eye" data-size="18"></span>Spectate game</button>
+
+        <div class="auth-divider"><span>Join with invite code</span></div>
+
+        <div class="invite-code-row">
+          <input id="roomCodeInput" class="text-input invite-code-input" type="text" placeholder="Invite code" maxlength="8" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')" onkeydown="if(event.key==='Enter')joinRoom()" />
+          <button class="btn invite-paste-btn" type="button" onclick="pasteInviteCode()" title="Paste invite code from clipboard"><span data-icon="cards" data-size="16"></span>Paste</button>
+        </div>
+
+        <div class="auth-join-row">
+          <button class="btn" onclick="joinRoom()"><span data-icon="users" data-size="18"></span>Join game</button>
+          <button class="btn" onclick="spectateRoom()"><span data-icon="eye" data-size="18"></span>Spectate</button>
+        </div>
       </div>
     </div>
   </div>
@@ -38,7 +51,30 @@
   <div id="gameViewport">
     <div class="board-stage" id="boardStage">
 
-      <!-- Navigation -->
+      <!-- Mobile Top HUD (Row 1: Single Menu Gear Icon + Live Bank Strip; Row 2: Compact Player Cards) -->
+      <div id="mobileTopHud" class="mobile-top-hud">
+        <div class="mob-top-row">
+          <button type="button" id="mobileGearBtn" class="mob-icon-pill" onclick="toggleGameMenu()" title="Game menu &amp; settings">
+            <span data-icon="gear" data-size="16"></span>
+          </button>
+          <div id="mobileBankStrip" class="mob-bank-strip"></div>
+          <div class="mob-top-spacer" aria-hidden="true"></div>
+        </div>
+        <div id="mobilePlayersStrip" class="mob-players-strip"></div>
+      </div>
+
+      <!-- Mobile Bottom-Left Floating Log & Chat Buttons (above hand bar, Colonist.io style) -->
+      <div id="mobileBottomLeftFloat" class="mob-bottom-left-float">
+        <button type="button" class="mob-float-btn" onclick="setLogTab('live');toggleMobileSidebar(true)" title="Live Log &amp; Turn History">
+          <span data-icon="log" data-size="16"></span>
+        </button>
+        <button type="button" id="btnMobileSidebar" class="mob-float-btn" onclick="setLogTab('chat');toggleMobileSidebar(true)" title="Table Chat">
+          <span data-icon="chat" data-size="16"></span>
+          <span id="mobileChatUnreadBadge" class="mob-unread-badge" style="display:none;">0</span>
+        </button>
+      </div>
+
+      <!-- Navigation (desktop only; on mobile all menu items live inside the single Gear menu) -->
       <div class="left-nav">
         <button class="nav-btn" onclick="copyInviteLink()" title="Copy invite link"><span data-icon="link"></span></button>
         <button class="nav-btn" id="btnToggleSound" onclick="toggleSound()" title="Sound"><span data-icon="sound"></span></button>
@@ -49,18 +85,30 @@
         <button class="nav-btn" id="btnToggleEditor" onclick="toggleLobbyToolbar()" title="Lobby settings"><span data-icon="sliders"></span></button>
       </div>
 
-      <!-- In-game menu -->
+      <!-- In-game menu (all settings, invite code & navigation in one popover) -->
       <div id="gameSettingsMenu" class="game-settings-menu" style="display:none;">
         <div class="menu-head">
           <span>Game menu</span>
           <button class="icon-btn" onclick="toggleGameMenu(false)" title="Close"><span data-icon="close" data-size="18"></span></button>
         </div>
+        <div class="menu-invite-row" id="menuInviteRow">
+          <div class="menu-invite-meta">
+            <span class="menu-invite-lbl">Invite code</span>
+            <strong id="menuInviteCodeVal" class="menu-invite-code">-----</strong>
+          </div>
+          <button type="button" class="btn sm primary" onclick="shareInviteCode()"><span data-icon="link" data-size="15"></span><span>Share</span></button>
+        </div>
         <div class="menu-actions">
-          <button class="btn sm" onclick="resetCamera()"><span data-icon="fit" data-size="16"></span>Fit board</button>
+          <button class="btn sm primary" id="btnMenuWorldSetup" onclick="backToWorldSetup()" title="Return to World Setup (Players, World, Rules)"><span data-icon="sliders" data-size="16"></span>World setup</button>
+          <button class="btn sm" id="btnBackToLobby" onclick="rematchLobby()"><span data-icon="refresh" data-size="16"></span>Back to lobby</button>
+          <button class="btn sm" id="btnMenuMapPainter" style="display:none;" onclick="toggleGameMenu(false);toggleLobbyToolbar()"><span data-icon="pencil" data-size="16"></span>Map painter</button>
+          <button class="btn sm" id="btnMenuElevation" style="display:none;" onclick="toggleElevationView()"><span data-icon="map" data-size="16"></span>Elevation</button>
+          <button class="btn sm" onclick="resetCamera();toggleGameMenu(false)"><span data-icon="fit" data-size="16"></span>Fit board</button>
+          <button class="btn sm" onclick="toggleSound()"><span data-icon="sound" data-size="16"></span>Sound</button>
+          <button class="btn sm" onclick="toggleTheme()"><span data-icon="theme" data-size="16"></span>Theme</button>
           <button class="btn sm" id="btnMenuSpectate" onclick="toggleSpectate()" title="Switch between playing and spectating"><span data-icon="eye" data-size="16"></span><span>Spectate</span></button>
           <button class="btn sm" onclick="downloadTrainingLog()" title="Download AI Bot Training Data Log (.jsonl)"><span data-icon="cards" data-size="16"></span>AI Log</button>
-          <button class="btn sm" onclick="toggleDebugMode()" title="Open Debug Mode HUD (` or F2)"><span data-icon="sliders" data-size="16"></span>Debug Mode</button>
-          <button class="btn sm" id="btnBackToLobby" onclick="rematchLobby()"><span data-icon="refresh" data-size="16"></span>Back to lobby</button>
+          <button class="btn sm" onclick="toggleDebugMode();toggleGameMenu(false)" title="Open Debug Mode HUD (` or F2)"><span data-icon="sliders" data-size="16"></span>Debug Mode</button>
         </div>
       </div>
 
@@ -344,12 +392,15 @@
         <div id="inlineDrawer"></div>
         <div id="tradeConfirmStack">
           <button class="trade-side-btn" id="btnExecBankTrade" onclick="executeBankTrade()" title="Trade with bank or port">
-            <span data-icon="bank" data-size="22"></span>
-            <span>Bank</span>
+            <span data-icon="bank" data-size="20"></span>
+            <span class="trade-side-lbl">Bank</span>
           </button>
           <button class="trade-side-btn" id="btnExecPlayerTrade" onclick="proposePlayerTrade()" title="Offer trade to players and bots">
-            <span data-icon="users" data-size="22"></span>
-            <span>Players</span>
+            <span data-icon="users" data-size="20"></span>
+            <span class="trade-side-lbl">Players</span>
+          </button>
+          <button class="trade-side-btn trade-side-close" id="btnCloseTradeDrawer" onclick="closeInlineDrawer()" title="Close trade">
+            <span data-icon="close" data-size="20"></span>
           </button>
         </div>
       </div>
@@ -418,8 +469,15 @@
 
     </div>
 
+    <!-- Mobile slide-over backdrop -->
+    <div id="mobileSidebarBackdrop" class="mob-sidebar-backdrop" onclick="toggleMobileSidebar(false)"></div>
+
     <!-- Right sidebar -->
     <div class="right-sidebar">
+      <div class="mob-sidebar-head">
+        <span class="mob-sidebar-title">Table, Bank &amp; Chat</span>
+        <button type="button" class="icon-btn" onclick="toggleMobileSidebar(false)" title="Close drawer"><span data-icon="close" data-size="18"></span></button>
+      </div>
       <div id="logSection">
         <div class="log-head-tabs">
           <button class="log-tab-btn active" id="tabBtnLogLive" onclick="setLogTab('live')" title="Merged Live Log & Turn History">Live Log</button>
@@ -440,6 +498,14 @@
     </div>
   </div>
 
-  <script src="/app.js"></script>
+  <script src="./host.js"></script>
+  <script src="./app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
 </body>
 </html>

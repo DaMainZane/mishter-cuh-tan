@@ -1,4 +1,4 @@
-// MODULE: socket broadcast (sends each human player their own view, clears one-shot effects, wakes the bots) | DEPENDS ON: server/mapmenu, server/rooms, server/runtime, server/types, server/view | USED BY: server/bots/scheduler, server/main, server/socket
+// MODULE: socket broadcast (sends each human player their own view, clears one-shot effects, wakes the bots) | DEPENDS ON: server/mapmenu, server/rooms, server/runtime, server/types, server/view | USED BY: server/bots/scheduler, server/main, server/p2pHost, server/socket
 import type { Server } from 'socket.io';
 import { humanIds } from './rooms';
 import { mapOptionsForSettings } from './mapmenu';

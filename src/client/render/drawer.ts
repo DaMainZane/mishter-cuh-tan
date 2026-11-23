@@ -213,6 +213,7 @@ function pickCardHtml(r: string, onclick: string, title: string, rate?: number):
 }
 
 export function renderInlineDrawer(me: any, isMyTurn: boolean): void {
+  const stage = document.getElementById('boardStage');
   const wrap = document.getElementById('inlineDrawerWrap')!;
   const drawer = document.getElementById('inlineDrawer')!;
   const sideStack = document.getElementById('tradeConfirmStack')!;
@@ -224,9 +225,14 @@ export function renderInlineDrawer(me: any, isMyTurn: boolean): void {
 
   if (!drawerMode || !me) {
     wrap.style.display = 'none';
+    wrap.classList.remove('is-trade-mode');
+    stage?.classList.remove('drawer-open', 'drawer-trade-open');
     return;
   }
   wrap.style.display = 'flex';
+  wrap.classList.toggle('is-trade-mode', drawerMode === 'trade');
+  stage?.classList.add('drawer-open');
+  stage?.classList.toggle('drawer-trade-open', drawerMode === 'trade');
 
   if (drawerMode === 'gold') {
     drawer.innerHTML = `
@@ -346,7 +352,6 @@ export function renderInlineDrawer(me: any, isMyTurn: boolean): void {
       </div>
     `;
   } else if (drawerMode === 'trade') {
-    btnCancel.style.display = 'flex';
     sideStack.style.display = 'flex';
 
     const bankOk = canExecuteBankTrade(me);
@@ -379,24 +384,41 @@ export function renderInlineDrawer(me: any, isMyTurn: boolean): void {
     bankBtn.title = bankOk ? 'Trade with bank or port' : advice.text;
     const hintClass = advice.ok ? 'ok' : (advice.text.startsWith('Click') ? '' : 'warn');
     const fixHtml = advice.fixable ? ` <button type="button" class="chip-btn chip-accent" onclick="fixBankTrade()">Fix amounts</button>` : '';
+    const mobFixHtml = advice.fixable
+      ? `<button type="button" class="trade-fix-mob" onclick="fixBankTrade()" title="${esc(advice.text)}">Fix bank</button>`
+      : '';
 
     drawer.innerHTML = `
-      <div class="sheet-head">
-        <span class="sheet-title">${uiIcon('swap', 18)} Trade</span>
-        <span class="sheet-sub">Ratios show your bank and port rates</span>
+      <div class="trade-pick-strip">
+        <div class="pick-row trade-pick-row">
+          ${RESOURCES.map(r => pickCardHtml(r, `adjustTradeWant('${r}', 1)`, `Want ${RES_META[r].name} (${ratios[r]}:1 with the bank)`, ratios[r])).join('')}
+        </div>
+        <div class="trade-pick-right">
+          ${mobFixHtml}
+          <span class="trade-pick-bank-ico" title="Bank and port trade ratios">${uiIcon('bank', 18)}</span>
+        </div>
       </div>
-      <div class="pick-row">
-        ${RESOURCES.map(r => pickCardHtml(r, `adjustTradeWant('${r}', 1)`, `Want ${RES_META[r].name} (${ratios[r]}:1 with the bank)`, ratios[r])).join('')}
+      <div class="trade-rows-box">
+        <div class="trade-tray-row">
+          <span class="trade-dir-badge" title="You get">
+            <span class="trade-who-group">${uiIcon('users', 16)}</span>
+            <span class="trade-arrow get">${uiIcon('arrowDown', 15)}</span>
+          </span>
+          <div class="trade-tray-cards">
+            ${wantStacksHtml || '<span class="tray-hint">Tap resources above</span>'}
+          </div>
+        </div>
+        <div class="trade-tray-row">
+          <span class="trade-dir-badge" title="You give">
+            <span class="avatar trade-who-avatar" style="background:${esc(me.color)}">${avatarFace(me.avatar, me.name)}</span>
+            <span class="trade-arrow give">${uiIcon('arrowUp', 15)}</span>
+          </span>
+          <div class="trade-tray-cards">
+            ${giveStacksHtml || '<span class="tray-hint">Tap cards in hand</span>'}
+          </div>
+        </div>
+        <div class="trade-hint trade-hint-desktop ${hintClass}">${advice.text}${fixHtml}</div>
       </div>
-      <div class="sheet-label">You get</div>
-      <div class="tray">
-        ${wantStacksHtml || '<span class="tray-hint">Pick resources above</span>'}
-      </div>
-      <div class="sheet-label">You give</div>
-      <div class="tray">
-        ${giveStacksHtml || '<span class="tray-hint">Click cards in your hand</span>'}
-      </div>
-      <div class="trade-hint ${hintClass}">${advice.text}${fixHtml}</div>
     `;
   }
 }

@@ -1,4 +1,4 @@
-// MODULE: socket handlers (lobby editing + game actions; every game action goes through engine dispatch) | DEPENDS ON: packs/base/constants, packs/base/robbing, server/bots/dialogue, server/bots/tiers, server/debug, server/game, +8 more | USED BY: server/main
+// MODULE: socket handlers (lobby editing + game actions; every game action goes through engine dispatch) | DEPENDS ON: packs/base/constants, packs/base/robbing, server/bots/dialogue, server/bots/tiers, server/debug, server/game, +8 more | USED BY: server/main, server/p2pHost
 import type { Server } from 'socket.io';
 import { AVATARS, PLAYER_COLORS } from '../shared';
 import { victimsOnHex } from '../packs/base/robbing';
@@ -304,7 +304,7 @@ export function registerSocketHandlers(io: Server): void {
       if (candidateRoom.game) {
         return addSpectator(candidateRoom, socket, cleanName, cleanClientId, 'Game in progress — joined as spectator!');
       }
-      if (candidateRoom.setup) return socket.emit('errorMsg', 'Host is creating world');
+      if (!cleanCode && candidateRoom.setup) return socket.emit('errorMsg', 'Host is creating world');
       if (candidateRoom.lobbyPlayers.some(p => p.id === socket.id) || (candidateRoom.spectators || []).some(s => s.id === socket.id)) return;
       if (candidateRoom.lobbyPlayers.length >= candidateRoom.settings.maxPlayers) {
         return addSpectator(candidateRoom, socket, cleanName, cleanClientId, 'Lobby seats full — joined as spectator!');
@@ -455,7 +455,7 @@ export function registerSocketHandlers(io: Server): void {
         return;
       }
 
-      if (!room.game && room.setup) {
+      if (!cleanCode && !room.game && room.setup) {
         socket.emit('reconnectFailed', { code: cleanCode });
         socket.emit('errorMsg', 'Host is creating world');
         return;
@@ -473,6 +473,7 @@ export function registerSocketHandlers(io: Server): void {
         }
         socket.join(room.code);
         addLobbyLog(room, `${newP.avatar} ${cleanName} rejoined the lobby`, newP.color);
+        socket.emit('reconnected', { code: room.code, name: cleanName });
         broadcastRoom(room);
         return;
       }
@@ -603,9 +604,6 @@ export function registerSocketHandlers(io: Server): void {
       if (!room) return;
       const sc = mapOptionsView().scenarios.find(s => s.id === scenarioId);
       if (!sc) return;
-      if (isPreset(sc.quickStart, room.settings)) {
-        applyMapStart(room, sc.quickStart);
-      }
       const resetDlc: Record<string, boolean> = {};
       for (const k of Object.keys(room.settings.dlc ?? {})) resetDlc[k] = false;
       Object.assign(resetDlc, sc.dlc);
@@ -617,12 +615,18 @@ export function registerSocketHandlers(io: Server): void {
           addons: sc.addons ?? {},
           eventsOn: !!sc.eventsOn,
           fateTokens: sc.fateTokens ?? 2,
-          ...(resetDlc.tidebound ? { techTreeOn: true } : {})
+          techTreeOn: Boolean(resetDlc.tidebound)
         },
         room.settings
       );
       room.settings = next;
-      refreshMap(room);
+      if (resetDlc.tidebound) {
+        applyTideboundMapDefaults(room);
+      } else if (isPreset(sc.quickStart, room.settings)) {
+        applyMapStart(room, sc.quickStart);
+      } else {
+        refreshMap(room);
+      }
       addLobbyLog(room, `Scenario "${sc.label}" applied`, null);
       broadcastRoom(room);
     }));
@@ -683,10 +687,13 @@ export function registerSocketHandlers(io: Server): void {
       broadcastRoom(room);
     }));
 
-    socket.on('rematchLobby', safe(({ code }) => {
+    socket.on('rematchLobby', safe(({ code, openSetup }) => {
       const room = rooms[code];
       if (!room) return;
       rematch(room);
+      if (openSetup && room.hostId === socket.id) {
+        room.setup = true;
+      }
       broadcastRoom(room);
     }));
 

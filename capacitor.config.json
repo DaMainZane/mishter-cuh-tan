@@ -1,0 +1,9 @@
+{
+	"appId": "com.colonistcustom.hexsettlers",
+	"appName": "Colonist Custom",
+	"webDir": "dist/public",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https"
+	}
+}

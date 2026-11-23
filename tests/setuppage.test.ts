@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { ruleFoldValues } from '../src/client/render/setup';
+import { COMING_SOON_EXPANSIONS, effectiveDlcsAndAddons, ruleFoldValues } from '../src/client/render/setup';
 import { createRoom, humanIds, rooms } from '../src/server/rooms';
 import { makeStateBuilder } from '../src/server/view';
 import { startGame } from '../src/server/game';
+import { SCENARIO_PRESETS } from '../src/server/mapmenu';
+import { mergeSettingsDetailed } from '../src/server/lobby';
 
 describe('world setup page flag and spectator mode', () => {
   it('a new room starts on the setup page and the host can leave it', () => {
@@ -99,5 +101,34 @@ describe('rule fold titles show the current values', () => {
     expect(v.foldValTimers).toBe('90 s turns +5 s · trades 30 s');
     expect(v.foldValEvents).toBe('Events on, 1 fate token · tech tree on');
     expect(v.foldValPieces).toBe('15 roads · 5 settlements · 1 city');
+  });
+});
+
+describe('Tidebound-only live expansion catalog', () => {
+  it('offers only Standard Catan and Tidebound scenarios', () => {
+    expect(SCENARIO_PRESETS.map(s => s.id)).toEqual(['standard', 'tidebound']);
+  });
+
+  it('exposes Tidebound as the only live expansion and lists upcoming ones as coming soon', () => {
+    const { dlcs } = effectiveDlcsAndAddons();
+    expect(dlcs.map(d => d.id)).toEqual(['tidebound']);
+    expect(COMING_SOON_EXPANSIONS.map(c => c.id)).toEqual(['bulwark', 'warlords', 'wildearth', 'guildhall', 'rowdy']);
+  });
+
+  it('ignores unregistered expansions and addons during settings merge', () => {
+    const room = createRoom('host-dlc-filter', 'Host');
+    try {
+      const { settings } = mergeSettingsDetailed(
+        {
+          dlc: { tidebound: true, bulwark: true, warlords: true, rowdy: true },
+          addons: { 'tidebound.tides': true, 'bulwark.walls': true }
+        },
+        room.settings
+      );
+      expect(settings.dlc).toEqual({ tidebound: true });
+      expect(settings.addons).toEqual({ 'tidebound.tides': true });
+    } finally {
+      delete rooms[room.code];
+    }
   });
 });

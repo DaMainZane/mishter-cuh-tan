@@ -70,100 +70,23 @@ const TIDE_LEVEL_NAMES = ['Very low', 'Low', 'Medium', 'High', 'Very high'];
 /** Names of the Rising sea slider positions (1 to 5). Must match RISING_SEA_LEVELS in packs/tidebound/risingSea.ts. */
 const RISING_SEA_LEVEL_NAMES = ['Very slow', 'Slow', 'Medium', 'Fast', 'Very fast'];
 
-/** Built-in catalog fallback for DLC packs not yet registered in the server registry, matching Ideas.md exactly. */
-const CATALOG_DLCS: DlcInfoView[] = [
-  {
-    id: 'tidebound',
-    name: 'Tidebound',
-    addons: [
-      'tidebound.bridges',
-      'tidebound.rickety_bridges',
-      'tidebound.tides',
-      'tidebound.rising_sea',
-      'tidebound.harbor',
-      'tidebound.fishing',
-      'tidebound.wrecks',
-      'tidebound.pirates'
-    ]
-  },
-  {
-    id: 'bulwark',
-    name: 'Bulwark',
-    addons: [
-      'bulwark.walls',
-      'bulwark.wall_tiers',
-      'bulwark.siege',
-      'bulwark.castle',
-      'bulwark.wall_decay',
-      'bulwark.gatehouse',
-      'bulwark.castle_sieges',
-      'bulwark.sea_wall'
-    ]
-  },
-  {
-    id: 'warlords',
-    name: 'Warlords',
-    addons: [
-      'warlords.knights_armies',
-      'warlords.mercenaries',
-      'warlords.war_mechanic',
-      'warlords.diplomacy',
-      'warlords.alliances',
-      'warlords.wave_defense',
-      'warlords.king_vs_peasant',
-      'warlords.ai_warlord',
-      'warlords.war_weariness'
-    ]
-  },
-  {
-    id: 'wildearth',
-    name: 'Wild Earth',
-    addons: [
-      'wildearth.gems',
-      'wildearth.gem_market',
-      'wildearth.volcano',
-      'wildearth.oasis',
-      'wildearth.seasons',
-      'wildearth.meteor',
-      'wildearth.plague',
-      'wildearth.aftermath',
-      'wildearth.biome_tags',
-      'wildearth.quarantine_card',
-      'wildearth.plague_doctor'
-    ]
-  },
-  {
-    id: 'guildhall',
-    name: 'Guildhall',
-    addons: [
-      'guildhall.sheep_economy',
-      'guildhall.debt',
-      'guildhall.debt_tieins',
-      'guildhall.landmarks',
-      'guildhall.landmark_bonus',
-      'guildhall.ruins',
-      'guildhall.monuments',
-      'guildhall.caravans'
-    ]
-  },
-  {
-    id: 'rowdy',
-    name: 'Rowdy Tavern',
-    addons: [
-      'rowdy.hat_day',
-      'rowdy.drunk_robber',
-      'rowdy.karaoke7',
-      'rowdy.duels',
-      'rowdy.drinking_game',
-      'rowdy.instigation',
-      'rowdy.hat_unlocks',
-      'rowdy.hat_of_shame'
-    ]
-  }
-];
+/** Fallback for the only shipped expansion (Tidebound) before `mapOptions` arrives from the server. */
+const TIDEBOUND_FALLBACK_DLC: DlcInfoView = {
+  id: 'tidebound',
+  name: 'Tidebound',
+  addons: [
+    'tidebound.bridges',
+    'tidebound.rickety_bridges',
+    'tidebound.tides',
+    'tidebound.rising_sea',
+    'tidebound.harbor',
+    'tidebound.fishing',
+    'tidebound.wrecks',
+    'tidebound.pirates'
+  ]
+};
 
-const CATALOG_ADDONS: AddonInfoView[] = [
-  // 3. Tidebound
+const TIDEBOUND_FALLBACK_ADDONS: AddonInfoView[] = [
   { id: 'tidebound.bridges', name: 'Bridges', description: 'Roads across the sea. Both ends must touch ocean; they count toward Longest Road.', pack: 'tidebound', deps: [], links: [{ target: 'piece-cost', kind: 'mechanic' }, { target: 'history', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
   { id: 'tidebound.rickety_bridges', name: 'Rickety bridges', description: 'A cheap bridge with 1 health that collapses on a 7. Upgrade it to a full bridge later.', pack: 'tidebound', deps: ['tidebound.bridges'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'seven-resolver', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }, { target: 'tidebound.bridges', kind: 'content' }] },
   { id: 'tidebound.tides', name: 'Tides', description: 'Coast tiles flood on a seeded schedule; a flooded tile yields half, rounded up, for every settlement and city on it. Higher ground resists.', pack: 'tidebound', deps: [], links: [{ target: 'round-clock', kind: 'mechanic' }, { target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
@@ -171,72 +94,26 @@ const CATALOG_ADDONS: AddonInfoView[] = [
   { id: 'tidebound.harbor', name: 'Harbor', description: 'Upgrade a port city to a harbor for 1:1 trades: click the port itself. One per player. A harbor, and any port raised to 2:1, keeps working while flooded.', pack: 'tidebound', deps: [], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }, { target: 'tidebound.tides', kind: 'mechanic' }] },
   { id: 'tidebound.fishing', name: 'Fishing', description: 'A net on a sea tile catches fish, a token that counts as any one resource. Fish icons on the sea boost the catch; feed the sea to refill them.', pack: 'tidebound', deps: [], links: [{ target: 'wild-token', kind: 'mechanic' }, { target: 'marker', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }, { target: 'tidebound.tides', kind: 'content' }] },
   { id: 'tidebound.wrecks', name: 'Shipwreck salvage', description: 'A storm leaves a wreck at sea or on the shore. The first road, bridge or port to reach it claims the loot.', pack: 'tidebound', deps: [], links: [{ target: 'marker', kind: 'mechanic' }, { target: 'event-deck', kind: 'content' }, { target: 'overlay', kind: 'ui' }, { target: 'tidebound.bridges', kind: 'mechanic' }] },
-  { id: 'tidebound.pirates', name: 'Pirates', description: 'Up to 2 pirates roam the ocean and rob coastal settlements. Beating one takes knights, and it pays more than a wreck.', pack: 'tidebound', deps: [], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'marker', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }, { target: 'tidebound.wrecks', kind: 'content' }] },
+  { id: 'tidebound.pirates', name: 'Pirates', description: 'Up to 2 pirates roam the ocean and rob coastal settlements. Beating one takes knights, and it pays more than a wreck.', pack: 'tidebound', deps: [], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'marker', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }, { target: 'tidebound.wrecks', kind: 'content' }] }
+];
 
-  // 4. Bulwark
-  { id: 'bulwark.walls', name: 'Walls & Zone Control', description: 'Build wall rings on edges to enclose territory; controller taxes outside production (~30%).', pack: 'bulwark', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'bulwark.wall_tiers', name: 'Wall Tiers', description: 'Upgrade from wooden palisade to permanent stone wall or ore-reinforced siege wall.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }] },
-  { id: 'bulwark.siege', name: 'Siege', description: 'Break enemy walls with siege engines while defenders burn resources to repair.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'strength', kind: 'mechanic' }] },
-  { id: 'bulwark.castle', name: 'Castle', description: 'Upgrade a city using all 5 resources for 4x production and 3 public VP.', pack: 'bulwark', deps: [], links: [{ target: 'score', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'bulwark.wall_decay', name: 'Wall Decay', description: 'Wooden palisades lose durability on a 7 roll unless repaired with wood.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'seven-resolver', kind: 'mechanic' }, { target: 'durability', kind: 'mechanic' }] },
-  { id: 'bulwark.gatehouse', name: 'Gatehouse', description: 'Grant taxed building permits inside your wall; if a guest exceeds your local VP, they overthrow you.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'ledger', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
-  { id: 'bulwark.castle_sieges', name: 'Castle Sieges', description: 'A besieged castle produces half until the siege breaks.', pack: 'bulwark', deps: ['bulwark.castle', 'bulwark.siege'], links: [{ target: 'production', kind: 'mechanic' }, { target: 'strength', kind: 'mechanic' }] },
-  { id: 'bulwark.sea_wall', name: 'Sea Wall', description: 'Coastline walls block Tides and Rising Sea for enclosed tiles.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'durability', kind: 'mechanic' }] },
-
-  // 5. Warlords
-  { id: 'warlords.knights_armies', name: 'Knights as Armies', description: 'Play knights in classic robber mode or recruit mode to garrison strength tokens on buildings and walls.', pack: 'warlords', deps: [], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'warlords.mercenaries', name: 'Mercenaries', description: 'Pay ore and wheat to the bank to hire temporary strength for one round.', pack: 'warlords', deps: ['warlords.knights_armies'], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }] },
-  { id: 'warlords.war_mechanic', name: 'War Mechanic', description: 'Declare war by spending a knight; warring kingdoms cannot trade until a peace offer is accepted.', pack: 'warlords', deps: ['warlords.knights_armies'], links: [{ target: 'relations', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
-  { id: 'warlords.diplomacy', name: 'Diplomacy & Embassies', description: 'Envoys, Peace pacts, and Embassies that trade at partner ports even at war.', pack: 'warlords', deps: [], links: [{ target: 'relations', kind: 'mechanic' }, { target: 'trade-ratio', kind: 'mechanic' }] },
-  { id: 'warlords.alliances', name: 'Alliances & Betrayal', description: 'Share wall zones and garrisons with an ally, or betray them at a treaty-break penalty.', pack: 'warlords', deps: ['warlords.diplomacy'], links: [{ target: 'relations', kind: 'mechanic' }, { target: 'history', kind: 'mechanic' }] },
-  { id: 'warlords.wave_defense', name: 'Wave Defense (Co-op)', description: 'Scheduled raider waves arrive from the sea edge; players spread garrison strength to defend.', pack: 'warlords', deps: ['warlords.knights_armies'], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'marker', kind: 'mechanic' }] },
-  { id: 'warlords.king_vs_peasant', name: 'King vs. Peasant', description: 'Massive central walled zone where the first occupant becomes King against the table.', pack: 'warlords', deps: ['bulwark.walls'], allowCrossDlcDep: true, links: [{ target: 'score', kind: 'mechanic' }, { target: 'relations', kind: 'mechanic' }] },
-  { id: 'warlords.ai_warlord', name: 'Player vs. AI Warlord', description: 'Persistent named AI Warlord invades the leader or holds the fortified center.', pack: 'warlords', deps: ['warlords.knights_armies'], links: [{ target: 'persistence', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'warlords.war_weariness', name: 'War Weariness', description: 'Staying at war for many rounds worsens port trade ratios, pushing peace deals.', pack: 'warlords', deps: ['warlords.war_mechanic'], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }] },
-
-  // 6. Wild Earth
-  { id: 'wildearth.gems', name: 'Emerald & Diamond Tiles', description: 'Rare gem tiles with their own 2:1 or 1:1 gem ports and special dev cards.', pack: 'wildearth', deps: [], links: [{ target: 'production', kind: 'mechanic' }, { target: 'trade-ratio', kind: 'mechanic' }] },
-  { id: 'wildearth.gem_market', name: 'Gem Market', description: 'Gems trade exclusively at gem ports and fund special development cards.', pack: 'wildearth', deps: ['wildearth.gems'], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'wildearth.volcano', name: 'Volcano', description: 'High-ore gamble tile that erupts on 7s, destroying the nearest settlement and leaving ash then fertile soil.', pack: 'wildearth', deps: [], links: [{ target: 'seven-resolver', kind: 'mechanic' }, { target: 'tile-state', kind: 'mechanic' }] },
-  { id: 'wildearth.oasis', name: 'Oasis in the Desert', description: 'Desert oasis tile that yields a wild resource of your choice at low odds.', pack: 'wildearth', deps: [], links: [{ target: 'wild-token', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'wildearth.seasons', name: 'Seasons', description: 'Every N rounds, biological tiles (sheep, wheat, wood) shift their roll numbers.', pack: 'wildearth', deps: [], links: [{ target: 'round-clock', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'wildearth.meteor', name: 'Meteor Crater', description: 'Falling star event that removes a tile and leaves a gold or gem crater.', pack: 'wildearth', deps: [], links: [{ target: 'event-deck', kind: 'content' }, { target: 'tile-state', kind: 'mechanic' }] },
-  { id: 'wildearth.plague', name: 'Plague', description: 'Spreads from settlement to settlement (faster in wheat/sheep clumps); walls and markets quarantine it.', pack: 'wildearth', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
-  { id: 'wildearth.aftermath', name: 'Aftermath & Ground Work', description: 'Barren tiles from eruptions or meteors regrow over time or convert via Ground Work tech.', pack: 'wildearth', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }] },
-  { id: 'wildearth.biome_tags', name: 'Biome Tags', description: 'Connected forest and field clusters swing together in Seasons and accelerate Plague in monocultures.', pack: 'wildearth', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'wildearth.quarantine_card', name: 'Quarantine Card', description: 'Development card that grants a settlement immunity from Plague spread.', pack: 'wildearth', deps: ['wildearth.plague'], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'wildearth.plague_doctor', name: 'Plague Doctor Tech', description: 'Wild Earth tech branch that shortens plague duration and cures settlements.', pack: 'wildearth', deps: ['wildearth.plague'], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }] },
-
-  // 7. Guildhall
-  { id: 'guildhall.sheep_economy', name: 'Sheep Economy', description: 'Sheep act as currency for fees and interest, and sheep ports pay triple.', pack: 'guildhall', deps: [], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'ledger', kind: 'mechanic' }] },
-  { id: 'guildhall.debt', name: 'Debt', description: 'Borrow cards from the bank on credit and repay with interest, or have a settlement seized.', pack: 'guildhall', deps: [], links: [{ target: 'ledger', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }] },
-  { id: 'guildhall.debt_tieins', name: 'Debt Tie-ins', description: 'Unpaid debt turns a settlement into an occupied token that can be bought back; Embassies protect against seizure.', pack: 'guildhall', deps: ['guildhall.debt'], links: [{ target: 'marker', kind: 'mechanic' }, { target: 'ledger', kind: 'mechanic' }] },
-  { id: 'guildhall.landmarks', name: 'Landmarks', description: 'First-claim Lighthouse, Library, Market, Granary and Outpost bonuses on resource tiles.', pack: 'guildhall', deps: [], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }] },
-  { id: 'guildhall.landmark_bonus', name: 'Landmark Set Bonus', description: 'Owning 3 or 5 unique landmark types grants bonus public VP.', pack: 'guildhall', deps: ['guildhall.landmarks'], links: [{ target: 'score', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'guildhall.ruins', name: 'Ruins (Landmark)', description: 'Polytopia-style ruins that grant one-time loot when a road touches them and count as a landmark.', pack: 'guildhall', deps: ['guildhall.landmarks'], links: [{ target: 'marker', kind: 'mechanic' }, { target: 'score', kind: 'mechanic' }] },
-  { id: 'guildhall.monuments', name: 'Monuments', description: 'Completing a Tier 3 public contract unlocks a one-per-game Monument worth bonus public VP.', pack: 'guildhall', deps: [], links: [{ target: 'score', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }] },
-  { id: 'guildhall.caravans', name: 'Trade Caravans', description: 'Route caravans between cities or ports along unblocked roads, bridges and open gates for a payout.', pack: 'guildhall', deps: [], links: [{ target: 'marker', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-
-  // 8. Rowdy Tavern
-  { id: 'rowdy.hat_day', name: 'Hat Day', description: 'Every settlement and city wears a random hat during Hat Day, with bot commentary.', pack: 'rowdy', deps: [], links: [{ target: 'event-deck', kind: 'content' }, { target: 'overlay', kind: 'ui' }] },
-  { id: 'rowdy.drunk_robber', name: 'Drunk Robber', description: 'Robber wanders one hex in a random direction after each roll; controlled by whoever is in last place.', pack: 'rowdy', deps: [], links: [{ target: 'score', kind: 'mechanic' }, { target: 'tile-state', kind: 'mechanic' }] },
-  { id: 'rowdy.karaoke7', name: 'Karaoke 7', description: 'On a 7, everyone races to type a one-word chat message; the slowest loses a card.', pack: 'rowdy', deps: [], links: [{ target: 'seven-resolver', kind: 'mechanic' }, { target: 'history', kind: 'mechanic' }] },
-  { id: 'rowdy.duels', name: 'Robbery Minigames', description: 'Resolve robber steals and contested claims with fast 1v1 tavern duels.', pack: 'rowdy', deps: [], links: [{ target: 'overlay', kind: 'ui' }, { target: 'history', kind: 'mechanic' }] },
-  { id: 'rowdy.drinking_game', name: 'Bot Drinking Game', description: 'Bots comment on dice streaks and repeated robber hits, with optional pity card for hammered players.', pack: 'rowdy', deps: [], links: [{ target: 'history', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
-  { id: 'rowdy.instigation', name: 'Instigation', description: 'Bots stir rivalries between players based on public match history and grudges.', pack: 'rowdy', deps: [], links: [{ target: 'history', kind: 'mechanic' }, { target: 'relations', kind: 'mechanic' }] },
-  { id: 'rowdy.hat_unlocks', name: 'Hat Unlocks', description: 'Unlock persistent hats from end-game achievements (Longest Road, Largest Army, trades, robber hits).', pack: 'rowdy', deps: [], links: [{ target: 'persistence', kind: 'mechanic' }, { target: 'history', kind: 'mechanic' }] },
-  { id: 'rowdy.hat_of_shame', name: 'Hat of Shame', description: 'Joke hat awarded to whoever lost the most cards to the robber this game.', pack: 'rowdy', deps: [], links: [{ target: 'history', kind: 'mechanic' }, { target: 'persistence', kind: 'mechanic' }] }
+/** Upcoming expansions displayed in World Setup as non-interactive "Coming soon" placeholders. */
+export const COMING_SOON_EXPANSIONS: readonly { id: string; name: string }[] = [
+  { id: 'bulwark', name: 'Bulwark' },
+  { id: 'warlords', name: 'Warlords' },
+  { id: 'wildearth', name: 'Wild Earth' },
+  { id: 'guildhall', name: 'Guildhall' },
+  { id: 'rowdy', name: 'Rowdy Tavern' }
 ];
 
 function effectiveDlcsAndAddons(): { dlcs: DlcInfoView[]; addons: Map<string, AddonInfoView> } {
-  const srvDlcs = mapOptions?.dlcs && mapOptions.dlcs.length > 0 ? mapOptions.dlcs : [];
-  const srvAddons = mapOptions?.addons && mapOptions.addons.length > 0 ? mapOptions.addons : [];
+  const srvDlcs = mapOptions?.dlcs && mapOptions.dlcs.length > 0 ? mapOptions.dlcs : [TIDEBOUND_FALLBACK_DLC];
+  const srvAddons = mapOptions?.addons && mapOptions.addons.length > 0 ? mapOptions.addons : TIDEBOUND_FALLBACK_ADDONS;
+
   const dlcMap = new Map<string, DlcInfoView>();
-  for (const d of CATALOG_DLCS) dlcMap.set(d.id, d);
   for (const d of srvDlcs) dlcMap.set(d.id, d);
 
   const addonMap = new Map<string, AddonInfoView>();
-  for (const a of CATALOG_ADDONS) addonMap.set(a.id, a);
   for (const a of srvAddons) addonMap.set(a.id, a);
   return { dlcs: [...dlcMap.values()], addons: addonMap };
 }
@@ -276,9 +153,22 @@ function drawRoster(el: HTMLElement): void {
     players.map(p => `${p.id}|${p.name}|${p.avatar}|${p.color}|${p.difficulty ?? ''}`).join(';') +
     '||' +
     spectators.map(s => `${s.id}|${s.name}|${s.avatar}|${s.color}`).join(';') +
-    `|${state?.settings?.maxPlayers}|${state?.hostId}`;
+    `|${state?.settings?.maxPlayers}|${state?.hostId}|${state?.code ?? ''}`;
   if (sig === lastRosterSig) return;
   lastRosterSig = sig;
+  const code = state?.code || '';
+  const inviteBanner = code
+    ? `<div class="setup-invite-banner">
+        <div class="setup-invite-meta">
+          <span class="setup-invite-label">Invite code</span>
+          <strong class="setup-invite-code" id="setupRoomCodeDisplay">${esc(code)}</strong>
+        </div>
+        <div class="setup-invite-actions">
+          <button type="button" class="btn sm" onclick="copyInviteCodeOnly()" title="Copy invite code">Copy code</button>
+          <button type="button" class="btn sm primary" onclick="shareInviteCode()" title="Share invite code or link with friends">${uiIcon('link', 14)}<span>Share invite</span></button>
+        </div>
+      </div>`
+    : '';
   const chips = players.map(p => {
     const key = String(p.difficulty || '').toLowerCase();
     const tag = p.isBot
@@ -301,7 +191,7 @@ function drawRoster(el: HTMLElement): void {
     </div>`;
   }).join('');
   const specCount = spectators.length > 0 ? ` · ${spectators.length} spectating` : '';
-  el.innerHTML = `<div class="setup-count">${players.length} / ${esc(state?.settings?.maxPlayers ?? '')} seats${specCount}</div>${chips}${specChips}`;
+  el.innerHTML = `${inviteBanner}<div class="setup-count">${players.length} / ${esc(state?.settings?.maxPlayers ?? '')} seats${specCount}</div>${chips}${specChips}`;
 }
 
 function drawScenariosAndDlcs(): void {
@@ -464,7 +354,17 @@ function drawScenariosAndDlcs(): void {
             </div>
           </div>`;
       })
-      .join('');
+      .join('') +
+      COMING_SOON_EXPANSIONS.filter(c => !dlcs.some(d => d.id === c.id))
+        .map(
+          c => `<div class="dlc-row is-coming-soon" aria-disabled="true">
+            <div class="dlc-head">
+              <span class="dlc-expand is-static"><span class="dlc-name">${esc(c.name)}</span></span>
+              <span class="dlc-coming-pill">Coming soon</span>
+            </div>
+          </div>`
+        )
+        .join('');
   }
 }
 

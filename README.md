@@ -1,8 +1,17 @@
-# HexSettlers Online
+# Colonist Custom (`HexSettlers Online`)
 
-A customizable Catan-style game for private groups (up to 8 players), playable in phone and PC browsers. Includes bots with three difficulty tiers, a seeded map generator with a map menu, custom map presets, trading with counter offers, and gold and fog modes.
+A customizable Catan-style board game for private groups (up to 8 players), playable as a native **Android APK** or in phone and PC browsers with **serverless P2P invite codes** (no backend required). Includes bots with three difficulty tiers, a seeded map generator with a map menu, custom map presets, full trading with counter offers, gold and fog modes, and the **Tidebound** expansion.
 
-Current state: see `change log.md`. Next work: see `Backlog Priority.md`.
+## Download Android APK
+
+- **[Download `project-colonist-custom-1.0.apk` (v1.0)](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest/download/project-colonist-custom-1.0.apk)** · [View all releases](https://github.com/DaMainZane/mishter-cuh-tan/releases/latest)
+
+**How to install on Android:**
+1. Tap the download link above on your Android phone (or download on PC and transfer the `.apk` file).
+2. Open `project-colonist-custom-1.0.apk` and allow installing from unknown sources if prompted.
+3. Launch **Colonist Custom** — create a room to get a 5-character invite code, or enter a friend's invite code to join via P2P.
+
+Current state: see `change log.md` and `HANDOFF.md`. Next work: see `Backlog Priority.md`.
 
 ## Quick start
 

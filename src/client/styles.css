@@ -489,6 +489,48 @@ svg#boardSvg:active { cursor: grabbing; }
   width: 420px; max-width: calc(100vw - 24px); background: var(--surface); border-radius: var(--r-lg); padding: 14px;
   box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;
 }
+#inlineDrawerWrap.is-trade-mode { align-items: stretch; gap: 6px; }
+#inlineDrawerWrap.is-trade-mode #inlineDrawer {
+  width: 392px; padding: 0; background: transparent; box-shadow: none; gap: 6px;
+}
+.trade-pick-strip {
+  background: var(--surface); border-radius: var(--r-lg); padding: 8px 10px;
+  box-shadow: var(--shadow); display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.trade-pick-row { flex-wrap: nowrap; gap: 6px; }
+.trade-pick-right {
+  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+.trade-fix-mob {
+  display: none;
+  border: 0; border-radius: 999px; padding: 4px 8px;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 10px; font-weight: 800; line-height: 1; white-space: nowrap;
+  cursor: pointer;
+}
+.trade-pick-bank-ico {
+  color: var(--ink-dim); display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0; opacity: 0.72; padding-right: 2px;
+}
+.trade-rows-box {
+  background: var(--surface); border-radius: var(--r-lg); padding: 8px 12px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px;
+  --card-w: 38px; --card-h: 50px; --card-step: 6px;
+}
+.trade-rows-box .stack-slice svg.glyph { width: 22px; height: 22px; }
+.trade-rows-box .card-count { font-size: 13px; }
+.trade-tray-row {
+  display: flex; align-items: center; gap: 10px; min-height: 50px;
+}
+.trade-tray-cards {
+  flex: 1; min-width: 0; min-height: 46px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow-x: auto;
+  scrollbar-width: none; padding: 2px 0;
+}
+.trade-tray-cards::-webkit-scrollbar { display: none; }
+#inlineDrawerWrap.is-trade-mode .mini-res-card { width: 44px; height: 50px; }
+#inlineDrawerWrap.is-trade-mode .mini-res-card svg.glyph { width: 24px; height: 24px; }
+
 .sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .sheet-title { font-weight: 700; font-size: 15px; }
 .sheet-title.danger { color: var(--danger); }
@@ -500,20 +542,22 @@ svg#boardSvg:active { cursor: grabbing; }
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 .tray-hint { font-size: 12px; color: var(--ink-dim); font-weight: 500; }
-.trade-hint { font-size: 12px; font-weight: 600; color: var(--ink-dim); }
+.trade-hint { font-size: 11.5px; font-weight: 600; color: var(--ink-dim); }
 .trade-hint.ok { color: var(--ok); }
 .trade-hint.warn { color: var(--danger); }
 .trade-hint .chip-btn { margin-left: 6px; min-height: 24px; vertical-align: middle; }
 .sheet-foot { display: flex; justify-content: flex-end; }
 
-#tradeConfirmStack { display: none; flex-direction: column; gap: 6px; }
+#tradeConfirmStack { display: none; flex-direction: column; gap: 6px; justify-content: space-between; }
 .trade-side-btn {
-  width: 64px; height: 56px; border-radius: var(--r); background: var(--accent); color: var(--on-accent); border: 0;
+  width: 58px; flex: 1; min-height: 48px; border-radius: var(--r); background: var(--accent); color: var(--on-accent); border: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  cursor: pointer; box-shadow: var(--shadow); font-weight: 700; font-size: 10.5px; transition: background 0.12s;
+  cursor: pointer; box-shadow: var(--shadow); font-weight: 700; font-size: 10.5px; transition: background 0.12s, opacity 0.12s;
 }
 .trade-side-btn:hover { background: var(--accent-hover); }
-.trade-side-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.trade-side-btn:disabled { background: var(--surface); color: var(--ink-dim); opacity: 0.62; cursor: not-allowed; }
+.trade-side-btn.trade-side-close { background: var(--surface); color: var(--ink); flex: 0 0 44px; min-height: 44px; }
+.trade-side-btn.trade-side-close:hover { background: var(--surface-2); }
 
 /* Resource picker cards (flat colored rectangles, ratio chip underneath) */
 .mini-res-card {
@@ -1596,6 +1640,15 @@ button.dlc-expand:hover { background: var(--surface-3); }
 .dlc-expand.is-static { cursor: default; }
 .dlc-name { font-size: 13.5px; font-weight: 700; }
 .dlc-row:not(.is-on) .dlc-name { color: var(--ink-dim); }
+.dlc-row.is-coming-soon { background: var(--surface-2); opacity: 0.72; }
+.dlc-row.is-coming-soon .dlc-name { color: var(--ink-dim); font-weight: 600; }
+.dlc-coming-pill {
+  display: inline-flex; align-items: center;
+  margin-right: 10px; padding: 3px 9px; border-radius: 999px;
+  background: var(--surface-3); color: var(--ink-dim);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  white-space: nowrap; flex-shrink: 0;
+}
 .dlc-count { flex: 1; font-size: 12.5px; color: var(--ink-dim); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dlc-caret { display: inline-flex; color: var(--ink-dim); transition: transform 0.15s ease-out; }
 .dlc-expand[aria-expanded="true"] .dlc-caret { transform: rotate(180deg); }
@@ -1955,6 +2008,677 @@ button.dlc-expand:hover { background: var(--surface-3); }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* =====================================================================
+   Mobile App, P2P Invite Code UI & Adaptive Portrait/Landscape Layout
+   Follows "Design UI Philosophy.md":
+   - Lichess shell (board first, flat neutral chrome, one soft shadow level)
+   - Flat buttons (8px radius, no borders, --accent only for primary & active turn)
+   - 44px (--tap) minimum touch targets; small visual pieces with 44px invisible hit slop
+   - Safe-area insets, tabular figures, balanced headlines, and overflow card peek
+   ===================================================================== */
+
+.auth-card h1, .vic-title, .sheet-title {
+  text-wrap: balance;
+}
+.auth-divider {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; font-weight: 600; color: var(--ink-dim);
+  margin: 6px 0 2px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.invite-code-row {
+  display: flex; gap: 8px; align-items: stretch;
+}
+.invite-code-input {
+  flex: 1; text-align: center; font-weight: 700; font-size: 15px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.invite-paste-btn {
+  flex-shrink: 0; padding: 0 14px; min-height: var(--tap);
+}
+.auth-join-row {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+
+/* Setup screen invite code bar: flat neutral surface-2, no decorative border */
+.setup-invite-banner {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; padding: 10px 14px; margin-bottom: 6px;
+  background: var(--surface-2); border: 0; border-radius: var(--r);
+}
+.setup-invite-meta {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.setup-invite-label {
+  font-size: 12px; font-weight: 600; color: var(--ink-dim);
+}
+.setup-invite-code {
+  font-size: 18px; font-weight: 700; letter-spacing: 0.1em; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.setup-invite-actions {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.setup-invite-actions .btn {
+  min-height: var(--tap);
+}
+
+/* Game menu invite code strip */
+.menu-invite-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; border-radius: var(--r); background: var(--surface-2);
+}
+.menu-invite-meta {
+  display: flex; flex-direction: column; gap: 1px;
+}
+.menu-invite-lbl {
+  font-size: 10.5px; font-weight: 600; color: var(--ink-dim);
+}
+.menu-invite-code {
+  font-size: 15px; font-weight: 700; letter-spacing: 0.1em; color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile Top HUD & Slide-Over Sidebar defaults (hidden on wide desktop) */
+.mobile-top-hud { display: none; }
+.mob-bottom-left-float { display: none; }
+.mob-sidebar-head { display: none; }
+.mob-sidebar-backdrop { display: none; }
+
+/* Pause SVG pattern pulse animations while dragging or on touch screens for smooth 60fps Tidebound / big-map panning */
+#boardStage:has(#boardPanShield.on) .hex-overlay-pulse,
+#boardStage:has(#boardPanShield.on) .spot-pulse,
+#boardStage:has(#boardPanShield.on) .fish-ring {
+  animation-play-state: paused !important;
+}
+
+/* Small targets, big hit areas (44px invisible hit slop; visual spots and pieces stay small) */
+@media (pointer: coarse) {
+  .r-hit { stroke-width: 28px; }
+  .hex-overlay-pulse { animation: none; }
+  svg#boardSvg { touch-action: none; }
+}
+
+/* ---------- Mobile & Tablet Layout (<= 900px or touch devices <= 1100px: Single Gear + Compact Colonist.io HUD) ---------- */
+@media (max-width: 900px), (pointer: coarse) and (max-width: 1100px) {
+  :root {
+    --safe-top: max(8px, env(safe-area-inset-top, 0px));
+    --safe-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    --safe-left: max(6px, env(safe-area-inset-left, 0px));
+    --safe-right: max(6px, env(safe-area-inset-right, 0px));
+    --card-w: 34px;
+    --card-h: 46px;
+    --card-step: 5px;
+  }
+
+  body, #gameViewport, .board-stage {
+    height: 100dvh; width: 100vw; overflow: hidden;
+  }
+
+  /* Safe-area padding for Landing & World Setup screens on both iOS and Android */
+  #authScreen {
+    padding: calc(var(--safe-top) + 12px) 16px calc(var(--safe-bottom) + 12px);
+  }
+  .auth-card {
+    width: 100%; max-width: 350px; padding: 22px 18px; margin: 0 auto;
+  }
+  #setupScreen {
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+  .setup-inner {
+    padding: 8px 12px 8px;
+  }
+  .setup-foot {
+    padding: 8px 12px calc(8px + var(--safe-bottom));
+  }
+
+  /* Hide desktop left-nav column and desktop turn-pill on mobile so board sea stays completely open */
+  .left-nav {
+    display: none !important;
+  }
+  .turn-pill {
+    display: none !important;
+  }
+  .game-clock-hud {
+    display: none !important;
+  }
+
+  /* 1. Top Mobile HUD: Row 1 (Menu + Invite Code + Live Bank Strip + Drawer Toggle) & Row 2 (4-Across Player Cards) */
+  .mobile-top-hud {
+    position: absolute;
+    top: var(--safe-top);
+    left: var(--safe-left);
+    right: var(--safe-right);
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .mobile-top-hud > * { pointer-events: auto; }
+
+  .mob-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .mob-top-spacer {
+    width: 34px; flex-shrink: 0;
+  }
+
+  .mob-icon-pill {
+    width: 34px; height: 32px; border-radius: var(--r-sm);
+    background: var(--surface); color: var(--ink); border: 0;
+    box-shadow: var(--shadow); display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; flex-shrink: 0;
+  }
+
+  /* Top-Center Live Bank Strip (Colonist.io style mini resource stacks) */
+  .mob-bank-strip {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: var(--surface); padding: 2px 6px; border-radius: var(--r-sm);
+    box-shadow: var(--shadow); flex-shrink: 1; min-width: 0; overflow-x: auto; scrollbar-width: none;
+  }
+  .mob-bank-strip::-webkit-scrollbar { display: none; }
+  .mob-bank-ico {
+    color: var(--ink-dim); display: inline-flex; align-items: center; margin-right: 2px; flex-shrink: 0;
+  }
+  .mob-bank-chip {
+    width: 21px; height: 27px; border-radius: 4px;
+    display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 1px 0 2px; flex-shrink: 0; font-variant-numeric: tabular-nums;
+  }
+  .mob-bank-cnt {
+    font-size: 9.5px; font-weight: 800; line-height: 1; color: var(--token-ink);
+  }
+  .mob-bank-chip.card-dev .mob-bank-cnt {
+    color: var(--dev-ink);
+  }
+  .mob-bank-chip svg.glyph, .mob-bank-chip svg.ui-icon {
+    width: 12px; height: 12px;
+  }
+
+  /* 2. Second Row: 4-Across Compact Player Cards (Colonist.io style, capped width so 1-2 players stay neat) */
+  .mob-players-strip {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(78px, 118px);
+    justify-content: center;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    align-items: start;
+  }
+  .mob-players-strip::-webkit-scrollbar { display: none; }
+
+  .mob-p-col {
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .mob-p-card {
+    background: var(--surface); border-radius: var(--r-sm);
+    box-shadow: var(--shadow); overflow: hidden; cursor: pointer;
+    display: flex; flex-direction: column;
+    font-variant-numeric: tabular-nums;
+  }
+  .mob-p-card.is-turn {
+    box-shadow: 0 0 0 1.5px var(--accent), var(--shadow);
+  }
+  .mob-p-card.can-rob {
+    box-shadow: 0 0 0 2px var(--danger), var(--shadow);
+  }
+  .mob-p-head {
+    display: flex; align-items: center; gap: 4px;
+    height: 19px; padding: 0 5px 0 3px;
+    color: #fff; font-size: 10.5px; font-weight: 700;
+  }
+  .mob-p-vp-badge {
+    min-width: 15px; height: 15px; padding: 0 3px;
+    border-radius: 999px; background: rgba(0, 0, 0, 0.28);
+    color: #fff; font-size: 10px; font-weight: 800;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .mob-p-head-name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  }
+  .mob-p-body {
+    padding: 3px 4px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .mob-p-row-stats, .mob-p-row-pieces {
+    display: flex; align-items: center; justify-content: space-between; gap: 2px;
+    font-size: 9.5px; color: var(--ink-dim);
+  }
+  .mob-p-stat {
+    display: inline-flex; align-items: center; gap: 1px;
+  }
+  .mob-p-stat b {
+    color: var(--ink); font-weight: 700;
+  }
+  .mob-p-stat.warn b {
+    color: var(--danger); font-weight: 800;
+  }
+  .mob-p-piece {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 9px; font-weight: 700; color: var(--ink-dim);
+  }
+  .mob-piece-road {
+    display: inline-block; width: 3px; height: 8px; border-radius: 1px;
+  }
+  .mob-piece-dot {
+    display: inline-block; width: 6px; height: 6px; border-radius: 1px;
+  }
+  .mob-piece-sq {
+    display: inline-block; width: 8px; height: 6px; border-radius: 1px;
+  }
+  .mob-p-turn-foot {
+    margin-top: 2px; padding: 2px 4px; border-radius: 4px;
+    background: var(--surface-2); color: var(--ink);
+    font-size: 9.5px; font-weight: 700; text-align: center;
+    box-shadow: var(--shadow); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mob-p-turn-foot.mine {
+    background: var(--accent); color: var(--on-accent);
+  }
+
+  /* 3. Bottom-Left Floating Log & Chat Buttons (above the bottom hand strip) */
+  .mob-bottom-left-float {
+    position: absolute;
+    left: var(--safe-left);
+    bottom: calc(var(--safe-bottom) + 60px);
+    z-index: 32;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .mob-float-btn {
+    position: relative;
+    width: 34px; height: 34px; border-radius: var(--r-sm);
+    background: var(--surface); color: var(--ink); border: 0;
+    box-shadow: var(--shadow); display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .mob-unread-badge {
+    position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px;
+    padding: 0 4px; border-radius: 999px; background: var(--danger); color: var(--surface);
+    font-size: 9.5px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 4. Bottom-Right Compact Dice & Action Buttons (above the bottom hand strip) */
+  .center-hud {
+    position: absolute;
+    left: auto;
+    right: var(--safe-right);
+    bottom: calc(var(--safe-bottom) + 58px);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
+    z-index: 32;
+    max-width: calc(100vw - 54px);
+  }
+  .dice-pair {
+    gap: 5px; padding: 2px;
+  }
+  .die-box {
+    width: 36px; height: 36px; border-radius: 7px;
+  }
+  .die-box svg {
+    width: 24px; height: 24px;
+  }
+  .action-bar {
+    display: flex;
+    gap: 4px;
+    max-width: 100%;
+    overflow-x: auto; scrollbar-width: none;
+    padding: 2px;
+  }
+  .action-bar::-webkit-scrollbar { display: none; }
+  .act-btn {
+    width: 40px; height: 40px; min-width: 40px; min-height: 40px;
+    border-radius: var(--r-sm); gap: 1px;
+  }
+  .act-btn svg.ui-icon {
+    width: 17px; height: 17px;
+  }
+  .act-btn .lbl {
+    font-size: 8.5px;
+  }
+  .piece-badge {
+    top: 2px; right: 3px; font-size: 8.5px;
+  }
+
+  /* 5. Very Bottom Edge: Full-Width Compact Hand Strip (Colonist.io bottom card tray) */
+  .hand-panel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    min-width: 0; max-width: none;
+    min-height: calc(52px + var(--safe-bottom));
+    padding: 4px 14px calc(4px + var(--safe-bottom)) 10px;
+    border-radius: 0;
+    gap: 8px;
+    scroll-padding-inline: 12px;
+    z-index: 34;
+  }
+  .stack-slice svg.glyph {
+    width: 20px; height: 20px;
+  }
+  .card-count {
+    font-size: 12px;
+  }
+  .dev-card {
+    width: 38px; height: 48px; gap: 2px;
+  }
+  .dev-card svg.glyph {
+    width: 20px; height: 20px;
+  }
+  .dev-name {
+    font-size: 8px;
+  }
+
+  /* 6. Slide-Over Right Sidebar Drawer */
+  .mob-sidebar-backdrop {
+    position: fixed; inset: 0; background: var(--line);
+    z-index: 80; display: none;
+  }
+  .mob-sidebar-backdrop.on { display: block; }
+
+  .right-sidebar {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: min(320px, 86vw); height: 100dvh;
+    z-index: 85; box-shadow: var(--shadow);
+    transform: translateX(105%); transition: transform 0.2s ease-out;
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+  }
+  .right-sidebar.mob-open {
+    transform: translateX(0);
+  }
+  .mob-sidebar-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 6px 8px; border-bottom: 1px solid var(--line);
+    font-weight: 700; font-size: 13px; flex-shrink: 0;
+  }
+
+  .game-settings-menu {
+    top: calc(var(--safe-top) + 36px);
+    left: var(--safe-left);
+    width: min(260px, calc(100vw - 16px));
+  }
+
+  /* 7. Inline Drawer (Compact Colonist.io Trade Composer + Discard / Robber / Gold Sheets) */
+  #boardStage.drawer-open .center-hud {
+    display: none;
+  }
+  #boardStage.drawer-trade-open .mob-bottom-left-float {
+    bottom: calc(var(--safe-bottom) + 210px);
+  }
+  #boardStage.drawer-open:not(.drawer-trade-open) .mob-bottom-left-float {
+    display: none;
+  }
+
+  #inlineDrawerWrap {
+    left: var(--safe-left);
+    right: var(--safe-right);
+    bottom: calc(var(--safe-bottom) + 60px);
+    flex-direction: column; align-items: stretch;
+    gap: 5px;
+    z-index: 55;
+  }
+  #inlineDrawer {
+    width: 100%; max-width: none;
+    max-height: 42dvh; overflow-y: auto;
+    padding: 8px 10px;
+    border-radius: var(--r);
+    gap: 6px;
+  }
+  #tradeConfirmStack {
+    flex-direction: row; justify-content: flex-end;
+  }
+  .trade-side-btn {
+    flex: 1; min-height: 38px; height: 38px; flex-direction: row; gap: 6px; font-size: 12px;
+  }
+
+  /* Compact Colonist.io-style Trade Composer docked right above Hand Strip */
+  #inlineDrawerWrap.is-trade-mode {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 5px;
+  }
+  #inlineDrawerWrap.is-trade-mode #inlineDrawer {
+    flex: 1; min-width: 0;
+    width: auto; max-height: none; overflow: visible;
+    padding: 0; background: transparent; box-shadow: none;
+    gap: 5px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-pick-strip {
+    border-radius: var(--r);
+    padding: 4px 7px;
+    min-height: 46px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-pick-row {
+    gap: 5px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-fix-mob {
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  #inlineDrawerWrap.is-trade-mode .mini-res-card {
+    width: 34px; height: 38px; border-radius: 5px; gap: 0;
+  }
+  #inlineDrawerWrap.is-trade-mode .mini-res-card svg.glyph {
+    width: 19px; height: 19px;
+  }
+  #inlineDrawerWrap.is-trade-mode .mini-res-card .rate {
+    font-size: 8.5px; padding: 1px 4px; border-radius: 4px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-rows-box {
+    border-radius: var(--r);
+    padding: 5px 8px;
+    gap: 4px;
+    --card-w: 28px; --card-h: 36px; --card-step: 4px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-rows-box .stack-slice {
+    gap: 1px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-tray-row {
+    min-height: 38px; gap: 6px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-tray-cards {
+    min-height: 36px; gap: 6px; padding: 0;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-rows-box .stack-slice svg.glyph {
+    width: 17px; height: 17px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-rows-box .card-count {
+    font-size: 11px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-who-group,
+  #inlineDrawerWrap.is-trade-mode .trade-who-avatar {
+    width: 24px; height: 24px; font-size: 11px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-who-group svg.ui-icon {
+    width: 13px; height: 13px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-arrow,
+  #inlineDrawerWrap.is-trade-mode .trade-arrow svg.ui-icon {
+    width: 14px; height: 14px;
+  }
+  #inlineDrawerWrap.is-trade-mode .tray-hint {
+    font-size: 11px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-hint {
+    font-size: 10.5px; line-height: 1.25;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-hint-desktop {
+    display: none;
+  }
+  #inlineDrawerWrap.is-trade-mode #tradeConfirmStack {
+    flex-direction: column;
+    justify-content: space-between;
+    width: 44px;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-side-btn {
+    width: 44px; flex: 1; min-height: 40px; height: auto;
+    border-radius: var(--r); gap: 0; padding: 0;
+  }
+  #inlineDrawerWrap.is-trade-mode #btnExecBankTrade {
+    flex: 0 0 46px; min-height: 46px;
+  }
+  #inlineDrawerWrap.is-trade-mode .trade-side-lbl {
+    display: none;
+  }
+
+  #lobbyToolbar {
+    top: auto;
+    bottom: calc(var(--safe-bottom) + 58px);
+    left: var(--safe-left);
+    right: var(--safe-right);
+    max-height: 44dvh;
+    padding: 10px;
+  }
+
+  /* Compact Colonist.io-style Active Trade Offer Card cleanly below the active player's turn footer */
+  #activeTradeModal {
+    top: calc(var(--safe-top) + 112px);
+    left: var(--safe-left);
+    right: var(--safe-right);
+    width: auto;
+    max-width: none;
+    max-height: 196px;
+    gap: 4px;
+    --card-w: 28px;
+    --card-h: 36px;
+    --card-step: 4px;
+  }
+  #activeTradeModal .trade-top-avatars {
+    min-height: 32px;
+    padding: 3px 36px;
+    border-radius: var(--r);
+  }
+  #activeTradeModal .trade-top-avatars-list {
+    gap: 8px;
+  }
+  #activeTradeModal .resp,
+  #activeTradeModal .resp .avatar {
+    width: 24px; height: 24px; font-size: 11px;
+  }
+  #activeTradeModal .resp .status {
+    width: 13px; height: 13px; right: -3px; bottom: -3px;
+  }
+  #activeTradeModal .resp .status svg.ui-icon {
+    width: 9px; height: 9px;
+  }
+  #activeTradeModal .trade-collapse-btn {
+    right: 6px; height: 24px; min-width: 24px; padding: 0 5px;
+  }
+  #activeTradeModal .trade-offers-stack {
+    gap: 4px;
+    max-height: 158px;
+    scrollbar-gutter: auto;
+    scrollbar-width: none;
+  }
+  #activeTradeModal .trade-offers-stack::-webkit-scrollbar {
+    display: none;
+  }
+  #activeTradeModal .trade-offer-body {
+    border-radius: var(--r);
+    padding: 5px 8px 8px;
+    gap: 4px;
+  }
+  #activeTradeModal .trade-offer-main {
+    gap: 6px;
+    align-items: flex-end;
+  }
+  #activeTradeModal .trade-rows {
+    gap: 4px;
+  }
+  #activeTradeModal .trade-row {
+    min-height: 36px;
+    gap: 6px;
+  }
+  #activeTradeModal .trade-who-avatar,
+  #activeTradeModal .trade-who-group {
+    width: 24px; height: 24px; font-size: 11px;
+  }
+  #activeTradeModal .trade-who-group svg.ui-icon {
+    width: 13px; height: 13px;
+  }
+  #activeTradeModal .trade-arrow,
+  #activeTradeModal .trade-arrow svg.ui-icon {
+    width: 14px; height: 14px;
+  }
+  #activeTradeModal .trade-cards-line {
+    gap: 6px;
+  }
+  #activeTradeModal .stack-slice {
+    gap: 1px;
+  }
+  #activeTradeModal .stack-slice svg.glyph {
+    width: 17px; height: 17px;
+  }
+  #activeTradeModal .card-count {
+    font-size: 11px;
+  }
+  #activeTradeModal .trade-actions {
+    gap: 4px;
+    flex-wrap: wrap;
+    max-width: 136px;
+  }
+  #activeTradeModal .trade-resp-box,
+  #activeTradeModal .trade-act-btn {
+    width: 30px; height: 30px; border-radius: var(--r-sm);
+  }
+  #activeTradeModal .trade-resp-box svg.ui-icon,
+  #activeTradeModal .trade-act-btn svg.ui-icon {
+    width: 15px; height: 15px;
+  }
+  #activeTradeModal .counter-picker {
+    gap: 4px;
+  }
+  #activeTradeModal .counter-picker .mini-res-card {
+    width: 32px; height: 36px;
+  }
+  #activeTradeModal .counter-picker .mini-res-card svg.glyph {
+    width: 18px; height: 18px;
+  }
+}
+
+/* ---------- Mobile Landscape Layout ---------- */
+@media (max-width: 960px) and (max-height: 540px) {
+  .mob-players-strip {
+    max-width: 65vw;
+  }
+  .hand-panel {
+    max-width: 48vw;
+    border-top-right-radius: var(--r);
+  }
+  .center-hud {
+    bottom: var(--safe-bottom);
+  }
+  .mob-bottom-left-float {
+    bottom: calc(var(--safe-bottom) + 56px);
+  }
+  #activeTradeModal {
+    top: calc(var(--safe-top) + 4px);
+    left: auto;
+    width: 310px;
+  }
+  #inlineDrawerWrap.is-trade-mode {
+    right: auto;
+    width: 324px;
+  }
+}
+
 
 
 

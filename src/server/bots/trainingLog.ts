@@ -1,4 +1,4 @@
-// MODULE: AI bot training data logger (captures pre-action state features, legal action counts, chosen actions, and terminal VP/win rewards) | DEPENDS ON: packs/base/trading, server/bots/tiers, server/util, shared/index | USED BY: server/bots/sim, server/game, server/main, server/rooms
+// MODULE: AI bot training data logger (captures pre-action state features, legal action counts, chosen actions, and terminal VP/win rewards) | DEPENDS ON: packs/base/trading, server/bots/tiers, server/util, shared/index | USED BY: server/bots/sim, server/game, server/main, server/p2pHost, server/rooms
 import fs from 'fs';
 import path from 'path';
 import { getPlayer, legalActions, publicVP, score, totalCards } from '../../shared';
