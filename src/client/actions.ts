@@ -472,8 +472,10 @@ const RISING_SEA_LEVEL_NAMES = ['Very slow', 'Slow', 'Medium', 'Fast', 'Very fas
 /** While the Tides slider is dragged: show the name of the position under the thumb. Nothing is sent until it is let go. */
 export function previewTideLevel(value: string | number): void {
   const n = Math.min(5, Math.max(1, Math.round(Number(value)) || 3));
-  const el = document.getElementById('tideLevelName');
-  if (el) el.textContent = TIDE_LEVEL_NAMES[n - 1];
+  for (const id of ['tideLevelName', 'pvTideLevelName']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = TIDE_LEVEL_NAMES[n - 1];
+  }
 }
 
 /** Host: set the Tides level (1 low to 5 high). On or off is the Tides addon checkbox. */
@@ -487,8 +489,10 @@ export function setTideLevel(value: string | number): void {
 /** While the Rising sea slider is dragged: show the name of the position under the thumb. */
 export function previewRisingSeaLevel(value: string | number): void {
   const n = Math.min(5, Math.max(1, Math.round(Number(value)) || 3));
-  const el = document.getElementById('risingSeaLevelName');
-  if (el) el.textContent = RISING_SEA_LEVEL_NAMES[n - 1];
+  for (const id of ['risingSeaLevelName', 'pvRisingSeaLevelName']) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = RISING_SEA_LEVEL_NAMES[n - 1];
+  }
 }
 
 /** Host: set the Rising sea level (1 slow to 5 fast). On or off is the Rising sea addon checkbox. */
@@ -497,6 +501,53 @@ export function setRisingSeaLevel(value: string | number): void {
   const n = Math.min(5, Math.max(1, Math.round(Number(value)) || 3));
   socket.emit('updateSettings', { code: state.code, newSettings: { risingSeaLevel: n } });
   playTone(420 + n * 30, 0.04);
+}
+
+const QUICK_RULE_NUM_BOUNDS: Record<string, { min: number; max: number; def: number; inputId: string }> = {
+  boardRadius: { min: 1, max: 50, def: 2, inputId: 'setRadius' },
+  vpToWin: { min: 3, max: 50, def: 10, inputId: 'setVp' },
+  cardDiscardLimit: { min: 3, max: 50, def: 7, inputId: 'setDiscard' },
+  desertTiles: { min: 0, max: 200, def: 1, inputId: 'setDesert' },
+  goldTiles: { min: 0, max: 500, def: 0, inputId: 'setGold' },
+  fogTiles: { min: 0, max: 2000, def: 0, inputId: 'setFog' }
+};
+
+const QUICK_RULE_BOOL_INPUTS: Record<string, string> = {
+  fairDice: 'setFairDice',
+  eventsOn: 'setEventsOn',
+  techTreeOn: 'setTechTreeOn'
+};
+
+/** Host: edit a single rule straight from the sticky map preview quick-rules drawer. */
+export function updateQuickRule(key: string, rawValue: number | string | boolean): void {
+  if (!state || !requireHost('change settings')) return;
+  if (key in QUICK_RULE_NUM_BOUNDS) {
+    const cfg = QUICK_RULE_NUM_BOUNDS[key];
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) return;
+    const next = Math.min(cfg.max, Math.max(cfg.min, Math.round(parsed)));
+    const canonical = document.getElementById(cfg.inputId) as HTMLInputElement | null;
+    if (canonical) canonical.value = String(next);
+    socket.emit('updateSettings', { code: state.code, newSettings: { [key]: next } });
+    playTone(500, 0.04);
+    return;
+  }
+  if (key in QUICK_RULE_BOOL_INPUTS) {
+    const next = Boolean(rawValue);
+    const canonical = document.getElementById(QUICK_RULE_BOOL_INPUTS[key]) as HTMLInputElement | null;
+    if (canonical) canonical.checked = next;
+    socket.emit('updateSettings', { code: state.code, newSettings: { [key]: next } });
+    playTone(next ? 560 : 440, 0.04);
+  }
+}
+
+/** Host: increment or decrement a numeric quick-rule setting from the map preview stepper buttons. */
+export function stepQuickRule(key: string, delta: number): void {
+  if (!state || !(key in QUICK_RULE_NUM_BOUNDS)) return;
+  const cfg = QUICK_RULE_NUM_BOUNDS[key];
+  const curRaw = (state.settings as Record<string, any> | undefined)?.[key];
+  const cur = Number.isFinite(Number(curRaw)) ? Number(curRaw) : cfg.def;
+  updateQuickRule(key, cur + delta);
 }
 
 export function enableAddonWithDeps(addonId: string): void {

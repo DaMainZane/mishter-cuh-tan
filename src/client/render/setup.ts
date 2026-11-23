@@ -18,6 +18,8 @@ const SETUP_TABS: SetupTab[] = ['players', 'world', 'rules'];
 let setupTab: SetupTab = 'players';
 /** DLC rows the host opened. A row only opens while its DLC is on. */
 const openDlcs = new Set<string>();
+type PreviewDrawer = 'tidebound' | 'rules' | null;
+let previewDrawer: PreviewDrawer = null;
 
 /** Shows one tab's panel and marks its tab selected (roving tabindex, so arrow keys move between tabs). */
 function applySetupTab(): void {
@@ -63,6 +65,28 @@ export function toggleDlcOpen(id: string): void {
 /** Called just before the switch turns a DLC on, so the host sees its addons straight away. */
 export function openDlcRow(id: string, turningOn: boolean): void {
   if (turningOn) openDlcs.add(id);
+}
+
+/** Toggle the compact Tidebound or Rules quick-edit drawer inside the sticky map preview card. */
+export function togglePreviewDrawer(mode: 'tidebound' | 'rules'): void {
+  previewDrawer = previewDrawer === mode ? null : mode;
+  drawScenariosAndDlcs();
+}
+
+export function closePreviewDrawer(): void {
+  if (previewDrawer === null) return;
+  previewDrawer = null;
+  drawScenariosAndDlcs();
+}
+
+/** Jump from the map preview quick-rules drawer to the full Rules tab. */
+export function openAllRulesFromPreview(): void {
+  previewDrawer = null;
+  setSetupTab('rules');
+  drawScenariosAndDlcs();
+  requestAnimationFrame(() => {
+    document.getElementById('setupRulesHeading')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 /** Names of the Tides slider positions (1 to 5). Must match TIDE_LEVELS in packs/tidebound/tides.ts. */
@@ -207,7 +231,11 @@ function drawScenariosAndDlcs(): void {
   const scenarios: ScenarioPresetView[] = mapOptions?.scenarios || [];
   const { dlcs, addons } = effectiveDlcsAndAddons();
 
-  const sig = JSON.stringify([dlcMap, addonFlags, eventsOn, fateTokens, techTreeOn, fairDice, tideLevel, risingSeaLevel, s.vpToWin, s.boardRadius, scenarios.length, dlcs.length, [...openDlcs]]);
+  const sig = JSON.stringify([
+    dlcMap, addonFlags, eventsOn, fateTokens, techTreeOn, fairDice, tideLevel, risingSeaLevel,
+    s.vpToWin, s.boardRadius, s.cardDiscardLimit, s.desertTiles, s.goldTiles, s.fogTiles,
+    scenarios.length, dlcs.length, [...openDlcs], previewDrawer
+  ]);
   if (sig === lastDlcSig) return;
   lastDlcSig = sig;
 
@@ -282,6 +310,141 @@ function drawScenariosAndDlcs(): void {
       .join('');
 
     summaryBox.innerHTML = `<div class="summary-pills-row"><span class="tool-label">Active</span>${pills.join('')}</div>${blockedHtml}`;
+    summaryBox.classList.toggle('has-dep-prompt', blockedAddons.length > 0);
+  }
+
+  // 3b. Quick Tidebound & Rules controls embedded inside the sticky map preview card
+  const previewCard = document.getElementById('setupPreviewCard');
+  const setupSide = document.getElementById('setupSide');
+  const previewBar = document.getElementById('setupPreviewBar');
+  const previewDrawerEl = document.getElementById('setupPreviewDrawer');
+  const hasDrawer = previewDrawer !== null;
+  if (previewCard) previewCard.classList.toggle('has-drawer', hasDrawer);
+  if (setupSide) setupSide.classList.toggle('has-drawer', hasDrawer);
+
+  const tideDlc = dlcs.find(d => d.id === 'tidebound') || TIDEBOUND_FALLBACK_DLC;
+  const isTideOn = dlcMap.tidebound === true;
+  const tideAddonList = tideDlc.addons.map(id => addons.get(id)).filter((a): a is AddonInfoView => !!a);
+  const activeTideCount = tideAddonList.filter(a => enabledAddons.has(a.id)).length;
+  const vpVal = Number.isFinite(Number(s.vpToWin)) ? Number(s.vpToWin) : 10;
+  const radVal = Number.isFinite(Number(s.boardRadius)) ? Number(s.boardRadius) : 2;
+  const discardVal = Number.isFinite(Number(s.cardDiscardLimit)) ? Number(s.cardDiscardLimit) : 7;
+  const desertVal = Number.isFinite(Number(s.desertTiles)) ? Number(s.desertTiles) : 1;
+  const goldVal = Number.isFinite(Number(s.goldTiles)) ? Number(s.goldTiles) : 0;
+  const fogVal = Number.isFinite(Number(s.fogTiles)) ? Number(s.fogTiles) : 0;
+
+  if (previewBar) {
+    const tideMeta = isTideOn ? `${activeTideCount}/${tideAddonList.length}` : 'Off';
+    previewBar.innerHTML = `
+      <div class="sp-btn-group sp-tidebound${isTideOn ? ' is-on' : ''}${previewDrawer === 'tidebound' ? ' is-open' : ''}">
+        <button type="button" class="sp-action-btn" aria-expanded="${previewDrawer === 'tidebound'}" aria-controls="setupPreviewDrawer" onclick="togglePreviewDrawer('tidebound')">
+          <span class="sp-btn-icon">${uiIcon('waves', 15)}</span>
+          <span class="sp-btn-title">Tidebound</span>
+          <span class="sp-btn-meta">${esc(tideMeta)}</span>
+          <span class="sp-caret">${uiIcon('chevronDown', 14)}</span>
+        </button>
+        <label class="sp-inline-switch" title="Toggle Tidebound expansion">
+          <input type="checkbox" class="setup-switch sp-switch" role="switch" aria-label="Toggle Tidebound" ${isTideOn ? 'checked' : ''}
+            onclick="event.preventDefault(); openDlcRow('tidebound', ${!isTideOn}); toggleDlc('tidebound')" />
+        </label>
+      </div>
+      <button type="button" class="sp-action-btn sp-rules${previewDrawer === 'rules' ? ' is-open' : ''}" aria-expanded="${previewDrawer === 'rules'}" aria-controls="setupPreviewDrawer" onclick="togglePreviewDrawer('rules')">
+        <span class="sp-btn-icon">${uiIcon('sliders', 15)}</span>
+        <span class="sp-btn-title">Rules</span>
+        <span class="sp-btn-meta">${esc(vpVal)} VP · R${esc(radVal)}</span>
+        <span class="sp-caret">${uiIcon('chevronDown', 14)}</span>
+      </button>`;
+  }
+
+  if (previewDrawerEl) {
+    previewDrawerEl.hidden = !hasDrawer;
+    if (previewDrawer === 'tidebound') {
+      const addonChips = tideAddonList
+        .map(a => {
+          const rawWanted = addonFlags[a.id] !== false;
+          const isActuallyOn = enabledAddons.has(a.id);
+          const missingDeps = (a.deps || []).filter(depId => !enabledAddons.has(depId));
+          const isBlocked = isTideOn && rawWanted && missingDeps.length > 0;
+          const onClick = isBlocked ? `enableAddonWithDeps('${esc(a.id)}')` : `toggleAddon('${esc(a.id)}')`;
+          const depNote = isBlocked
+            ? `<span class="sp-addon-dep">Needs ${esc(missingDeps.map(m => addons.get(m)?.name || m).join(', '))}</span>`
+            : '';
+          return `<button type="button" class="sp-addon-chip${isActuallyOn ? ' is-on' : ''}${isBlocked ? ' is-blocked' : ''}" aria-pressed="${isActuallyOn}" onclick="${onClick}" title="${esc(a.description || a.name)}">
+            <span class="sp-addon-dot" aria-hidden="true">${isActuallyOn ? uiIcon('check', 12) : ''}</span>
+            <span class="sp-addon-name">${esc(a.name)}${depNote}</span>
+          </button>`;
+        })
+        .join('');
+
+      const sliders: string[] = [];
+      if (enabledAddons.has('tidebound.tides')) {
+        sliders.push(`<label class="sp-slider-row">
+          <span class="sp-slider-label">Tide level <strong id="pvTideLevelName">${esc(TIDE_LEVEL_NAMES[tideLevel - 1])}</strong></span>
+          <input type="range" min="1" max="5" step="1" value="${tideLevel}" aria-label="Tide level"
+            oninput="previewTideLevel(this.value)" onchange="setTideLevel(this.value)" />
+        </label>`);
+      }
+      if (enabledAddons.has('tidebound.rising_sea')) {
+        sliders.push(`<label class="sp-slider-row">
+          <span class="sp-slider-label">Rising rate <strong id="pvRisingSeaLevelName">${esc(RISING_SEA_LEVEL_NAMES[risingSeaLevel - 1])}</strong></span>
+          <input type="range" min="1" max="5" step="1" value="${risingSeaLevel}" aria-label="Rising sea rate"
+            oninput="previewRisingSeaLevel(this.value)" onchange="setRisingSeaLevel(this.value)" />
+        </label>`);
+      }
+
+      const bodyHtml = isTideOn
+        ? `<div class="sp-addon-grid">${addonChips}</div>
+           ${sliders.length > 0 ? `<div class="sp-sliders">${sliders.join('')}</div>` : ''}
+           <div class="sp-drawer-foot">
+             <button type="button" class="sp-foot-btn" onclick="applyScenario('tidebound')">${uiIcon('map', 14)}<span>Load Tidebound Islands map</span></button>
+           </div>`
+        : `<p class="sp-drawer-hint">Adds bridges, tides, rising sea, harbors, fishing, shipwrecks and pirates.</p>
+           <div class="sp-cta-row">
+             <button type="button" class="btn sm" onclick="openDlcRow('tidebound', true); toggleDlc('tidebound')">Enable on this map</button>
+             <button type="button" class="btn sm primary" onclick="applyScenario('tidebound')">Tidebound Islands</button>
+           </div>`;
+
+      previewDrawerEl.innerHTML = `
+        <div class="sp-drawer-head">
+          <span class="sp-drawer-title">${uiIcon('waves', 14)}<span>Tidebound</span></span>
+          <button type="button" class="sp-drawer-close" aria-label="Close Tidebound panel" onclick="closePreviewDrawer()">${uiIcon('close', 14)}</button>
+        </div>
+        ${bodyHtml}`;
+    } else if (previewDrawer === 'rules') {
+      const stepper = (key: string, label: string, val: number, min: number, max: number) => `
+        <div class="sp-stepper-cell">
+          <span class="sp-stepper-label">${esc(label)}</span>
+          <div class="sp-stepper">
+            <button type="button" class="sp-step-btn" aria-label="Decrease ${esc(label)}" onclick="stepQuickRule('${esc(key)}', -1)" ${val <= min ? 'disabled' : ''}>${uiIcon('minus', 13)}</button>
+            <input type="number" class="sp-num" value="${esc(val)}" min="${min}" max="${max}" aria-label="${esc(label)}" onchange="updateQuickRule('${esc(key)}', this.value)" />
+            <button type="button" class="sp-step-btn" aria-label="Increase ${esc(label)}" onclick="stepQuickRule('${esc(key)}', 1)" ${val >= max ? 'disabled' : ''}>${uiIcon('plus', 13)}</button>
+          </div>
+        </div>`;
+
+      previewDrawerEl.innerHTML = `
+        <div class="sp-drawer-head">
+          <span class="sp-drawer-title">${uiIcon('sliders', 14)}<span>Quick rules</span></span>
+          <button type="button" class="sp-drawer-close" aria-label="Close Rules panel" onclick="closePreviewDrawer()">${uiIcon('close', 14)}</button>
+        </div>
+        <div class="sp-rules-grid">
+          ${stepper('boardRadius', 'Radius', radVal, 1, 50)}
+          ${stepper('vpToWin', 'VP to win', vpVal, 3, 50)}
+          ${stepper('cardDiscardLimit', 'Discard >', discardVal, 3, 50)}
+          ${stepper('desertTiles', 'Desert', desertVal, 0, 200)}
+          ${stepper('goldTiles', 'Gold', goldVal, 0, 500)}
+          ${stepper('fogTiles', 'Fog', fogVal, 0, 2000)}
+        </div>
+        <div class="sp-toggles-row">
+          <button type="button" class="sp-toggle-pill${fairDice ? ' is-on' : ''}" aria-pressed="${fairDice}" onclick="updateQuickRule('fairDice', ${!fairDice})">Fair dice</button>
+          <button type="button" class="sp-toggle-pill${eventsOn ? ' is-on' : ''}" aria-pressed="${eventsOn}" onclick="updateQuickRule('eventsOn', ${!eventsOn})">Events</button>
+          <button type="button" class="sp-toggle-pill${techTreeOn ? ' is-on' : ''}" aria-pressed="${techTreeOn}" onclick="updateQuickRule('techTreeOn', ${!techTreeOn})">Tech tree</button>
+        </div>
+        <div class="sp-drawer-foot">
+          <button type="button" class="sp-foot-btn" onclick="openAllRulesFromPreview()">${uiIcon('sliders', 14)}<span>All rules (Timers, Bank, Pieces)</span></button>
+        </div>`;
+    } else {
+      previewDrawerEl.innerHTML = '';
+    }
   }
 
   // 4. Expansions: one compact row per DLC (switch, "n of m addons"); its addons and settings show only when it is on and opened

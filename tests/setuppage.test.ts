@@ -78,6 +78,12 @@ describe('setup page layout (Players / World / Rules tabs)', () => {
     const mapmenu = readFileSync(join(__dirname, '../src/client/mapmenu.ts'), 'utf8');
     expect(mapmenu).not.toContain('startSavePreset()');
   });
+
+  it('embeds sticky map preview quick controls for Tidebound and Rules', () => {
+    expect(page).toContain('id="setupSide"');
+    expect(page).toContain('id="setupPreviewBar"');
+    expect(page).toContain('id="setupPreviewDrawer"');
+  });
 });
 
 describe('rule fold titles show the current values', () => {
