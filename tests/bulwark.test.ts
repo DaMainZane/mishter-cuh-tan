@@ -88,6 +88,11 @@ function put(m: Game, vertexId: number, owner: string, type = 'settlement'): voi
   m.reg.hooks.afterAction.forEach(h => h(m.ctx, 'build'));
 }
 const resync = (m: Game) => m.reg.hooks.afterAction.forEach(h => h(m.ctx, 'build'));
+/** The map's rings are stone; tests of decay turn one zone's ring into palisades first. */
+function toPalisades(m: Game): void {
+  const z = bulwarkState(m.g).zones[0];
+  for (const eid of ringEdges(m.g, z.hexIds)) if (m.g.board.edges[eid].piece) m.g.board.edges[eid].piece!.type = WALL;
+}
 
 describe('castle', () => {
   it('upgrades your own city for 9 cards, makes 4 per hit and is worth 3 VP', () => {
@@ -119,7 +124,7 @@ describe('castle', () => {
 });
 
 describe('spawned zones and walls', () => {
-  it('puts walls on every edge around a planned zone at game start, neutral', () => {
+  it('puts walls on every edge around a planned zone at game start: neutral old stone', () => {
     const m = makeGame();
     const st = bulwarkState(m.g);
     expect(st.zones).toHaveLength(1);
@@ -127,7 +132,7 @@ describe('spawned zones and walls', () => {
     expect(z.hexIds).toEqual(centreIds(m.g).sort((a, b) => a - b));
     const edges = ringEdges(m.g, z.hexIds);
     expect(edges).toHaveLength(18);
-    for (const eid of edges) expect(m.g.board.edges[eid].piece?.type).toBe(WALL);
+    for (const eid of edges) expect(m.g.board.edges[eid].piece?.type).toBe(STONE_WALL);
     expect(z.complete).toBe(true);
     expect(z.controller).toBeNull();
   });
@@ -297,6 +302,7 @@ describe('decay, rot, repair and stone', () => {
   it('a 7 takes 1 from every palisade; at 0 the piece is gone and the zone opens', () => {
     const m = makeGame();
     const z = bulwarkState(m.g).zones[0];
+    toPalisades(m);
     const eid = ringEdges(m.g, z.hexIds)[0];
     for (let i = 0; i < 3; i++) palisadeDecayStep.run(m.ctx);
     resync(m);
@@ -309,6 +315,7 @@ describe('decay, rot, repair and stone', () => {
     const z = bulwarkState(m.g).zones[0];
     const inside = interiorVertices(m.g, z.hexIds);
     put(m, inside[0], 'a');
+    toPalisades(m);
     const eid = ringEdges(m.g, z.hexIds)[0];
     const outsideHex = m.g.board.edges[eid].hexIds.find(h => !z.hexIds.includes(h))!;
     setTileState(m.g, outsideHex, { id: 'flooded' });
@@ -325,6 +332,7 @@ describe('decay, rot, repair and stone', () => {
     const z = bulwarkState(m.g).zones[0];
     put(m, interiorVertices(m.g, z.hexIds)[0], 'a');
     m.g.players[0].resources = { ...rich };
+    toPalisades(m);
     const eid = ringEdges(m.g, z.hexIds)[0];
     expect(act(m, 'a', 'build', { piece: STONE_WALL, loc: eid }).ok).toBe(true);
     for (let i = 0; i < 5; i++) palisadeDecayStep.run(m.ctx);
@@ -334,6 +342,7 @@ describe('decay, rot, repair and stone', () => {
   it('Palisade fire takes 1 or 2 from each palisade', () => {
     const m = makeGame();
     const z = bulwarkState(m.g).zones[0];
+    toPalisades(m);
     palisadeFire(m.ctx);
     for (const eid of ringEdges(m.g, z.hexIds)) {
       const hp = m.g.board.edges[eid].piece ? getPieceDurability(m.g, m.reg, 'edge', eid)! : 0;

@@ -1,7 +1,7 @@
 // MODULE: Bulwark map spawn (plans walled zones while the map generates: count and size grow with the radius, never a lone zone, a mix of whole and broken rings, good numbers moved in when needed; then puts the walls up at game start, broken rings with 1 or 2 gaps) | DEPENDS ON: packs/bulwark/constants, packs/bulwark/zones, shared/index | USED BY: packs/bulwark/index, packs/bulwark/walls
 import { createRng, rngInt, rngNext, rngShuffle } from '../../shared';
 import type { Ctx, GameState, HexInit, RngState } from '../../shared';
-import { NO_OWNER, WALL, WALL_MIN_RADIUS, ZONE_MIN_TILES } from './constants';
+import { NO_OWNER, STONE_WALL, WALL, WALL_MIN_RADIUS, ZONE_MIN_TILES } from './constants';
 import { bulwarkState, ringEdges } from './zones';
 import type { ZoneRec } from './zones';
 
@@ -180,12 +180,14 @@ export function raiseSpawnedWalls(ctx: Ctx): void {
       st.wallZone[eid] = z.id;
       const e = g.board.edges[eid];
       if (gaps.has(eid) || e.piece) continue;
-      e.piece = { type: WALL, owner: NO_OWNER };
+      // The map's rings are old stone when Stone walls is on: a palisade ring (18 pieces, 3 durability) would rot away within a few rounds of 7s,
+      // so decay is a cost of the palisades players build, not of the map. Without the stone addon the rings are palisades.
+      e.piece = { type: reg.pieces.has(STONE_WALL) ? STONE_WALL : WALL, owner: NO_OWNER };
     }
   }
 }
 
-/** Test helper: does this game have walls on the board? */
+/** Test helper: how many palisades are on the board (the map's own rings are stone when Stone walls is on). */
 export function wallCount(g: GameState): number {
   return g.board.edges.filter(e => e.piece?.type === WALL).length;
 }

@@ -104,6 +104,15 @@ Through `BotGoalDef` hooks only:
 
 Placeholder for now: a Bulwark branch after the existing root (Stockpiling). The lanes and nodes get their own session (working names: Fortress for walls, stone and gates; Crown for castles, tax and permits).
 
+## As built (2026-11-24)
+
+- **Files:** `src/packs/bulwark/`: `castle.ts`, `walls.ts` (wall piece, placement rules, tax meter, Peasant revolt, view, zone bot goal), `zones.ts` (state, geometry, control, rebellion, would-be-inside tiles, the gate Longest Road rule), `spawn.ts` (map planning and game-start walls), `wallTiers.ts`, `wallDecay.ts` (decay, rot, fire, repair), `gatehouse.ts`, `highGround.ts`. Client: `client/render/bulwark.ts` (gates, arches, cracks, zone banners, the Overthrown card); the zone tints are drawn in `client/render/terrainCanvas.ts`.
+- **Engine hooks added (generic):** `PLACEMENT_CHECKS` and `LONGEST_ROAD_BREAKS` (`shared/placementChecks.ts`), and `hex.ext.elevationBonus` read by `hexElevation`. Bulwark and Tidebound never import each other.
+- **The map's rings are stone** (when the Stone walls addon is on). Bot simulations showed palisade rings (18 pieces, 3 durability, -1 on every 7) rot away within about five rounds and nobody can repair 18 pieces, so every zone was gone by mid-game. Decay, rot and fire now hit the palisades players build (gaps they close, rings they extend). Without the Stone walls addon the rings are palisades. Change it in `raiseSpawnedWalls` (`spawn.ts`) if you want the old rule.
+- **Buttons:** Castle, Wall, Stone, Repair, Gate, Open/close and Permit all use the generic piece and action buttons (spots come from the server). Open/close: click your gate. Permit: click a guest's building inside your zone (click again to take it back).
+- **Bots:** close a broken ring they would win, repair cracked palisades, build a gate in a zone they hold, keep it closed (Secondary and up), value corners by zone tax, build castles. In 4-bot sims at 25 VP every game finished; bots built 3 to 5 castles and gates in most held zones. Bots rarely settle as a guest in a zone someone already holds, so tax and rebellion seldom fire between bots (unit tests cover both).
+- **Not built:** Siege, Castle sieges and zones in the lobby map preview (left for later), the Bulwark tech lanes (the root Stockpiling is unchanged; lanes get their own session).
+
 ## Open numbers to tune in sims
 
 Zone count and size by radius, the castle cost and 4x output against bank shortages, the wall cap of 12, palisade durability of 3, the tax rate of 30%, and the event ranges.

@@ -917,6 +917,21 @@ function drawHexOverlay(ctx: CanvasRenderingContext2D, ov: CanvasHexOverlayLike,
       if (isWarn) ctx.setLineDash([]);
     }
     ctx.restore();
+  } else if (ov.kind === 'zone-closed' || ov.kind === 'zone-open') {
+    // Bulwark walled zone: a calm stone tint with upright stakes (dashed while its gate stands open).
+    const open = ov.kind === 'zone-open';
+    ctx.fillStyle = open ? 'rgba(120, 104, 84, 0.10)' : 'rgba(120, 104, 84, 0.16)';
+    ctx.fill(poly);
+    ctx.strokeStyle = 'rgba(92, 70, 46, 0.42)';
+    ctx.lineWidth = 1.6;
+    if (open) ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    for (let offset = -48; offset <= 48; offset += 16) {
+      ctx.moveTo(ov.x + offset, ov.y - 50);
+      ctx.lineTo(ov.x + offset, ov.y + 50);
+    }
+    ctx.stroke();
+    if (open) ctx.setLineDash([]);
   } else {
     // Fallback tint + diagonal stripe for any other overlay kind (plague, crack, wave, etc.)
     ctx.fillStyle =

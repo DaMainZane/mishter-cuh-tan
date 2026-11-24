@@ -84,6 +84,11 @@ export function bridgeSiteOk(board: MenuBoard, edgeId: number, myId: string): bo
   return joinsMyNetwork(board, edgeId, myId);
 }
 
+/** Spots the server closed to you (walls and zones, Bulwark): `me.placementBlocks`. */
+function blockedHere(c: MenuContext, kind: 'vertices' | 'edges', id: number): boolean {
+  return !!(c.me as any).placementBlocks?.[kind]?.includes(id);
+}
+
 function option(c: MenuContext, id: string, label: string, icon: string, cost: Resources): BuildOption {
   return { id, label, icon, cost, affordable: canPay(c.me, cost) };
 }
@@ -105,7 +110,7 @@ export function vertexOptions(c: MenuContext, vertexId: number): BuildOption[] {
   const out: BuildOption[] = [];
   const b = v.building;
   if (!b) {
-    if ((c.me.settlementsLeft ?? 0) > 0 && settlementSiteOk(c.board, vertexId, c.me.id)) out.push(option(c, 'settlement', 'Settlement', 'house', c.costOf('settlement')));
+    if ((c.me.settlementsLeft ?? 0) > 0 && settlementSiteOk(c.board, vertexId, c.me.id) && !blockedHere(c, 'vertices', vertexId)) out.push(option(c, 'settlement', 'Settlement', 'house', c.costOf('settlement')));
   } else if (b.owner === c.me.id) {
     if (b.type === 'settlement' && (c.me.citiesLeft ?? 0) > 0) out.push(option(c, 'city', 'City', 'city', c.costOf('city')));
     if (b.type === 'city' && c.harborCost && c.me.harborSpots?.includes(vertexId)) out.push(option(c, 'harbor', 'Harbor 1:1', 'harbor', c.harborCost));
@@ -126,7 +131,7 @@ export function showsHotspot(opts: BuildOption[]): boolean {
 /** What an edge offers you on your main-phase turn, in popover order. Empty means no hotspot. */
 export function edgeOptions(c: MenuContext, edgeId: number): BuildOption[] {
   const out: BuildOption[] = [];
-  if ((c.me.roadsLeft ?? 0) > 0 && roadSiteOk(c.board, edgeId, c.me.id)) {
+  if ((c.me.roadsLeft ?? 0) > 0 && roadSiteOk(c.board, edgeId, c.me.id) && !blockedHere(c, 'edges', edgeId)) {
     out.push(option(c, 'road', 'Road', 'road', (c.me.freeRoads ?? 0) > 0 ? {} : c.costOf('road')));
   }
   if ((c.me.bridgesLeft ?? 0) > 0 && bridgeSiteOk(c.board, edgeId, c.me.id)) {

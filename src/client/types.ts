@@ -1,4 +1,4 @@
-// MODULE: loose client-side view types (PlayerView, GameState, Resources) | DEPENDS ON: shared/visual | USED BY: client/buildMenu, client/logFilter, client/mapmenu, client/pieceModel, client/pieceui, client/render/index, +6 more
+// MODULE: loose client-side view types (PlayerView, GameState, Resources) | DEPENDS ON: shared/visual | USED BY: client/buildMenu, client/logFilter, client/mapmenu, client/pieceModel, client/pieceui, client/render/bulwark, +7 more
 // Loose client-side view types. Tightened when shared engine types arrive (Step 2).
 import type { PiecePlayerData } from '../shared/visual';
 
@@ -50,6 +50,8 @@ export interface PlayerView {
   harborsLeft?: number;
   /** Remaining 1:1 trades across your harbors this turn (max 4 per harbor per turn, T8b). */
   harborTradesLeft?: number;
+  /** Corners and edges where you may not put a settlement or road because of walls and zones (Bulwark). Only sent to you. */
+  placementBlocks?: { vertices: number[]; edges: number[] };
   vp: number;
   /** What other players see (differs from `vp` only for your own hidden VP cards). */
   publicVp?: number;
@@ -207,8 +209,29 @@ export interface GameState {
   portLevels?: Record<number, number> | null;
   /** Event Deck timeline (2026-11-24): the next events with their rounds, and the last one that fired. Missing when the deck is off. */
   eventTimeline?: EventTimelineView | null;
+  /** Bulwark walls and zones (gates, damaged palisades, lords, tax meters, the last overthrow). Null while the DLC is off. */
+  bulwark?: BulwarkView | null;
   /** Tidebound Tides (T6): tide facts for the title card, the warning and the heat map. Null when Tides is off. */
   tide?: TideView | null;
+}
+
+export interface BulwarkZoneView {
+  id: number;
+  hexIds: number[];
+  complete: boolean;
+  controller: string | null;
+  /** Guest id -> tax meter in twentieths (a card is taken at 20). */
+  meters: Record<string, number>;
+  permits: string[];
+  vp: Record<string, number>;
+}
+
+export interface BulwarkView {
+  zones: BulwarkZoneView[];
+  pending: number[][];
+  gates: { vertexId: number; arch: number; open: boolean; zoneId: number }[];
+  damaged: Record<number, number>;
+  lastOverthrow: { round: number; zoneId: number; from: string | null; to: string } | null;
 }
 
 export interface EventTimelineItemView {

@@ -1157,7 +1157,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
         for (let k = 0; k < v.adjacentVertices.length; k++) {
           if (vertices[v.adjacentVertices[k]]?.building) { adjBlocked = true; break; }
         }
-        if (!adjBlocked) {
+        if (!adjBlocked && !me.placementBlocks?.vertices?.includes(v.id)) {
           nextVertexSpots.push({ vertexId: v.id, x: v.x, y: v.y, kind: 'direct' });
         }
       }
@@ -1808,6 +1808,8 @@ export function canClientPlaceSettlement(v: any, me: any): boolean {
   for (const adjId of v.adjacentVertices) {
     if (state.board.vertices[adjId]?.building) return false;
   }
+  // Walls and zones (Bulwark): the server lists the corners closed to you.
+  if (me.placementBlocks?.vertices?.includes(v.id)) return false;
   if (state.phase === 'SETUP_SETTLEMENT') return true;
   if (state.phase !== 'MAIN') return false;
   if (!canClientAffordPiece(me, 'settlement')) return false;
@@ -1817,6 +1819,8 @@ export function canClientPlaceSettlement(v: any, me: any): boolean {
 export function canClientPlaceRoad(e: any, me: any): boolean {
   if (!me || me.roadsLeft <= 0) return false;
   if (!e.hexIds || e.hexIds.length === 0) return false;
+  if (e.road) return false;
+  if (me.placementBlocks?.edges?.includes(e.id)) return false;
   if (state.phase === 'SETUP_ROAD') {
     return e.v1 === state.lastSetupVertexId || e.v2 === state.lastSetupVertexId;
   }

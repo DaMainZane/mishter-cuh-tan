@@ -1,4 +1,4 @@
-// MODULE: S0.13 overlay and popup kit (Service 11: hex tint/pattern layer, timer-bar popups, dramatic event title card, round-end recap card; T6: theme-aware flood and flood-warning patterns, elevation heat map) | DEPENDS ON: client/icons, client/pieceModel, client/util, client/visuals, shared/visual | USED BY: client/main, client/render/board, client/render/eventTimeline, client/render/index
+// MODULE: S0.13 overlay and popup kit (Service 11: hex tint/pattern layer, timer-bar popups, dramatic event title card, round-end recap card; T6: theme-aware flood and flood-warning patterns, elevation heat map) | DEPENDS ON: client/icons, client/pieceModel, client/util, client/visuals, shared/visual | USED BY: client/main, client/render/board, client/render/bulwark, client/render/eventTimeline, client/render/index
 // Colorblind rule ("Design UI Philosophy.md"): every hex overlay pairs a color tint with a distinct geometric SVG pattern
 // (hatch, waves, dots, chevrons, diagonal crack, rings) so color is never the only signal.
 import { uiIcon } from '../icons';

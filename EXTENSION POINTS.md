@@ -75,6 +75,8 @@ Call sites were opened and checked.
 | `STEAL_COUNT_MODS` | `packs/base/robbing.ts` | `{ id, apply(g, reg, thiefId, victimId, source, current) => number }` |
 | `VIEW_DATA` | `shared/viewData.ts` | `{ id, priority?, shared?(g, reg), overlays?(g, reg), player?(g, reg, p, who), vpBonus?(g, reg, pid) }`: fields added to the state `server/view.ts` sends. `shared` is public (`null` when its addon is off, so give it a `null` default in an always-on pack-level entry), `overlays` is hex id to `{ kind }` (`undefined`/`null` = not taking part, `{}` = taking part with nothing), `player` is per player (`who.self`, `who.over`, `who.spectator`; `undefined` when off), `vpBonus` is `{ [breakdownKey]: n }`. First wins per field: higher `priority`, then lower id. Merge helpers: `mergeViewShared`, `mergeViewOverlays`, `mergeViewPlayer`, `mergeViewVpBonus` |
 | `OVERLAY_KINDS` | `shared/visual.ts` | `OverlayKindVisual`: `{ id, label, tint: { light, dark }, line: { light, dark }, pattern, icon?, pulse? }`. Plain data (no functions). `pattern` is required: a tint alone fails the colourblind rule. Registered now, sent to the client from R8.4, drawn from R8.8 |
+| `PLACEMENT_CHECKS` | `shared/placementChecks.ts` | `{ id, check(ctx, pid, pieceDef, loc, mode) => string \| null }`: a veto on top of a piece's `canPlace` (a reason refuses it). Read by the build action (`validateBuild`), the generic spot lists and the bot's candidate spots through `canPlacePiece`. Base road and settlement spots on the client read the per-player `placementBlocks` field the addon sends (Bulwark: walls and zones) |
+| `LONGEST_ROAD_BREAKS` | `shared/placementChecks.ts` | `{ id, breaks(ctx, pid, vertexId) => boolean }`: cuts `pid`'s road at a corner for Longest Road, like an opponent's settlement (Bulwark: a closed gate) |
 
 Not checked: registries defined inside a single pack (outside the files above). Search for `export const .* = '` before assuming none exist.
 
@@ -95,6 +97,10 @@ A new action or piece needs no server handler. `act` and `place` are the only ga
 |---|---|---|
 | `mapOptions` | the map menu options | On connect, and in the lobby whenever the room's addon set changes (`syncMapOptions` in `server/net.ts`) |
 | `visuals` | `{ key, manifest }`: the visual manifest (`VisualManifest` in `shared/visual.ts`, built by `buildVisualManifest` in `shared/visualManifest.ts`) | In `broadcastRoom`, before `gameState`, in the lobby and in a game. The first broadcast to a socket always sends it (even an empty manifest); after that only when the addon set changes. `key` is the addon set. The client keeps it in `client/visuals.ts` and copes with it arriving before or after the first `gameState` |
+
+## Shared tile data
+
+- `hex.ext.elevationBonus`: added to a tile's elevation by `hexElevation` (Tidebound tides and rising sea). Bulwark writes +1 for land inside a finished wall zone. Any content may write it; the writer clears its own.
 
 ## Rules to keep when using these
 
