@@ -1033,8 +1033,6 @@ svg#boardSvg:active { cursor: grabbing; }
 .port-ring { fill: none; stroke: var(--accent); stroke-width: 4; }
 /* The port badge is the node for a harbor upgrade or a port raise; a harbor gets a dark badge with an anchor. */
 .port-node-ring { fill: var(--accent); fill-opacity: 0.35; stroke: var(--accent); stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: spotPulse 1.6s ease-in-out infinite; }
-.port-node.hot-dim { opacity: 0.4; }
-.port-node.hot-dim .port-node-ring { animation: none; }
 .port-badge-outer.harbor { fill: var(--accent); }
 .port-harbor-icon { color: var(--token); }
 .port-text { fill: var(--token-ink); font-weight: 800; text-anchor: middle; }
@@ -1045,9 +1043,8 @@ svg#boardSvg:active { cursor: grabbing; }
   transform-box: fill-box; transform-origin: center; animation: spotPulse 1.6s ease-in-out infinite;
 }
 .spot-pulse.spot-static { animation: none; }
-/* BUG 5: build-menu hotspots are see-through; one where you can pay for nothing yet is dimmer and still. */
+/* BUG 5: build-menu hotspots are see-through. A spot only shows when you can pay for something there (showsHotspot). */
 .spot-pulse.hotspot { fill-opacity: 0.55; }
-.hotspot.hot-dim, .target-ring.hot-dim { opacity: 0.4; animation: none; }
 .spot-pulse:hover { opacity: 1; animation: none; transform: scale(1.15); }
 @keyframes spotPulse { 0%, 100% { opacity: 0.78; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
 .road-rim-line {

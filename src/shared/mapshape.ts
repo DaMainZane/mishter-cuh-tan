@@ -5,7 +5,7 @@ import { cellPoint } from './noise';
 import type { NoiseFn } from './noise';
 import { rngInt, rngNext } from './rng';
 import type { RngState } from './rng';
-import { MAX_RADIUS } from './maprecipe';
+import { MAX_CANVAS_RADIUS } from './maprecipe';
 import { hexDistance } from './topology';
 
 /** Neighbour directions in ring order (consecutive entries are neighbours of each other). */
@@ -49,11 +49,11 @@ export function seaGrow(extra: number): number {
 }
 
 /**
- * The canvas radius for a normal map of `radius` and a wide-water extra: the normal map plus the sea rings, never above MAX_RADIUS.
+ * The canvas radius for a normal map of `radius` and a wide-water extra: the normal map plus the sea rings, never above MAX_CANVAS_RADIUS.
  * Tidebound's map is bigger than the base one by design; the land count still comes from `radius`, so the extra room is all sea.
  */
 export function canvasRadiusFor(radius: number, extra: number): number {
-  return Math.min(MAX_RADIUS, radius + seaGrow(extra));
+  return Math.min(MAX_CANVAS_RADIUS, radius + seaGrow(extra));
 }
 
 /**

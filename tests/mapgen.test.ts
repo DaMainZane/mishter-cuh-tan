@@ -84,7 +84,7 @@ describe('recipe', () => {
 
   it('clamps, dedupes and drops what it does not know', () => {
     const r = makeRecipe({ seed: 'abc', radius: 999, picks: ['a', 'a', 'b c', 'd'], params: { land: NaN, ok: 5, seed: 1 } });
-    expect(r.radius).toBe(50);
+    expect(r.radius).toBe(30); // the map radius setting is capped at 30 (wide water may still grow the canvas past it)
     expect(r.picks).toEqual(['a', 'd']);
     expect(r.params).toEqual({ ok: 5 });
     const d = decodeRecipe('hx1;r=0;picks=a+zzz;nope=1;seed=ABC', id => id === 'a');

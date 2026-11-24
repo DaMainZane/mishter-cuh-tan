@@ -115,6 +115,14 @@ export function vertexOptions(c: MenuContext, vertexId: number): BuildOption[] {
   return out.concat(entryOptions(c, 'vertex', vertexId, new Set(out.map(o => o.id))));
 }
 
+/**
+ * Is a hotspot drawn for these options? Only when at least one of them is payable now (Bug List: no settlement prompt without the cards).
+ * The popover still lists an option you cannot pay for, disabled, when another option at the same spot is payable.
+ */
+export function showsHotspot(opts: BuildOption[]): boolean {
+  return opts.some(o => o.affordable);
+}
+
 /** What an edge offers you on your main-phase turn, in popover order. Empty means no hotspot. */
 export function edgeOptions(c: MenuContext, edgeId: number): BuildOption[] {
   const out: BuildOption[] = [];

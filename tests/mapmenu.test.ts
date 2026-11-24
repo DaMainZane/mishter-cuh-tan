@@ -148,7 +148,7 @@ describe('presets v2', () => {
 
     // Unknown ids and out-of-range numbers are dropped or clamped when the recipe is applied.
     const odd = loaded({ ...saved, recipe: { g: 1, seed: 'ODD1', radius: 9999, picks: ['continent', 'bogus', 'fog'], params: { land: 5000, bogus: 1 } } });
-    expect(odd.recipe?.radius).toBeLessThanOrEqual(50);
+    expect(odd.recipe?.radius).toBeLessThanOrEqual(30);
     const target = roomOf();
     applyLoadedPreset(target, odd);
     expect(target.settings.mapPicks).toEqual(['continent', 'fog']);

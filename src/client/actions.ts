@@ -349,7 +349,7 @@ export function setRisingSeaLevel(value: string | number): void {
 }
 
 const QUICK_RULE_NUM_BOUNDS: Record<string, { min: number; max: number; def: number; inputId: string }> = {
-  boardRadius: { min: 1, max: 50, def: 2, inputId: 'setRadius' },
+  boardRadius: { min: 1, max: 30, def: 2, inputId: 'setRadius' }, // MAX_RADIUS in shared/maprecipe.ts
   vpToWin: { min: 3, max: 50, def: 10, inputId: 'setVp' },
   cardDiscardLimit: { min: 3, max: 50, def: 7, inputId: 'setDiscard' },
   desertTiles: { min: 0, max: 200, def: 1, inputId: 'setDesert' },

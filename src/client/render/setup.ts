@@ -537,7 +537,7 @@ function drawScenariosAndDlcs(): void {
           <button type="button" class="sp-drawer-close" aria-label="Close Rules panel" onclick="closePreviewDrawer()">${uiIcon('close', 14)}</button>
         </div>
         <div class="sp-rules-grid">
-          ${stepper('boardRadius', 'Radius', radVal, 1, 50)}
+          ${stepper('boardRadius', 'Radius', radVal, 1, 30)}
           ${stepper('vpToWin', 'VP to win', vpVal, 3, 50)}
           ${stepper('cardDiscardLimit', 'Discard >', discardVal, 3, 50)}
           ${stepper('desertTiles', 'Desert', desertVal, 0, 200)}

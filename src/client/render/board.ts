@@ -33,8 +33,8 @@ import { renderPiratesMarkup } from './pirates';
 import { upgradePortClick } from './techpanel';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
-import { edgeOptions, hexCandidates, hexOptions, vertexOptions } from '../buildMenu';
-import type { BuildOption, MenuContext } from '../buildMenu';
+import { edgeOptions, hexCandidates, hexOptions, showsHotspot, vertexOptions } from '../buildMenu';
+import type { MenuContext } from '../buildMenu';
 import { manifestEntries } from '../visuals';
 import {
   computeCanvasCamera,
@@ -894,7 +894,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       if (raiseModeSet?.has(vid)) return { kind: 'upgrade_port', vertexId: vid, dim: false };
       if (!menuCtx) continue;
       const opts = vertexOptions(menuCtx, vid).filter(o => o.id === 'harbor' || o.id === 'upgrade_port');
-      if (opts.length > 0) return { kind: 'menu', vertexId: vid, dim: !opts.some(o => o.affordable) };
+      if (showsHotspot(opts)) return { kind: 'menu', vertexId: vid, dim: false };
     }
     return null;
   };
@@ -1156,15 +1156,14 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
         const v1 = vertices[e.v1], v2 = vertices[e.v2];
         if (!v1 || !v2) continue;
         const opts = edgeOptions(menuCtx, e.id);
-        if (opts.length === 0) continue;
+        if (!showsHotspot(opts)) continue;
         nextEdgeSpots.push({
           edgeId: e.id,
           x1: v1.x, y1: v1.y,
           x2: v2.x, y2: v2.y,
           mx: (v1.x + v2.x) / 2,
           my: (v1.y + v2.y) / 2,
-          kind: 'menu',
-          dim: !opts.some(o => o.affordable)
+          kind: 'menu'
         });
       }
     } else if (state.phase === 'SETUP_ROAD' && state.lastSetupVertexId != null) {
@@ -1249,9 +1248,10 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
         v.hexIds.includes(robberHexId) && robberVictimSet.has(v.building.owner);
       const isCity = v.building.type === 'city';
       const isClickable = canUpgrade || canRobThisBuilding;
-      const menuOpts = menuCtx && v.building.owner === myId
+      const ownOpts = menuCtx && v.building.owner === myId
         ? vertexOptions(menuCtx, v.id).filter(o => o.id !== 'harbor' && o.id !== 'upgrade_port')
         : [];
+      const menuOpts = showsHotspot(ownOpts) ? ownOpts : [];
       const showRing = menuCtx ? menuOpts.length > 0 : (!isCity && canUpgrade);
       const clickAttr = menuOpts.length > 0
         ? `openBuildMenu('vertex', ${v.id})`
@@ -1267,7 +1267,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
             ${anim.isAnimating ? `<circle cx="0" cy="0" r="${ringR + 4}" class="piece-impact-ring" style="${anim.delayStyle}" />` : ''}
             ${clickAttr ? `<circle r="${ringR + 2}" fill="transparent" />` : ''}
             ${canRobThisBuilding ? `<circle r="${ringR}" class="target-ring rob" />` : ''}
-            ${showRing && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade${hotDim(menuOpts)}" />` : ''}
+            ${showRing && !canRobThisBuilding ? `<circle r="${ringR}" class="target-ring upgrade" />` : ''}
             <g class="${anim.isAnimating ? 'piece-drop-anim' : ''}" style="${anim.delayStyle}">
               ${placedVertexMarkup(v.building.type, col) ?? (isCity ? cityMarkup(col) : settlementMarkup(col))}
             </g>
@@ -1294,8 +1294,8 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
       if (!v || v.building) continue;
       if (menuCtx) {
         const opts = vertexOptions(menuCtx, vid);
-        if (opts.length === 0) continue;
-        nextVertexSpots.push({ vertexId: vid, x: v.x, y: v.y, kind: 'menu', dim: !opts.some(o => o.affordable) });
+        if (!showsHotspot(opts)) continue;
+        nextVertexSpots.push({ vertexId: vid, x: v.x, y: v.y, kind: 'menu' });
       } else if (canAffordSettle && me.settlementsLeft > 0 && canClientPlaceSettlement(v, me)) {
         nextVertexSpots.push({ vertexId: vid, x: v.x, y: v.y, kind: 'direct' });
       }
@@ -1315,15 +1315,14 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     for (const id of hexCandidates(menuCtx)) {
       const h = hexes[id];
       const opts = h && !h.fog ? hexOptions(menuCtx, id) : [];
-      if (opts.length === 0) continue;
+      if (!showsHotspot(opts)) continue;
       const geom = hexGeomCache.get(id);
       nextHexSpots.push({
         hexId: id,
         x: h.x,
         y: h.y,
         innerPoly: geom?.innerPoly || '',
-        kind: 'menu',
-        dim: !opts.some(o => o.affordable)
+        kind: 'menu'
       });
     }
   }
@@ -1913,10 +1912,6 @@ export function buildMenuContext(me: any): MenuContext {
   };
 }
 
-/** A hotspot where you can pay for nothing yet is drawn dim and still (BUG 5): it opens the menu, whose options show the price. */
-function hotDim(opts: BuildOption[]): string {
-  return opts.length > 0 && !opts.some(o => o.affordable) ? ' hot-dim' : '';
-}
 
 /** Rickety bridges are in this game (the server sends a price for the piece only then). */
 export function isRicketyEnabled(me: any): boolean {

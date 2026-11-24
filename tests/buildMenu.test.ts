@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  TIP_HOVER_MS, TIP_LONG_PRESS_MS, bridgeSiteOk, costTipHtml, edgeOptions, hexOptions, popoverPlace, roadSiteOk, settlementSiteOk, tipDelay, vertexOptions
+  TIP_HOVER_MS, TIP_LONG_PRESS_MS, bridgeSiteOk, costTipHtml, edgeOptions, hexOptions, popoverPlace, showsHotspot, roadSiteOk, settlementSiteOk, tipDelay, vertexOptions
 } from '../src/client/buildMenu';
 import type { MenuBoard, MenuContext, MenuPlayer } from '../src/client/buildMenu';
 import type { ManifestEntry } from '../src/shared';
@@ -132,6 +132,25 @@ describe('build menu: options at a corner', () => {
     const opts = vertexOptions(ctx(b, me, { entries: [lantern] }), 3);
     expect(opts).toEqual([expect.objectContaining({ id: 'lantern', label: 'Lantern', entryId: 'lantern', cost: { ore: 1 }, affordable: true })]);
     expect(vertexOptions(ctx(b, me, { entries: [lantern] }), 2).map(o => o.id)).toEqual(['settlement']);
+  });
+});
+
+describe('build menu: a hotspot only where you can pay for something (Bug List: no settlement prompt without the cards)', () => {
+  it('shows when at least one option is affordable, hides when none is or there are none', () => {
+    const b = started();
+    expect(showsHotspot(vertexOptions(ctx(b, player()), 2))).toBe(true);
+    expect(showsHotspot(vertexOptions(ctx(b, player({ resources: BROKE })), 2))).toBe(false);
+    expect(showsHotspot([])).toBe(false);
+    // A free road is payable even with an empty hand.
+    expect(showsHotspot(edgeOptions(ctx(b, player({ resources: BROKE, freeRoads: 1 })), 2))).toBe(true);
+  });
+
+  it('keeps an unaffordable option in the popover when another option at the same spot is payable', () => {
+    const b = started();
+    b.edges[2].road = 'A';
+    const opts = edgeOptions(ctx(b, player({ resources: { wood: 1, brick: 0, sheep: 0, wheat: 0, ore: 0 } }), { ricketyOn: true }), 3);
+    expect(opts.map(o => [o.id, o.affordable])).toEqual([['bridge', false], ['rickety_bridge', true]]);
+    expect(showsHotspot(opts)).toBe(true);
   });
 });
 

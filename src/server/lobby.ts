@@ -1,9 +1,10 @@
-// MODULE: lobby board tools (generate from a recipe, quick starts, settings merge, paint terrain/numbers/robber/ports) on the engine board | DEPENDS ON: packs/tidebound/index, server/bots/dialogue/events, server/runtime, server/types, server/util, shared/index | USED BY: server/game, server/presets, server/rooms, server/socket
+// MODULE: lobby board tools (generate from a recipe, quick starts, settings merge, paint terrain/numbers/robber/ports) on the engine board | DEPENDS ON: packs/tidebound/index, server/bots/dialogue/events, server/runtime, server/types, server/util, shared/index, +1 more | USED BY: server/game, server/presets, server/rooms, server/socket
 import {
   REAL_NUMBER_POOL, SHARE_PREFIX, buildTopology, cleanSeed, createRng, decodeRecipe, generateBoard, generateMap, hexDistance,
   isKnownMapId, randomSeed, resolveMapOptions, resolveParams, resolvePicks
 } from '../shared';
 import type { Board, HexInit } from '../shared';
+import { MAX_RADIUS } from '../shared/maprecipe';
 import {
   RISING_SEA_DEFAULT_LEVEL,
   RISING_SEA_LEVEL_MAX,
@@ -279,7 +280,7 @@ export function mergeSettingsDetailed(input: any, old: Settings): { settings: Se
   }
 
   const settings: Settings = {
-    boardRadius: clamp(radiusIn, 1, 50, old.boardRadius),
+    boardRadius: clamp(radiusIn, 1, MAX_RADIUS, Math.min(MAX_RADIUS, old.boardRadius)),
     goldTiles: clamp(s.goldTiles, 0, 500, old.goldTiles),
     desertTiles: clamp(s.desertTiles, 0, 200, old.desertTiles),
     fogTiles: clamp(s.fogTiles, 0, 2000, old.fogTiles ?? 0),

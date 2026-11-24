@@ -1,4 +1,4 @@
-// MODULE: map recipe (seed + radius + picks + params), share code, per-stage RNG streams, GEN_VERSION | DEPENDS ON: shared/rng | USED BY: shared/index, shared/mapcheck, shared/mapgen, shared/mapshape
+// MODULE: map recipe (seed + radius + picks + params), share code, per-stage RNG streams, GEN_VERSION | DEPENDS ON: shared/rng | USED BY: server/lobby, shared/index, shared/mapcheck, shared/mapgen, shared/mapshape
 import { createRng, randomSeed } from './rng';
 import type { RngState } from './rng';
 
@@ -21,7 +21,10 @@ export const GEN_VERSION = 6;
 
 export const SHARE_PREFIX = 'hx1';
 export const MIN_RADIUS = 1;
-export const MAX_RADIUS = 50;
+/** Largest map radius a host can choose (30: past that, maps were too big to play and too slow to draw). */
+export const MAX_RADIUS = 30;
+/** Largest canvas the generator builds: a radius-30 map plus Tidebound's wide-water sea rings still fits. */
+export const MAX_CANVAS_RADIUS = 50;
 const MAX_PICKS = 16;
 const MAX_PARAMS = 32;
 const MAX_SEED_LEN = 32;

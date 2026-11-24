@@ -7,7 +7,7 @@ import type { RngState } from './rng';
 import { addWaterTopology, buildTopology } from './topology';
 import type { HexInit } from './topology';
 import type { Board, Rules } from './types';
-import { makeRecipe, stageRng } from './maprecipe';
+import { MAX_RADIUS, MIN_RADIUS, makeRecipe, stageRng } from './maprecipe';
 import type { MapRecipe, MapStage } from './maprecipe';
 import { effectiveFlags, paramOf, resolveMapOptions, resolveParams } from './mapoptions';
 import type { CellInfo, DropReason, MapCtx, NumbersDef, PerkDef, ShapeOpDef, TerrainDef } from './mapoptions';
@@ -59,7 +59,7 @@ function portPool(reg: Registry): string[] {
  */
 export function generateBoard(reg: Registry, rules: Rules, rng: RngState, presetId = 'standard'): Board {
   const preset = reg.presets.get(presetId) ?? reg.presets.get('standard');
-  const radius = clampInt(rules.boardRadius, 1, 50, 2);
+  const radius = clampInt(rules.boardRadius, MIN_RADIUS, MAX_RADIUS, 2);
   const isLand = (t: string) => !!reg.tiles.get(t)?.land;
 
   const coords = canvasCoords(radius);
