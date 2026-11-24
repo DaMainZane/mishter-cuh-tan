@@ -1047,13 +1047,37 @@
     "11": 0,
     "12": 0
    },
+   "eventTimeline": {
+    "last": null,
+    "upcoming": [
+     {
+      "cardId": "tidebound.tide",
+      "detail": "Tide 2 · 3 rounds",
+      "icon": "waves",
+      "round": 6,
+      "title": "The tide rises"
+     },
+     {
+      "cardId": "base.calm_seas",
+      "round": 6,
+      "title": "Calm Seas"
+     },
+     {
+      "cardId": "tidebound.pirate_raid",
+      "detail": "Strength 1",
+      "icon": "pirate",
+      "round": 9,
+      "title": "Pirate raid"
+     }
+    ]
+   },
    "finishedAt": null,
    "fishIcons": {
     "60": 2
    },
    "hexOverlays": {
     "38": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "39": {
      "kind": "flood"
@@ -1062,25 +1086,46 @@
      "kind": "flood"
     },
     "49": {
+     "kind": "flood"
+    },
+    "50": {
+     "kind": "flood-warn"
+    },
+    "51": {
      "kind": "flood-warn"
     },
     "52": {
      "kind": "flood"
     },
     "61": {
+     "kind": "flood"
+    },
+    "62": {
+     "kind": "flood-warn"
+    },
+    "63": {
+     "kind": "flood-warn"
+    },
+    "64": {
      "kind": "flood-warn"
     },
     "65": {
      "kind": "flood"
     },
     "74": {
+     "kind": "flood"
+    },
+    "75": {
+     "kind": "flood-warn"
+    },
+    "76": {
      "kind": "flood-warn"
     },
     "77": {
      "kind": "flood"
     },
     "86": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "87": {
      "kind": "flood"
@@ -1102,10 +1147,6 @@
     {
      "color": "#e53935",
      "text": "🎲 Turn order randomized! 🦊 Alice goes first!"
-    },
-    {
-     "color": null,
-     "text": "🌊 The tide rises over 7 coast tiles"
     }
    ],
    "longestRoadOwner": "b",
@@ -1371,7 +1412,7 @@
     "dlc": {
      "tidebound": true
     },
-    "eventsOn": false,
+    "eventsOn": true,
     "fairDice": false,
     "fateTokens": 2,
     "fogTiles": 0,
@@ -1639,15 +1680,38 @@
     }
    ],
    "tide": {
-    "elevation": null,
+    "elevation": {
+     "38": 1,
+     "39": 1,
+     "40": 1,
+     "49": 1,
+     "50": 2,
+     "51": 2,
+     "52": 1,
+     "61": 1,
+     "62": 2,
+     "63": 1,
+     "64": 2,
+     "65": 1,
+     "74": 1,
+     "75": 2,
+     "76": 2,
+     "77": 1,
+     "86": 1,
+     "87": 1,
+     "88": 1
+    },
+    "height": 1,
     "level": 3,
     "levelName": "Medium",
     "rose": null,
     "round": 5,
+    "untilRound": 8,
     "warning": {
-     "count": 5,
+     "count": 7,
+     "height": 2,
      "round": 6,
-     "spring": false
+     "rounds": 3
     }
    },
    "tradeRatios": {
@@ -1730,13 +1794,37 @@
     "11": 0,
     "12": 0
    },
+   "eventTimeline": {
+    "last": null,
+    "upcoming": [
+     {
+      "cardId": "tidebound.tide",
+      "detail": "Tide 2 · 3 rounds",
+      "icon": "waves",
+      "round": 6,
+      "title": "The tide rises"
+     },
+     {
+      "cardId": "base.calm_seas",
+      "round": 6,
+      "title": "Calm Seas"
+     },
+     {
+      "cardId": "tidebound.pirate_raid",
+      "detail": "Strength 1",
+      "icon": "pirate",
+      "round": 9,
+      "title": "Pirate raid"
+     }
+    ]
+   },
    "finishedAt": null,
    "fishIcons": {
     "60": 2
    },
    "hexOverlays": {
     "38": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "39": {
      "kind": "flood"
@@ -1745,25 +1833,46 @@
      "kind": "flood"
     },
     "49": {
+     "kind": "flood"
+    },
+    "50": {
+     "kind": "flood-warn"
+    },
+    "51": {
      "kind": "flood-warn"
     },
     "52": {
      "kind": "flood"
     },
     "61": {
+     "kind": "flood"
+    },
+    "62": {
+     "kind": "flood-warn"
+    },
+    "63": {
+     "kind": "flood-warn"
+    },
+    "64": {
      "kind": "flood-warn"
     },
     "65": {
      "kind": "flood"
     },
     "74": {
+     "kind": "flood"
+    },
+    "75": {
+     "kind": "flood-warn"
+    },
+    "76": {
      "kind": "flood-warn"
     },
     "77": {
      "kind": "flood"
     },
     "86": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "87": {
      "kind": "flood"
@@ -1785,10 +1894,6 @@
     {
      "color": "#e53935",
      "text": "🎲 Turn order randomized! 🦊 Alice goes first!"
-    },
-    {
-     "color": null,
-     "text": "🌊 The tide rises over 7 coast tiles"
     }
    ],
    "longestRoadOwner": "b",
@@ -2028,7 +2133,7 @@
     "dlc": {
      "tidebound": true
     },
-    "eventsOn": false,
+    "eventsOn": true,
     "fairDice": false,
     "fateTokens": 2,
     "fogTiles": 0,
@@ -2296,15 +2401,38 @@
     }
    ],
    "tide": {
-    "elevation": null,
+    "elevation": {
+     "38": 1,
+     "39": 1,
+     "40": 1,
+     "49": 1,
+     "50": 2,
+     "51": 2,
+     "52": 1,
+     "61": 1,
+     "62": 2,
+     "63": 1,
+     "64": 2,
+     "65": 1,
+     "74": 1,
+     "75": 2,
+     "76": 2,
+     "77": 1,
+     "86": 1,
+     "87": 1,
+     "88": 1
+    },
+    "height": 1,
     "level": 3,
     "levelName": "Medium",
     "rose": null,
     "round": 5,
+    "untilRound": 8,
     "warning": {
-     "count": 5,
+     "count": 7,
+     "height": 2,
      "round": 6,
-     "spring": false
+     "rounds": 3
     }
    },
    "tradeRatios": {
@@ -2387,13 +2515,37 @@
     "11": 0,
     "12": 0
    },
+   "eventTimeline": {
+    "last": null,
+    "upcoming": [
+     {
+      "cardId": "tidebound.tide",
+      "detail": "Tide 2 · 3 rounds",
+      "icon": "waves",
+      "round": 6,
+      "title": "The tide rises"
+     },
+     {
+      "cardId": "base.calm_seas",
+      "round": 6,
+      "title": "Calm Seas"
+     },
+     {
+      "cardId": "tidebound.pirate_raid",
+      "detail": "Strength 1",
+      "icon": "pirate",
+      "round": 9,
+      "title": "Pirate raid"
+     }
+    ]
+   },
    "finishedAt": null,
    "fishIcons": {
     "60": 2
    },
    "hexOverlays": {
     "38": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "39": {
      "kind": "flood"
@@ -2402,25 +2554,46 @@
      "kind": "flood"
     },
     "49": {
+     "kind": "flood"
+    },
+    "50": {
+     "kind": "flood-warn"
+    },
+    "51": {
      "kind": "flood-warn"
     },
     "52": {
      "kind": "flood"
     },
     "61": {
+     "kind": "flood"
+    },
+    "62": {
+     "kind": "flood-warn"
+    },
+    "63": {
+     "kind": "flood-warn"
+    },
+    "64": {
      "kind": "flood-warn"
     },
     "65": {
      "kind": "flood"
     },
     "74": {
+     "kind": "flood"
+    },
+    "75": {
+     "kind": "flood-warn"
+    },
+    "76": {
      "kind": "flood-warn"
     },
     "77": {
      "kind": "flood"
     },
     "86": {
-     "kind": "flood-warn"
+     "kind": "flood"
     },
     "87": {
      "kind": "flood"
@@ -2442,10 +2615,6 @@
     {
      "color": "#e53935",
      "text": "🎲 Turn order randomized! 🦊 Alice goes first!"
-    },
-    {
-     "color": null,
-     "text": "🌊 The tide rises over 7 coast tiles"
     }
    ],
    "longestRoadOwner": "b",
@@ -2694,7 +2863,7 @@
     "dlc": {
      "tidebound": true
     },
-    "eventsOn": false,
+    "eventsOn": true,
     "fairDice": false,
     "fateTokens": 2,
     "fogTiles": 0,
@@ -2722,15 +2891,38 @@
    "techActions": null,
    "techTree": null,
    "tide": {
-    "elevation": null,
+    "elevation": {
+     "38": 1,
+     "39": 1,
+     "40": 1,
+     "49": 1,
+     "50": 2,
+     "51": 2,
+     "52": 1,
+     "61": 1,
+     "62": 2,
+     "63": 1,
+     "64": 2,
+     "65": 1,
+     "74": 1,
+     "75": 2,
+     "76": 2,
+     "77": 1,
+     "86": 1,
+     "87": 1,
+     "88": 1
+    },
+    "height": 1,
     "level": 3,
     "levelName": "Medium",
     "rose": null,
     "round": 5,
+    "untilRound": 8,
     "warning": {
-     "count": 5,
+     "count": 7,
+     "height": 2,
      "round": 6,
-     "spring": false
+     "rounds": 3
     }
    },
    "tradeRatios": {

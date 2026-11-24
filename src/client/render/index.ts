@@ -47,12 +47,20 @@ function syncTideUi(): void {
   }
   if (key === tideSeenKey) return;
   tideSeenKey = key;
-  if (!tide.rose) return;
-  const n = tide.rose.count;
+  const rose = tide.rose;
+  if (!rose) return;
+  const n = rose.count;
   const tiles = `${n} ${n === 1 ? 'tile' : 'tiles'}`;
-  showEventTitleCard(tide.rose.spring
-    ? { kicker: 'Round ' + tide.round, title: 'Spring tide!', subtitle: `The sea reaches two tiles inland: ${tiles} under water`, badgeText: tiles, tone: 'danger', icon: 'waves', durationMs: 3000 }
-    : { kicker: 'Round ' + tide.round, title: 'The tide rises', subtitle: `${tiles} under water, no production there`, badgeText: tiles, tone: 'accent', icon: 'waves', durationMs: 2600 });
+  const left = rose.untilRound - rose.round;
+  showEventTitleCard({
+    kicker: 'Round ' + tide.round,
+    title: rose.stacked ? `The tide rises higher: tide ${rose.height}` : `The tide rises: tide ${rose.height}`,
+    subtitle: `${tiles} under water (half yield) for ${left} ${left === 1 ? 'round' : 'rounds'}, until round ${rose.untilRound}`,
+    badgeText: tiles,
+    tone: rose.stacked || rose.height >= 2 ? 'danger' : 'accent',
+    icon: 'waves',
+    durationMs: 3000
+  });
 }
 
 export function renderAll(): void {

@@ -307,7 +307,7 @@ describe('T12b Rising sea: optional with Tides, rate settings, and client overla
     // Last seat's turn before a tide round: tideWarning never includes drowned hex 1
     g.turn = g.players.length - 1;
     g.round = 3;
-    const warn = tideWarning(g);
+    const warn = tideWarning(g, reg);
     if (warn) {
       expect(warn.hexIds).not.toContain(1);
     }

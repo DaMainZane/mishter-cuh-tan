@@ -40,7 +40,7 @@ import { createRng, rngNext } from '../../shared/rng';
 import { CITY, SETTLEMENT } from '../base/constants';
 import { FISH_BOOSTS } from './seaData';
 import { registerTideboundTechs, TECH_FISHING_NETS, TECH_HARBOR_MASTER, TECH_NET_WORKS } from './tech';
-import { floodDepthAt, tideLevelOf } from './tides';
+
 import type { TideState } from './tides';
 
 export { TECH_FISHING_NETS, TECH_HARBOR_MASTER, TECH_NET_WORKS };
@@ -502,8 +502,8 @@ export function netCatchOnRoll(ctx: Ctx, _sum: number): void {
 
 /**
  * Chance, per round, that a fishing ground with room regains one boost, by how deep the tide reaches the coast beside it: index 0 dry, 1 the coast
- * ring (a normal tide), 2 the deeper reading (a spring tide, or a Very high tide). Slow on purpose: at Medium a ground beside a flooding coast
- * regains about one boost every 10 rounds, and a spring tide more than doubles that. Starting guesses: tune in T14.
+ * ring (a tide of height 1), 2 the deeper reading (a tide of height 2 or 3). Applied every round a tide is up, to the sea beside the land it flooded.
+ * Starting guesses: tune in T14.
  */
 export const FISH_REPLENISH_CHANCE: readonly number[] = [0, 0.2, 0.45];
 
@@ -516,19 +516,16 @@ export const FISH_REPLENISH_CHANCE: readonly number[] = [0, 0.2, 0.45];
 export function tideReachOnSea(g: GameState, reg: Registry, round: number): Map<number, 1 | 2> {
   const out = new Map<number, 1 | 2>();
   const st = g.ext?.tidebound?.tides as TideState | undefined;
-  if (!st) return out;
-  const level = tideLevelOf(g);
-  for (const c of st.clusters) {
-    const depth = floodDepthAt(c, round, level);
-    if (depth === 0) continue;
-    for (const landId of c.hexIds) {
-      const land = g.board.hexes[landId];
-      if (!land) continue;
-      for (const [dq, dr] of EDGE_DIR) {
-        const id = hexIdAt(g.board, land.q + dq, land.r + dr);
-        if (id === undefined || !isSeaHex(reg, g.board.hexes[id])) continue;
-        if (depth > (out.get(id) ?? 0)) out.set(id, depth);
-      }
+  // 2026-11-24: the sea beside the land the tide flooded, while it is up; a tide of height 2 or more reads as the deeper reach.
+  if (!st || !(st.height > 0) || round >= st.untilRound) return out;
+  const depth: 1 | 2 = st.height >= 2 ? 2 : 1;
+  for (const landId of st.flooded ?? []) {
+    const land = g.board.hexes[landId];
+    if (!land) continue;
+    for (const [dq, dr] of EDGE_DIR) {
+      const id = hexIdAt(g.board, land.q + dq, land.r + dr);
+      if (id === undefined || !isSeaHex(reg, g.board.hexes[id])) continue;
+      if (depth > (out.get(id) ?? 0)) out.set(id, depth);
     }
   }
   return out;

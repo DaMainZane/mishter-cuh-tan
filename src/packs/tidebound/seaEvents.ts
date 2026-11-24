@@ -1,4 +1,4 @@
-// MODULE: Tidebound sea event helpers (a seeded stream per event and round, random resources from the bank, card lists for the log; shared by the shipwreck, pirate and tide events) | DEPENDS ON: shared/index | USED BY: packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks
+// MODULE: Tidebound sea event helpers (a seeded stream per event and round, random resources from the bank, card lists for the log; shared by the shipwreck, pirate and tide events) | DEPENDS ON: shared/index | USED BY: packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/tides, packs/tidebound/wrecks
 import { bankGive, createRng, rngNext } from '../../shared';
 import type { Ctx, Id, Resources, RngState } from '../../shared';
 

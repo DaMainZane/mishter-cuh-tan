@@ -232,7 +232,7 @@ export function renderHexOverlaysMarkup(
 }
 
 /**
- * Elevation heat map (T6d): one flat tint per height (1 to 3, darker = higher) plus the number itself, so color is never the only signal.
+ * Elevation heat map (T6d): one flat tint per height (1 orange, 2 olive, 3 green: low ground warns, high ground is safe) plus the number itself, so color is never the only signal.
  * `elevation` maps hex id to height; hexes without an entry (sea, fog) get nothing.
  */
 export function renderElevationMarkup(

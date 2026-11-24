@@ -228,10 +228,13 @@ export interface TideView {
   level: number;
   levelName: string;
   round: number;
-  /** A tide rose at the start of this round (for the title card). */
-  rose: { round: number; spring: boolean; count: number } | null;
+  /** The tide up now (0 = calm), and the round at whose start it retreats (null when calm). Tides are Event Deck cards since 2026-11-24. */
+  height: number;
+  untilRound: number | null;
+  /** A tide rose at the start of this round (for the title card): its height, until when, tiles under water, and whether it rose on a tide already up. */
+  rose: { round: number; height: number; untilRound: number; count: number; stacked: boolean } | null;
   /** A tide will rise at the next round start (shown during the last turn of this round). */
-  warning: { round: number; spring: boolean; count: number } | null;
+  warning: { round: number; height: number; rounds: number; count: number } | null;
   /** Height of every visible land tile (1 to 3). Null when all tiles are the same, so the heat map toggle stays hidden. */
   elevation: Record<number, number> | null;
 }

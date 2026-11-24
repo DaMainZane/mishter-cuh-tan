@@ -12,7 +12,8 @@ import {
   applyTides,
   ensureTides,
   PIRATE_EVENT_ID,
-  seaHexIdsAt
+  seaHexIdsAt,
+  TIDE_EVENT_ID
 } from '../src/packs/tidebound';
 import { clearBotTimers, createRoom, rooms } from '../src/server/rooms';
 import { defaultSettings } from '../src/server/runtime';
@@ -27,7 +28,8 @@ import { buildTopology, createGame, ensureEventTimeline, makeCtx, registryFor } 
 // Traps handled here: `makeStateBuilder` reads `Date.now()` (trade timers, turn clock), so the clock is pinned; the room code and the lobby seed are random,
 // so they are set by hand; the board is replaced by a short summary, because the plain board shape does not change in R7a and would make the file huge.
 
-const TIDE_RULES = { dlc: { tidebound: true }, techTreeOn: true };
+// Tidebound turns the Event Deck on (its tides, shipwrecks and pirates are deck cards), so the Tidebound scenes have it on too.
+const TIDE_RULES = { dlc: { tidebound: true }, techTreeOn: true, eventsOn: true };
 
 beforeAll(() => {
   vi.useFakeTimers();
@@ -120,9 +122,17 @@ function tideboundScene() {
   oceanEdge.piece = { type: BRIDGE, owner: 'b' };
   g.awards.longestRoad = 'b';
 
-  // Round 5: one half of the coast is flooded, the other half is dry and about to flood (the warning shows during the last seat's turn).
-  ensureTides(g, reg);
+  // Round 5 (tides are Event Deck cards since 2026-11-24): the land ring next to the centre is high ground (elevation 2), so a tide of height 1 is up
+  // over the coast ring, and a tide card fires next round: it stacks to height 2, so the high ring and the centre behind it are warned about
+  // (the warning shows during the last seat's turn, which is Bob's).
+  for (const h of g.board.hexes as any[]) if (Math.max(Math.abs(h.q), Math.abs(h.r), Math.abs(h.q + h.r)) === 1) h.ext.elevation = 2;
+  const tides = ensureTides(g, reg);
+  tides.height = 1;
+  tides.untilRound = 8;
   applyTides(ctx);
+  const timeline = ensureEventTimeline(g, reg, g.round);
+  timeline.deck[0] = TIDE_EVENT_ID;
+  timeline.rounds![0] = g.round + 1;
 
   return { g, reg };
 }
@@ -263,7 +273,7 @@ describe('the Event Deck timeline (2026-11-24)', () => {
   });
 
   it('is not sent while the deck is off', () => {
-    const { g } = makeGame(TIDE_RULES);
+    const { g } = makeGame({ ...TIDE_RULES, eventsOn: false });
     expect(viewsFor(g).active.eventTimeline).toBeUndefined();
   });
 });

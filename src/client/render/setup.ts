@@ -190,7 +190,7 @@ const CATALOG_ADDONS: AddonInfoView[] = [
   // 3. Tidebound
   { id: 'tidebound.bridges', name: 'Bridges', description: 'Roads across the sea. Both ends must touch ocean; they count toward Longest Road.', pack: 'tidebound', deps: [], links: [{ target: 'piece-cost', kind: 'mechanic' }, { target: 'history', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
   { id: 'tidebound.rickety_bridges', name: 'Rickety bridges', description: 'A cheap bridge with 1 health that collapses on a 7. Upgrade it to a full bridge later.', pack: 'tidebound', deps: ['tidebound.bridges'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'seven-resolver', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }, { target: 'tidebound.bridges', kind: 'content' }] },
-  { id: 'tidebound.tides', name: 'Tides', description: 'Coast tiles flood on a seeded schedule; a flooded tile yields half, rounded up, for every settlement and city on it. Higher ground resists.', pack: 'tidebound', deps: [], links: [{ target: 'round-clock', kind: 'mechanic' }, { target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
+  { id: 'tidebound.tides', name: 'Tides', description: 'Tide events: the sea rises to a height of 1 to 3 for 2 to 5 rounds and floods every coast tile, and every tile joined to it, no higher than that. A flooded tile yields half, rounded up. Needs the Event Deck.', pack: 'tidebound', deps: [], links: [{ target: 'event-deck', kind: 'content' }, { target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }, { target: 'bot-goals', kind: 'bot' }] },
   { id: 'tidebound.rising_sea', name: 'Rising sea', description: 'Land drowns from the lowest ground up. Bridges become the only roads. Works alone or with Tides.', pack: 'tidebound', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }, { target: 'tidebound.tides', kind: 'content' }] },
   { id: 'tidebound.harbor', name: 'Harbor', description: 'Upgrade a port city to a harbor for 1:1 trades: click the port itself. One per player. A harbor, and any port raised to 2:1, keeps working while flooded.', pack: 'tidebound', deps: [], links: [{ target: 'trade-ratio', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }, { target: 'tidebound.tides', kind: 'mechanic' }] },
   { id: 'tidebound.fishing', name: 'Fishing', description: 'A net on a sea tile catches fish, a token that counts as any one resource. Fish icons on the sea boost the catch; feed the sea to refill them.', pack: 'tidebound', deps: [], links: [{ target: 'wild-token', kind: 'mechanic' }, { target: 'marker', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }, { target: 'tidebound.tides', kind: 'content' }] },
@@ -488,7 +488,7 @@ function drawScenariosAndDlcs(): void {
 
       const sliders: string[] = [];
       if (enabledAddons.has('tidebound.tides')) {
-        sliders.push(`<label class="sp-slider-row">
+        sliders.push(`<label class="sp-slider-row" title="How many tide cards are in the Event Deck: Very low 1, Medium 3, Very high 5.">
           <span class="sp-slider-label">Tide level <strong id="pvTideLevelName">${esc(TIDE_LEVEL_NAMES[tideLevel - 1])}</strong></span>
           <input type="range" min="1" max="5" step="1" value="${tideLevel}" aria-label="Tide level"
             oninput="previewTideLevel(this.value)" onchange="setTideLevel(this.value)" />
@@ -604,7 +604,7 @@ function drawScenariosAndDlcs(): void {
         // Settings that belong to this DLC's addons sit together under the list, not inside an addon's text.
         const settings: string[] = [];
         if (enabledAddons.has('tidebound.tides') && d.id === 'tidebound') {
-          settings.push(`<label class="dlc-opt" title="High tides come more often, stay longer, reach deeper inland and flood higher ground. Low tides are the opposite.">
+          settings.push(`<label class="dlc-opt" title="How many tide cards are in the Event Deck: Very low 1, Medium 3, Very high 5. Higher means tides come more often.">
             <span class="dlc-opt-label">Tide level <strong id="tideLevelName">${esc(TIDE_LEVEL_NAMES[tideLevel - 1])}</strong></span>
             <input type="range" min="1" max="5" step="1" value="${tideLevel}" aria-label="Tide level"
               oninput="previewTideLevel(this.value)" onchange="setTideLevel(this.value)" />

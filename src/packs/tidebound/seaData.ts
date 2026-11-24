@@ -14,9 +14,9 @@ export const ELEVATION_MIN = 1;
 export const ELEVATION_MAX = 3;
 /**
  * Where elevation 2 and 3 start on `h`. `h` is rank-normalized over the land cells (0..1, see `buildCellInfo`), so these are shares of the
- * land on any shape: about 10% of the land is elevation 3, 25% is elevation 2 (the next 25%) and 65% is elevation 1. Higher is rarer.
+ * land on any shape: about 10% of the land is elevation 3, 40% is elevation 2 and 50% is elevation 1 (2026-11-24: was 65% low ground, which made tides cover too much). Higher is rarer.
  */
-export const ELEVATION_2_FROM = 0.65;
+export const ELEVATION_2_FROM = 0.5;
 export const ELEVATION_3_FROM = 0.9;
 
 /** Fish boosts a sea tile starts with (the icon counts down from here; Fishing, T7c). */

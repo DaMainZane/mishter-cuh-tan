@@ -1,4 +1,4 @@
-// MODULE: seeded RNG (mulberry32), state is plain JSON | DEPENDS ON: none | USED BY: packs/tidebound/fishing, packs/tidebound/risingSea, packs/tidebound/tides, shared/engine, shared/eventDeck, shared/index, +12 more
+// MODULE: seeded RNG (mulberry32), state is plain JSON | DEPENDS ON: none | USED BY: packs/tidebound/fishing, packs/tidebound/risingSea, shared/engine, shared/eventDeck, shared/index, shared/mapcheck, +11 more
 export interface RngState { s: number }
 
 function hashSeed(seed: number | string): number {

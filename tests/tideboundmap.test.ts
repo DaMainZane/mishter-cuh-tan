@@ -277,10 +277,10 @@ describe('land field helpers for wide water', () => {
 // T2b2 and T2c: the same perk writes the sea data later chunks read. `ext.elevation` 1 to 3 on land (higher is rarer, by ranked height) and
 // `ext.fish` on seeded sea tiles. Data only, no RNG draws, and nothing at all without the pick.
 describe('sea data: elevation', () => {
-  it('elevationOf: 1 below 0.65, 2 from 0.65, 3 from 0.9', () => {
-    expect(ELEVATION_2_FROM).toBe(0.65);
+  it('elevationOf: 1 below 0.5, 2 from 0.5, 3 from 0.9 (half the land is low ground)', () => {
+    expect(ELEVATION_2_FROM).toBe(0.5);
     expect(ELEVATION_3_FROM).toBe(0.9);
-    for (const [h, want] of [[0, 1], [0.3, 1], [0.649, 1], [0.65, 2], [0.8, 2], [0.899, 2], [0.9, 3], [1, 3]] as const) {
+    for (const [h, want] of [[0, 1], [0.3, 1], [0.499, 1], [0.5, 2], [0.8, 2], [0.899, 2], [0.9, 3], [1, 3]] as const) {
       expect(elevationOf(h), `h=${h}`).toBe(want);
     }
   });

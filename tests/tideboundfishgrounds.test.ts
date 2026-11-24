@@ -114,10 +114,11 @@ function firstCatch(m: M, max: number): number {
 }
 
 /** Puts a hand-made tide state on the game: one cluster of the lone land tile. `phase` 0 floods the even rounds at Medium. */
-function giveTides(m: M, phase = 0): void {
+/** A tide (2026-11-24: an Event Deck tide) of the given height up until untilRound, with the centre land tile flooded by it. Height 0 = calm sea. */
+function giveTides(m: M, height = 1, untilRound = 1e9): void {
   const centre = m.g.board.hexes.find(h => h.q === 0 && h.r === 0)!;
   const ext = m.g.ext as any;
-  ext.tidebound = { ...(ext.tidebound ?? {}), tides: { clusters: [{ id: 0, hexIds: [centre.id], inner: [], phase }] } };
+  ext.tidebound = { ...(ext.tidebound ?? {}), tides: { height, untilRound, flooded: height > 0 ? [centre.id] : [], rose: null } };
 }
 
 describe('T7c fish icon boosts', () => {
@@ -206,16 +207,19 @@ describe('T7c fish icon boosts', () => {
 });
 
 describe('T7d tide replenish', () => {
-  it('the tide reaches the sea around a flooding cluster: depth 1 on a normal tide, 2 on a spring tide, none when dry', () => {
+  it('the tide reaches the sea beside the land it flooded: depth 1 at height 1, 2 at height 2 or 3, none once it has retreated', () => {
     const m = makeGame();
-    giveTides(m);
+    giveTides(m, 1, 5);
     const ring = ringIds(m);
     expect(ring).toHaveLength(6);
     const normal = tideReachOnSea(m.g, m.reg, 2);
     expect([...normal.keys()].sort((a, b) => a - b)).toEqual(ring);
     for (const id of ring) expect(normal.get(id)).toBe(1);
-    expect(tideReachOnSea(m.g, m.reg, 3).size).toBe(0);
+    expect(tideReachOnSea(m.g, m.reg, 5).size).toBe(0);
+    giveTides(m, 2, 9);
     for (const id of ring) expect(tideReachOnSea(m.g, m.reg, 4).get(id)).toBe(2);
+    giveTides(m, 0, 0);
+    expect(tideReachOnSea(m.g, m.reg, 4).size).toBe(0);
   });
 
   it('reaches nothing without a tide state', () => {
@@ -227,9 +231,8 @@ describe('T7d tide replenish', () => {
     expect(replenishFish(m.ctx)).toEqual([]);
   });
 
-  it('refills slowly, and a spring tide refills faster than a normal one; a dry round refills nothing', () => {
+  it('refills slowly, and a high tide refills faster than a low one; a calm round refills nothing', () => {
     const m = makeGame();
-    giveTides(m);
     const ring = ringIds(m);
     let normal = 0;
     let spring = 0;
@@ -237,6 +240,8 @@ describe('T7d tide replenish', () => {
     for (let round = 2; round <= 401; round++) {
       for (const id of ring) setFish(m, id, 1);
       m.g.round = round;
+      // Odd rounds calm, every 4th round a tide of height 2, the rest height 1.
+      giveTides(m, round % 2 === 1 ? 0 : round % 4 === 0 ? 2 : 1);
       const grown = replenishFish(m.ctx);
       for (const id of grown) expect(fishLeft(m.g.board.hexes[id])).toBe(2);
       if (round % 2 === 1) dry += grown.length;
@@ -244,7 +249,7 @@ describe('T7d tide replenish', () => {
       else normal += grown.length;
     }
     expect(dry).toBe(0);
-    // 100 normal rounds x 6 tiles x 0.2 = 120 (sd about 10); 100 spring rounds x 6 tiles x 0.45 = 270 (sd about 12).
+    // 100 height-1 rounds x 6 tiles x 0.2 = 120 (sd about 10); 100 height-2 rounds x 6 tiles x 0.45 = 270 (sd about 12).
     expect(normal).toBeGreaterThan(80);
     expect(normal).toBeLessThan(170);
     expect(spring).toBeGreaterThan(220);

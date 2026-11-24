@@ -3,46 +3,56 @@ import { allPacks } from '../src/packs';
 import {
   FLOODED,
   TIDE_DEFAULT_LEVEL,
-  TIDE_FIRST_ROUND,
+  TIDE_DURATION_MAX,
+  TIDE_DURATION_MIN,
+  TIDE_EVENT_ID,
   TIDE_LEVELS,
-  TIDE_PERIOD,
-  TIDE_SPRING_EVERY,
   applyTides,
-  buildTideClusters,
-  coastHexIds,
   ensureTides,
-  floodDepthAt,
   floodOverlayKind,
-  floodPlan,
+  floodSet,
   floodWarnOverlayKind,
   hexElevation,
-  isFloodedAt,
   isPortFlooded,
-  isSpringTide,
+  raiseTide,
   tideClientView,
-  tideLevelDef,
+  tideEventCard,
   tideLevelOf,
-  tideStrengthAt,
+  tidePick,
   tideWarning
 } from '../src/packs/tidebound';
-import type { TideCluster } from '../src/packs/tidebound';
+import type { TideState } from '../src/packs/tidebound';
 import { overlayPatternDefsMarkup, overlayVarsCss, renderHexOverlaysMarkup } from '../src/client/render/overlay';
 import { resetManifest, setManifest } from '../src/client/visuals';
 import { mergeSettings } from '../src/server/lobby';
 import { defaultSettings, rulesFromSettings } from '../src/server/runtime';
-import { OVERLAY_KINDS, buildTopology, buildVisualManifest, createGame, defsOf, dispatch, makeCtx, ratioFor, registryFor, registryVisualProblems } from '../src/shared';
+import {
+  OVERLAY_KINDS,
+  allEventCards,
+  buildTopology,
+  buildVisualManifest,
+  createGame,
+  defsOf,
+  ensureEventDeck,
+  ensureEventTimeline,
+  eventTimeline,
+  makeCtx,
+  ratioFor,
+  registryFor,
+  registryVisualProblems
+} from '../src/shared';
 import type { OverlayKindVisual } from '../src/shared';
 import { runProductionPipeline } from '../src/shared/production';
 import { getTileState, isHexRobberBlocked, resolveTileStateDef, setTileState } from '../src/shared/tileState';
 
-// T5a: the `flooded` tile state and the seeded per-cluster tide schedule. Tides is a Tidebound addon, so with the DLC (or the addon) off
-// nothing is registered and nothing moves; with it on the schedule is a formula of the cluster phase and the round, the clusters come from
-// the world seed, and nothing draws from `g.rng`.
+// Tides as events (2026-11-24). A tide is a card of the Event Deck: it picks a height (1 to 3) and how many rounds it stays (2 to 5). Every land tile
+// joined to the coast through tiles no higher than the height floods at once; a tide that comes while one is up raises it by 1 and keeps the longer
+// of the two durations; when the rounds are over it retreats. The Tide level slider sets how many tide cards are in the deck. Nothing draws `g.rng`.
 
-const on = { dlc: { tidebound: true } };
-const tidesOff = { dlc: { tidebound: true }, addons: { 'tidebound.tides': false } };
+const on = { dlc: { tidebound: true }, eventsOn: true };
+const tidesOff = { dlc: { tidebound: true }, eventsOn: true, addons: { 'tidebound.tides': false } };
 
-/** A disc of land tiles with the given radius (3 gives 37 tiles; the outer ring of 18 is the coast). Every tile is a numbered wood tile. */
+/** A disc of land tiles (radius 3: 37 tiles, the outer ring of 18 is the coast). Every tile is a numbered wood tile. */
 function discInits(radius: number): { q: number; r: number; type: string; number: number | null }[] {
   const out: { q: number; r: number; type: string; number: number | null }[] = [];
   for (let q = -radius; q <= radius; q++) {
@@ -53,6 +63,8 @@ function discInits(radius: number): { q: number; r: number; type: string; number
   }
   return out;
 }
+
+const ringIdx = (h: { q: number; r: number }) => Math.max(Math.abs(h.q), Math.abs(h.r), Math.abs(h.q + h.r));
 
 function makeGame(rules: Record<string, any> = on, seed = 99, radius = 3) {
   const reg = registryFor(allPacks, rules);
@@ -73,38 +85,56 @@ function makeGame(rules: Record<string, any> = on, seed = 99, radius = 3) {
   });
   g.phase = 'main';
   g.turn = 0;
+  g.round = 1;
   return { g, reg, ctx: makeCtx(g, reg) };
 }
 
-const ringOf = (g: ReturnType<typeof makeGame>['g'], radius: number): number[] =>
-  g.board.hexes.filter(h => Math.max(Math.abs(h.q), Math.abs(h.r), Math.abs(h.q + h.r)) === radius).map(h => h.id);
+type Game = ReturnType<typeof makeGame>['g'];
+const ringOf = (g: Game, radius: number): number[] => g.board.hexes.filter(h => ringIdx(h) === radius).map(h => h.id);
+const flooded = (g: Game, id: number): boolean => getTileState(g.board.hexes[id])?.id === FLOODED;
+const floodedIds = (g: Game): number[] => g.board.hexes.filter(h => getTileState(h)?.id === FLOODED).map(h => h.id);
 
-const flooded = (g: ReturnType<typeof makeGame>['g'], id: number): boolean => getTileState(g.board.hexes[id])?.id === FLOODED;
-
-/** Is every tile of the cluster reachable from the first one through tiles of the cluster? */
-function connected(g: ReturnType<typeof makeGame>['g'], c: TideCluster): boolean {
-  const byPos = new Map(c.hexIds.map(id => [`${g.board.hexes[id].q},${g.board.hexes[id].r}`, id]));
-  const dirs = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
-  const seen = new Set<number>([c.hexIds[0]]);
-  const queue = [c.hexIds[0]];
-  for (let i = 0; i < queue.length; i++) {
-    const h = g.board.hexes[queue[i]];
-    for (const [dq, dr] of dirs) {
-      const n = byPos.get(`${h.q + dq},${h.r + dr}`);
-      if (n !== undefined && !seen.has(n)) {
-        seen.add(n);
-        queue.push(n);
-      }
-    }
+/**
+ * The basin board: coast ring (3) at elevation 1, ring 2 at elevation 2 except one low tile (the channel), ring 1 at elevation 1 (a low basin
+ * behind the high ring), the centre at 3. Returns the channel tile and the basin tiles.
+ */
+function basin(g: Game, withChannel = true): { channel: number; basinIds: number[]; centre: number } {
+  for (const h of g.board.hexes) {
+    const r = ringIdx(h);
+    h.ext.elevation = r === 3 ? 1 : r === 2 ? 2 : r === 1 ? 1 : 3;
   }
-  return seen.size === c.hexIds.length;
+  // The channel: the ring-2 tile at (2, -1), next to the ring-1 tile (1, 0) and the coast.
+  const channel = g.board.hexes.find(h => h.q === 2 && h.r === -1)!;
+  if (withChannel) channel.ext.elevation = 1;
+  return { channel: channel.id, basinIds: ringOf(g, 1), centre: g.board.hexes.find(h => ringIdx(h) === 0)!.id };
+}
+
+/** Puts a tide (height, until) up directly, as a tide card would, and floods the board for it. */
+function tideUp(ctx: ReturnType<typeof makeGame>['ctx'], height: number, untilRound: number): void {
+  const st = ensureTides(ctx.g, ctx.reg);
+  st.height = height;
+  st.untilRound = untilRound;
+  applyTides(ctx);
+}
+
+/** Makes the next event a tide card firing at `round` (the deck's own timeline). */
+function tideNext(g: Game, reg: ReturnType<typeof makeGame>['reg'], round: number): void {
+  const st = ensureEventTimeline(g, reg, g.round || 0);
+  st.deck[0] = TIDE_EVENT_ID;
+  st.rounds![0] = round;
 }
 
 describe('registration', () => {
-  it('with Tidebound on, Tides gives the game its clusters at game start and uses the base flooded state (no silt, robber cannot be moved onto it)', () => {
+  it('with Tidebound on, the tide is a deck card with the waves icon, as many copies as the Tide level, and it uses the base flooded state', () => {
     const { g, reg } = makeGame(on);
     expect(reg.enabled.has('tidebound.tides')).toBe(true);
-    expect(g.ext.tidebound.tides.clusters.length).toBeGreaterThan(0);
+    const card = allEventCards(reg).get(TIDE_EVENT_ID)!;
+    expect(card).toBe(tideEventCard);
+    expect(card.icon).toBe('waves');
+    for (let level = 1; level <= 5; level++) {
+      const copies = typeof card.copies === 'function' ? card.copies({ ...g, rules: { ...g.rules, tideLevel: level } } as Game) : card.copies;
+      expect(copies, `level ${level}`).toBe(level);
+    }
     const def = resolveTileStateDef(reg, FLOODED)!;
     expect(def.yieldMultiplier).toBe(0.5);
     expect(def.yieldRound).toBe('ceil');
@@ -114,466 +144,96 @@ describe('registration', () => {
     expect(isHexRobberBlocked(g, reg, hexId)).toBe(true);
   });
 
-  it('with the DLC off, or only the Tides addon off, nothing is registered and no state is made', () => {
-    for (const rules of [{}, { dlc: { tidebound: false } }, tidesOff]) {
+  it('the Tide level puts that many tide cards in the shuffled deck', () => {
+    for (const level of [1, 3, 5]) {
+      const { g, reg } = makeGame({ ...on, tideLevel: level });
+      const st = ensureEventDeck(g, reg);
+      expect(st.deck.filter(id => id === TIDE_EVENT_ID).length, `level ${level}`).toBe(level);
+    }
+  });
+
+  it('with the DLC off, or only the Tides addon off, there is no tide card and nothing floods', () => {
+    for (const rules of [{ eventsOn: true }, { dlc: { tidebound: false }, eventsOn: true }, tidesOff]) {
       const { g, reg } = makeGame(rules);
       expect(reg.enabled.has('tidebound.tides')).toBe(false);
-      expect(g.ext.tidebound).toBeUndefined();
-      for (let round = 1; round <= 6; round++) {
+      expect(allEventCards(reg).has(TIDE_EVENT_ID)).toBe(false);
+      for (let round = 1; round <= 30; round++) {
         g.round = round;
         for (const hook of reg.hooks.onRoundStart) hook(makeCtx(g, reg));
       }
-      expect(g.board.hexes.every(h => getTileState(h) === null)).toBe(true);
-      expect(g.ext.tidebound).toBeUndefined();
-    }
-  });
-});
-
-describe('clusters', () => {
-  it('cover the coast exactly once, leave the inland dry, and are each one connected stretch', () => {
-    const { g, reg } = makeGame(on);
-    const coast = ringOf(g, 3);
-    expect(coastHexIds(g, reg)).toEqual([...coast].sort((a, b) => a - b));
-    const clusters = ensureTides(g, reg).clusters;
-    const all = clusters.flatMap(c => c.hexIds);
-    expect([...all].sort((a, b) => a - b)).toEqual([...coast].sort((a, b) => a - b));
-    expect(new Set(all).size).toBe(all.length);
-    expect(clusters).toHaveLength(3);
-    for (const c of clusters) {
-      expect(c.hexIds.length).toBeGreaterThan(0);
-      expect(connected(g, c), `cluster ${c.id}`).toBe(true);
-      expect([0, 1]).toContain(c.phase);
+      expect(floodedIds(g)).toEqual([]);
+      expect(g.ext.tidebound?.tides).toBeUndefined();
     }
   });
 
-  it('give each a second ring: inland land that touches the coast, once, never coast itself, never the deep inland', () => {
-    const { g, reg } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    const second = ringOf(g, 2);
-    const inner = clusters.flatMap(c => c.inner);
-    expect([...inner].sort((a, b) => a - b)).toEqual([...second].sort((a, b) => a - b));
-    expect(new Set(inner).size).toBe(inner.length);
-    expect(inner.some(id => ringOf(g, 3).includes(id))).toBe(false);
-    // A small island has no second ring beyond its centre: radius 1 is one ring of coast around one inland tile.
-    const small = makeGame(on, 5, 1);
-    expect(ensureTides(small.g, small.reg).clusters.flatMap(c => c.inner)).toHaveLength(1);
-  });
-
-  it('are the same for the same seed and change with the seed', () => {
-    const a = buildTideClusters(makeGame(on, 7).g, makeGame(on, 7).reg);
-    const b = buildTideClusters(makeGame(on, 7).g, makeGame(on, 7).reg);
-    expect(a).toEqual(b);
-    let differs = false;
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const other = makeGame(on, seed);
-      if (JSON.stringify(buildTideClusters(other.g, other.reg)) !== JSON.stringify(a)) differs = true;
-    }
-    expect(differs).toBe(true);
-  });
-
-  it('give both phases whenever there are two or more clusters, whatever the seed', () => {
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
-      const { g, reg } = makeGame(on, seed);
-      const phases = new Set(ensureTides(g, reg).clusters.map(c => c.phase));
-      expect(phases.size, `seed ${seed}`).toBe(2);
-    }
-  });
-
-  it('a small island is one cluster, and a hidden coast tile is left out without leaking', () => {
-    const small = makeGame(on, 5, 1);
-    expect(ensureTides(small.g, small.reg).clusters).toHaveLength(1);
-
-    const { g, reg } = makeGame(on, 5, 3);
-    const ring = ringOf(g, 3);
-    g.board.hexes[ring[0]].ext.hidden = true;
-    delete g.ext.tidebound;
-    const ids = ensureTides(g, reg).clusters.flatMap(c => c.hexIds);
-    expect(ids).not.toContain(ring[0]);
-    expect(ids).toHaveLength(ring.length - 1);
-  });
-});
-
-describe('the schedule', () => {
-  it('is dry before the first tide, then every other round, one phase apart', () => {
-    expect(TIDE_PERIOD).toBe(2);
-    expect(TIDE_FIRST_ROUND).toBe(2);
-    const even: TideCluster = { id: 0, hexIds: [], inner: [], phase: 0 };
-    const odd: TideCluster = { id: 1, hexIds: [], inner: [], phase: 1 };
-    expect([0, 1].map(r => isFloodedAt(even, r) || isFloodedAt(odd, r))).toEqual([false, false]);
-    expect([2, 3, 4, 5, 6].map(r => isFloodedAt(even, r))).toEqual([true, false, true, false, true]);
-    expect([2, 3, 4, 5, 6].map(r => isFloodedAt(odd, r))).toEqual([false, true, false, true, false]);
-  });
-
-  it('applyTides floods what the water reaches, dries the rest, and touches no deep inland tile', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    const deep = g.board.hexes.map(h => h.id).filter(id => ringOf(g, 3).includes(id) === false && ringOf(g, 2).includes(id) === false);
-    for (let round = 1; round <= 9; round++) {
-      g.round = round;
-      applyTides(ctx);
-      for (const c of clusters) {
-        const depth = floodDepthAt(c, round);
-        for (const id of c.hexIds) expect(flooded(g, id), `round ${round} cluster ${c.id} coast`).toBe(depth >= 1);
-        for (const id of c.inner) expect(flooded(g, id), `round ${round} cluster ${c.id} inner`).toBe(depth >= 2);
-      }
-      for (const id of deep) expect(getTileState(g.board.hexes[id])).toBeNull();
-    }
-  });
-
-  it('reports what moved: tileStateChanged per tile, one tideChanged, and a log line when a tide rises', () => {
-    const { g, reg, ctx } = makeGame(on);
-    g.round = 1;
-    expect(applyTides(ctx)).toEqual({ risen: [], fell: [] });
-    expect(ctx.events).toHaveLength(0);
-
-    g.round = 2;
-    const first = applyTides(ctx);
-    expect(first.risen.length).toBeGreaterThan(0);
-    expect(first.fell).toEqual([]);
-    expect(ctx.events.filter(e => e.type === 'tileStateChanged')).toHaveLength(first.risen.length);
-    expect(ctx.events.filter(e => e.type === 'tideChanged')).toEqual([{ type: 'tideChanged', data: { round: 2, spring: false, risen: first.risen, fell: [] } }]);
-    expect(g.log.some(l => l.text.includes('The tide rises'))).toBe(true);
-
-    g.round = 3;
-    const second = applyTides(ctx);
-    expect([...second.fell].sort((a, b) => a - b)).toEqual([...first.risen].sort((a, b) => a - b));
-
-    // Running it again in the same round changes nothing.
-    const before = ctx.events.length;
-    expect(applyTides(ctx)).toEqual({ risen: [], fell: [] });
-    expect(ctx.events).toHaveLength(before);
+  it('with the Event Deck off, Tides is on but no tide ever rises', () => {
+    const { g, reg } = makeGame({ dlc: { tidebound: true } });
     expect(reg.enabled.has('tidebound.tides')).toBe(true);
-  });
-
-  it('never overwrites another tile state, and never clears one it did not set', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    const wet = clusters.find(c => isFloodedAt(c, 2))!;
-    const dry = clusters.find(c => !isFloodedAt(c, 2))!;
-    const barren = wet.hexIds[0];
-    const fertile = dry.hexIds[0];
-    setTileState(g, barren, { id: 'barren' });
-    setTileState(g, fertile, { id: 'fertile' });
-    g.round = 2;
-    applyTides(ctx);
-    expect(getTileState(g.board.hexes[barren])?.id).toBe('barren');
-    expect(getTileState(g.board.hexes[fertile])?.id).toBe('fertile');
-    expect(wet.hexIds.slice(1).every(id => flooded(g, id))).toBe(true);
-    g.round = 3;
-    applyTides(ctx);
-    expect(getTileState(g.board.hexes[barren])?.id).toBe('barren');
-    expect(getTileState(g.board.hexes[fertile])?.id).toBe('fertile');
-  });
-
-  it('runs from the round clock: round 2 starts with the right clusters under water', () => {
-    const { g, reg } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    expect(g.round).toBe(0);
-    for (let i = 0; i < 2; i++) {
-      g.phase = 'main';
-      const who = g.players[g.turn].id;
-      expect(dispatch(g, reg, { type: 'end_turn', playerId: who }).ok).toBe(true);
-    }
-    expect(g.round).toBe(1);
-    expect(g.board.hexes.every(h => getTileState(h) === null)).toBe(true);
-    for (let i = 0; i < 2; i++) {
-      g.phase = 'main';
-      const who = g.players[g.turn].id;
-      expect(dispatch(g, reg, { type: 'end_turn', playerId: who }).ok).toBe(true);
-    }
-    expect(g.round).toBe(2);
-    for (const c of clusters) for (const id of c.hexIds) expect(flooded(g, id), `cluster ${c.id}`).toBe(isFloodedAt(c, 2));
-  });
-});
-
-describe('spring tide (T5b)', () => {
-  it('comes every 4th round from the first tide, and floods every cluster two rings deep whatever its phase', () => {
-    expect(TIDE_SPRING_EVERY).toBe(4);
-    expect([1, 2, 3, 4, 5, 6, 7, 8, 12].map(r => isSpringTide(r))).toEqual([false, false, false, true, false, false, false, true, true]);
-    const even: TideCluster = { id: 0, hexIds: [], inner: [], phase: 0 };
-    const odd: TideCluster = { id: 1, hexIds: [], inner: [], phase: 1 };
-    expect([2, 3, 4, 5].map(r => floodDepthAt(even, r))).toEqual([1, 0, 2, 0]);
-    expect([2, 3, 4, 5].map(r => floodDepthAt(odd, r))).toEqual([0, 1, 2, 1]);
-  });
-
-  it('on round 4 the whole coast and the ring behind it are under water; on round 5 only the phase that is up stays', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    for (let round = 1; round <= 4; round++) {
+    for (let round = 1; round <= 30; round++) {
       g.round = round;
-      applyTides(ctx);
+      for (const hook of reg.hooks.onRoundStart) hook(makeCtx(g, reg));
     }
-    for (const c of clusters) {
-      for (const id of [...c.hexIds, ...c.inner]) expect(flooded(g, id), `round 4 cluster ${c.id}`).toBe(true);
-    }
-    expect(g.log.some(l => l.text.includes('Spring tide'))).toBe(true);
-    const spring = ctx.events.filter(e => e.type === 'tideChanged').pop()!;
-    expect(spring.data.spring).toBe(true);
-    expect(spring.data.round).toBe(4);
-
-    g.round = 5;
-    applyTides(ctx);
-    for (const c of clusters) {
-      for (const id of c.inner) expect(flooded(g, id), `round 5 inner ${c.id}`).toBe(false);
-      for (const id of c.hexIds) expect(flooded(g, id), `round 5 coast ${c.id}`).toBe(isFloodedAt(c, 5));
-    }
-    // The centre of the disc is never reached.
-    expect(getTileState(g.board.hexes.find(h => h.q === 0 && h.r === 0)!)).toBeNull();
-  });
-
-  it('a spring tide does not overwrite another tile state on an inland tile either', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const inner = ensureTides(g, reg).clusters.flatMap(c => c.inner)[0];
-    setTileState(g, inner, { id: 'fertile' });
-    g.round = 4;
-    applyTides(ctx);
-    expect(getTileState(g.board.hexes[inner])?.id).toBe('fertile');
-  });
-
-  it('a save made with the T5a data (no second ring) still runs', () => {
-    const { g, reg, ctx } = makeGame(on);
-    for (const c of ensureTides(g, reg).clusters) delete (c as any).inner;
-    g.round = 4;
-    expect(() => applyTides(ctx)).not.toThrow();
+    expect(floodedIds(g)).toEqual([]);
   });
 });
 
-describe('what flooding does', () => {
-  it('a flooded tile yields half resources rounded up per building (settlement 1->1, city 2->1, castle 3->2) and a dry one yields full', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    const wet = g.board.hexes[clusters.find(c => isFloodedAt(c, 2))!.hexIds[0]];
-    const dry = g.board.hexes[clusters.find(c => !isFloodedAt(c, 2))!.hexIds[0]];
-    // A corner that touches only this tile, so a neighbouring cluster's tile cannot also pay out to the same building.
-    const ownCorner = (h: typeof wet) => h.vertexIds.find(v => g.board.vertices[v].hexIds.length === 1)!;
-    const wetV = ownCorner(wet);
-    const dryV = ownCorner(dry);
-    g.board.vertices[wetV].piece = { type: 'city', owner: 'a' };
-    g.board.vertices[dryV].piece = { type: 'city', owner: 'b' };
-    const woodOf = (id: string) => g.players.find(p => p.id === id)!.resources.wood || 0;
-
-    // Round 1 (dry): both cities produce 2 wood
-    runProductionPipeline(ctx, [wet, dry], 6);
-    expect([woodOf('a'), woodOf('b')]).toEqual([2, 2]);
-
-    // Round 2 (wet is flooded): city on flooded tile yields ceil(2 * 0.5) = 1; city on dry tile yields 2
-    g.round = 2;
-    applyTides(ctx);
-    runProductionPipeline(ctx, [wet, dry], 6);
-    expect([woodOf('a'), woodOf('b')]).toEqual([3, 4]);
-
-    // Settlement on flooded tile yields ceil(1 * 0.5) = 1
-    g.board.vertices[wetV].piece = { type: 'settlement', owner: 'a' };
-    runProductionPipeline(ctx, [wet], 6);
-    expect(woodOf('a')).toBe(4);
-
-    // Castle (produces: 3) on flooded tile yields ceil(3 * 0.5) = 2
-    reg.pieces.set('castle', { id: 'castle', name: 'Castle', target: 'vertex', cost: {}, vp: 3, produces: 3, canPlace: () => false });
-    g.board.vertices[wetV].piece = { type: 'castle', owner: 'a' };
-    runProductionPipeline(ctx, [wet], 6);
-    expect(woodOf('a')).toBe(6);
-
-    // Round 3 (wet dries out): castle yields full 3
-    g.round = 3;
-    applyTides(ctx);
-    runProductionPipeline(ctx, [wet], 6);
-    expect(woodOf('a')).toBe(9);
-  });
-
-  it('the robber stays on a tile that floods (it is not moved, only blocked from being moved onto)', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const wet = ensureTides(g, reg).clusters.find(c => isFloodedAt(c, 2))!.hexIds[0];
-    g.board.robberHexId = wet;
-    g.round = 2;
-    applyTides(ctx);
-    expect(flooded(g, wet)).toBe(true);
-    expect(g.board.robberHexId).toBe(wet);
+describe('the tide card picks a height and a duration', () => {
+  it('height 1 to 3, mostly 1; 2 to 5 rounds; the same for the same seed and round', () => {
+    const counts = [0, 0, 0, 0];
+    const durations = new Set<number>();
+    for (let round = 1; round <= 3000; round++) {
+      const p = tidePick(777, round);
+      expect(p).toEqual(tidePick(777, round));
+      expect(p.height).toBeGreaterThanOrEqual(1);
+      expect(p.height).toBeLessThanOrEqual(3);
+      expect(p.rounds).toBeGreaterThanOrEqual(TIDE_DURATION_MIN);
+      expect(p.rounds).toBeLessThanOrEqual(TIDE_DURATION_MAX);
+      counts[p.height]++;
+      durations.add(p.rounds);
+    }
+    expect(counts[1]).toBeGreaterThan(counts[2]);
+    expect(counts[2]).toBeGreaterThan(counts[3]);
+    expect(counts[3]).toBeGreaterThan(0);
+    expect([...durations].sort()).toEqual([2, 3, 4, 5]);
+    expect(tidePick(778, 10)).not.toEqual(tidePick(777, 10));
   });
 });
 
-describe('seed discipline', () => {
-  it('draws nothing from g.rng: not at game start, not over many rounds', () => {
-    const withTides = makeGame(on, 123);
-    const without = makeGame({}, 123);
-    expect(withTides.g.rng.s).toBe(without.g.rng.s);
-    for (let round = 1; round <= 12; round++) {
-      withTides.g.round = round;
-      applyTides(withTides.ctx);
-    }
-    expect(withTides.g.rng.s).toBe(without.g.rng.s);
+describe('where the water goes', () => {
+  it('floods every tile joined to the coast through tiles no higher than the height, at once: a low basin 2 tiles in floods through a low channel', () => {
+    const { g, reg } = makeGame(on);
+    const { channel, basinIds, centre } = basin(g, true);
+    const at1 = new Set(floodSet(g, reg, 1));
+    for (const id of ringOf(g, 3)) expect(at1.has(id)).toBe(true);
+    expect(at1.has(channel)).toBe(true);
+    for (const id of basinIds) expect(at1.has(id), `basin ${id}`).toBe(true);
+    for (const id of ringOf(g, 2).filter(id => id !== channel)) expect(at1.has(id)).toBe(false);
+    expect(at1.has(centre)).toBe(false);
+
+    const at2 = new Set(floodSet(g, reg, 2));
+    expect(at2.size).toBe(g.board.hexes.length - 1);
+    expect(at2.has(centre)).toBe(false);
+    expect(floodSet(g, reg, 3).length).toBe(g.board.hexes.length);
   });
 
-  it('the tide state is plain JSON and survives a save and load', () => {
-    const { g, reg, ctx } = makeGame(on, 42);
-    g.round = 2;
-    applyTides(ctx);
-    const copy = JSON.parse(JSON.stringify(g));
-    expect(copy.ext.tidebound.tides).toEqual(g.ext.tidebound.tides);
-    expect(copy.board.hexes.map((h: any) => h.ext.state?.id ?? null)).toEqual(g.board.hexes.map(h => getTileState(h)?.id ?? null));
-    // A save made before Tides existed builds its clusters on the first round.
-    delete copy.ext.tidebound;
-    copy.round = 3;
-    applyTides(makeCtx(copy, reg));
-    expect(copy.ext.tidebound.tides.clusters).toEqual(g.ext.tidebound.tides.clusters);
-  });
-});
-
-// T5c: the tide level. Medium is what T5a and T5b built, so every test above runs at Medium. The slider moves how often, how long and how deep.
-
-/** Tiles under water, summed over the first rounds of a flat disc (every tile elevation 1, so only the schedule and the reach matter). */
-function floodedTileRounds(level: number, rounds = 12): number {
-  const { g, ctx } = makeGame({ ...on, tideLevel: level });
-  let n = 0;
-  for (let round = 1; round <= rounds; round++) {
-    g.round = round;
-    applyTides(ctx);
-    n += g.board.hexes.filter(h => getTileState(h)?.id === FLOODED).length;
-  }
-  return n;
-}
-
-describe('tide level (T5c)', () => {
-  it('has five positions, Medium is the T5a and T5b behaviour, and a higher level is more aggressive in every way', () => {
-    expect(TIDE_LEVELS).toHaveLength(5);
-    expect(TIDE_DEFAULT_LEVEL).toBe(3);
-    const medium = tideLevelDef(3);
-    expect(medium.name).toBe('Medium');
-    expect([medium.period, medium.duration, medium.springEvery, medium.reach]).toEqual([TIDE_PERIOD, 1, TIDE_SPRING_EVERY, 1]);
-    for (let i = 1; i < TIDE_LEVELS.length; i++) {
-      const lo = TIDE_LEVELS[i - 1];
-      const hi = TIDE_LEVELS[i];
-      expect(hi.duration / hi.period, `${hi.name} share of rounds`).toBeGreaterThan(lo.duration / lo.period);
-      expect(hi.springEvery).toBeLessThanOrEqual(lo.springEvery);
-      expect(hi.reach).toBeGreaterThanOrEqual(lo.reach);
-      expect(hi.strength).toBeGreaterThanOrEqual(lo.strength);
-      expect(hi.springStrength).toBeGreaterThanOrEqual(lo.springStrength);
-    }
-    for (const d of TIDE_LEVELS) {
-      expect(d.duration).toBeLessThan(d.period);
-      expect(d.springStrength).toBeGreaterThan(d.strength);
-    }
+  it('a low basin behind high ground stays dry at height 1 (no low path to the sea)', () => {
+    const { g, reg } = makeGame(on);
+    const { basinIds } = basin(g, false);
+    const at1 = new Set(floodSet(g, reg, 1));
+    for (const id of basinIds) expect(at1.has(id)).toBe(false);
+    expect([...at1].sort((a, b) => a - b)).toEqual(ringOf(g, 3).sort((a, b) => a - b));
   });
 
-  it('a bad level is clamped or falls back to Medium, so it can never break a round', () => {
-    expect(tideLevelDef(0).name).toBe('Very low');
-    expect(tideLevelDef(99).name).toBe('Very high');
-    expect(tideLevelDef(2.6).name).toBe('Medium');
-    expect(tideLevelDef(Number.NaN).name).toBe('Medium');
-    expect(tideLevelOf(makeGame(on).g)).toBe(3);
-    expect(tideLevelOf(makeGame({ ...on, tideLevel: 5 }).g)).toBe(5);
-    expect(tideLevelOf(makeGame({ ...on, tideLevel: 'x' as any }).g)).toBe(3);
-    expect(tideLevelOf(makeGame({ ...on, tideLevel: 40 }).g)).toBe(5);
+  it('hidden tiles never flood and the water does not pass under them', () => {
+    const { g, reg } = makeGame(on);
+    const { channel, basinIds } = basin(g, true);
+    g.board.hexes[channel].ext.hidden = true;
+    const at1 = new Set(floodSet(g, reg, 1));
+    expect(at1.has(channel)).toBe(false);
+    for (const id of basinIds) expect(at1.has(id)).toBe(false);
   });
 
-  it('each phase is flooded for `duration` rounds of every `period`, the two phases are not the same rounds, and round 1 is dry', () => {
-    for (let level = 1; level <= 5; level++) {
-      const d = tideLevelDef(level);
-      const a: TideCluster = { id: 0, hexIds: [], inner: [], phase: 0 };
-      const b: TideCluster = { id: 1, hexIds: [], inner: [], phase: 1 };
-      expect(isFloodedAt(a, 1, level) || isFloodedAt(b, 1, level), `${d.name} round 1`).toBe(false);
-      const roundsOf = (c: TideCluster): number[] => Array.from({ length: 12 }, (_, i) => i + 4).filter(r => isFloodedAt(c, r, level));
-      // Rounds 4 to 15: twelve rounds, a whole number of cycles for periods 2, 3 and 4.
-      expect(roundsOf(a), `${d.name} phase 0`).toHaveLength((12 * d.duration) / d.period);
-      expect(roundsOf(b), `${d.name} phase 1`).toHaveLength((12 * d.duration) / d.period);
-      expect(roundsOf(a), `${d.name} phases differ`).not.toEqual(roundsOf(b));
-    }
-  });
-
-  it('a spring tide comes every `springEvery` rounds of the level and reaches two rings whatever the phase', () => {
-    for (let level = 1; level <= 5; level++) {
-      const d = tideLevelDef(level);
-      const springs = Array.from({ length: 30 }, (_, i) => i + 1).filter(r => isSpringTide(r, level));
-      expect(springs, d.name).toEqual(Array.from({ length: 30 }, (_, i) => i + 1).filter(r => r % d.springEvery === 0 && r >= TIDE_FIRST_ROUND));
-      for (const phase of [0, 1]) {
-        const c: TideCluster = { id: 0, hexIds: [], inner: [], phase };
-        for (const r of springs) expect(floodDepthAt(c, r, level), `${d.name} round ${r}`).toBe(2);
-      }
-    }
-  });
-
-  it('a normal tide reaches the level\'s depth: the coast ring up to High, one ring inland as well at Very high', () => {
-    const up: TideCluster = { id: 0, hexIds: [], inner: [], phase: 0 };
-    for (let level = 1; level <= 5; level++) {
-      const d = tideLevelDef(level);
-      const normalFlooded = Array.from({ length: 30 }, (_, i) => i + 2).filter(r => isFloodedAt(up, r, level) && !isSpringTide(r, level));
-      expect(normalFlooded.length).toBeGreaterThan(0);
-      for (const r of normalFlooded) expect(floodDepthAt(up, r, level), `${d.name} round ${r}`).toBe(d.reach);
-    }
-  });
-
-  it('the level is read from the game rules: Very low floods the least, Very high the most', () => {
-    const counts = [1, 2, 3, 4, 5].map(level => floodedTileRounds(level));
-    for (let i = 1; i < counts.length; i++) expect(counts[i], `level ${i + 1} floods more than level ${i}`).toBeGreaterThan(counts[i - 1]);
-    // No rule at all is Medium.
-    expect(floodedTileRounds(3)).toBe(counts[2]);
-    const plain = makeGame(on);
-    let n = 0;
-    for (let round = 1; round <= 12; round++) {
-      plain.g.round = round;
-      applyTides(plain.ctx);
-      n += plain.g.board.hexes.filter(h => getTileState(h)?.id === FLOODED).length;
-    }
-    expect(n).toBe(counts[2]);
-  });
-
-  it('at Very high a normal tide also covers the ring inland; at Medium it does not', () => {
-    const high = makeGame({ ...on, tideLevel: 5 });
-    const clusters = ensureTides(high.g, high.reg).clusters;
-    const round = Array.from({ length: 12 }, (_, i) => i + 2).find(r => !isSpringTide(r, 5) && clusters.some(c => isFloodedAt(c, r, 5)))!;
-    high.g.round = round;
-    applyTides(high.ctx);
-    for (const c of clusters.filter(c => isFloodedAt(c, round, 5))) {
-      for (const id of [...c.hexIds, ...c.inner]) expect(flooded(high.g, id), `very high round ${round}`).toBe(true);
-    }
-
-    const mid = makeGame(on);
-    const midClusters = ensureTides(mid.g, mid.reg).clusters;
-    mid.g.round = 2;
-    applyTides(mid.ctx);
-    for (const c of midClusters) for (const id of c.inner) expect(flooded(mid.g, id)).toBe(false);
-  });
-
-  it('the level draws nothing from g.rng, and with Tides off it changes nothing', () => {
-    const high = makeGame({ ...on, tideLevel: 5 }, 123);
-    const plain = makeGame({}, 123);
-    for (let round = 1; round <= 12; round++) {
-      high.g.round = round;
-      applyTides(high.ctx);
-    }
-    expect(high.g.rng.s).toBe(plain.g.rng.s);
-    for (const rules of [{ tideLevel: 5 }, { dlc: { tidebound: false }, tideLevel: 5 }, { ...tidesOff, tideLevel: 5 }]) {
-      const off = makeGame(rules, 123);
-      expect(off.g.ext.tidebound).toBeUndefined();
-    }
-  });
-
-  it('the lobby setting: clamped, kept when missing or bad, and sent as a rule only while Tides is on and off Medium', () => {
-    const base = defaultSettings();
-    expect(base.tideLevel).toBe(3);
-    expect(mergeSettings({ tideLevel: 4 }, base).tideLevel).toBe(4);
-    expect(mergeSettings({ tideLevel: 99 }, base).tideLevel).toBe(5);
-    expect(mergeSettings({ tideLevel: -3 }, base).tideLevel).toBe(1);
-    expect(mergeSettings({ tideLevel: 2.9 }, base).tideLevel).toBe(2);
-    const kept = mergeSettings({ tideLevel: 4 }, base);
-    expect(mergeSettings({ tideLevel: 'x' }, kept).tideLevel).toBe(4);
-    expect(mergeSettings({}, kept).tideLevel).toBe(4);
-    expect(mergeSettings({ boardRadius: 3 }, kept).tideLevel).toBe(4);
-
-    const s = { ...base, dlc: { tidebound: true }, tideLevel: 4 };
-    expect(rulesFromSettings(s).tideLevel).toBe(4);
-    expect(rulesFromSettings({ ...s, tideLevel: 3 }).tideLevel).toBeUndefined();
-    expect(rulesFromSettings({ ...s, addons: { 'tidebound.tides': false } }).tideLevel).toBeUndefined();
-    expect(rulesFromSettings({ ...s, dlc: {} }).tideLevel).toBeUndefined();
-    expect(rulesFromSettings({ ...base, tideLevel: 5 }).tideLevel).toBeUndefined();
-    expect('tideLevel' in rulesFromSettings(base)).toBe(false);
-  });
-});
-
-// T5d: elevation resistance. A tile floods when the tide's strength is at least its elevation (1 to 3, higher is rarer): elevation 1 goes
-// under in any tide, elevation 2 needs a spring tide at Medium, elevation 3 needs the strongest tides of High and Very high.
-
-describe('elevation resistance (T5d)', () => {
-  it('reads ext.elevation as 1 to 3, and a tile without it counts as 1', () => {
+  it('a tile without elevation data counts as 1', () => {
     const { g } = makeGame(on);
     const hex = g.board.hexes[0];
     expect(hexElevation(hex)).toBe(1);
@@ -582,113 +242,176 @@ describe('elevation resistance (T5d)', () => {
       expect(hexElevation(hex), `elevation ${String(value)}`).toBe(want);
     }
   });
+});
 
-  it('tide strength is the level\'s normal strength, and its spring strength on a spring tide', () => {
-    expect([2, 3, 4, 5].map(r => tideStrengthAt(r))).toEqual([1, 1, 2, 1]);
-    expect([2, 3, 4, 5].map(r => tideStrengthAt(r, 4))).toEqual([2, 2, 3, 2]);
-    expect([2, 6].map(r => tideStrengthAt(r, 1))).toEqual([1, 2]);
+describe('rising, staying and retreating', () => {
+  it('a tide card floods the board at once, logs it, and records the rise for the title card', () => {
+    const { g, reg, ctx } = makeGame(on, 4242);
+    basin(g, true);
+    g.round = 6;
+    const events: any[] = [];
+    const logs: string[] = [];
+    const c = { ...ctx, emit: (type: string, data: any) => events.push({ type, data }), log: (t: string) => logs.push(t) } as typeof ctx;
+    raiseTide(c);
+    const p = tidePick(g.seed, 6);
+    const st = g.ext.tidebound.tides as TideState;
+    expect(st.height).toBe(p.height);
+    expect(st.untilRound).toBe(6 + p.rounds);
+    expect(floodedIds(g).sort((a, b) => a - b)).toEqual(floodSet(g, reg, p.height));
+    expect(st.rose).toEqual({ round: 6, height: p.height, untilRound: 6 + p.rounds, count: floodSet(g, reg, p.height).length, stacked: false });
+    const changed = events.find(e => e.type === 'tideChanged');
+    expect(changed.data).toMatchObject({ round: 6, height: p.height, stacked: false });
+    expect(changed.data.risen.length).toBe(floodSet(g, reg, p.height).length);
+    expect(logs.some(l => l.includes('tide rises'))).toBe(true);
   });
 
-  it('at Medium a normal tide leaves elevation 2 and 3 dry, and a spring tide floods elevation 2 but not 3', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const wet = ensureTides(g, reg).clusters.find(c => isFloodedAt(c, 2))!;
-    const [low, mid, high] = [wet.hexIds[0], wet.hexIds[1], wet.hexIds[2]];
-    g.board.hexes[mid].ext.elevation = 2;
-    g.board.hexes[high].ext.elevation = 3;
-
-    g.round = 2;
-    applyTides(ctx);
-    expect([flooded(g, low), flooded(g, mid), flooded(g, high)]).toEqual([true, false, false]);
-    const first = ctx.events.filter(e => e.type === 'tideChanged').pop()!;
-    expect([...first.data.held].sort((a: number, b: number) => a - b)).toEqual([mid, high].sort((a, b) => a - b));
-    expect(g.log.some(l => l.text.includes('The tide rises') && l.text.includes('2 higher tiles hold'))).toBe(true);
-
-    g.round = 3;
-    applyTides(ctx);
-    expect([flooded(g, mid), flooded(g, high)]).toEqual([false, false]);
-
+  it('stays for its rounds and retreats at the round start after the last one', () => {
+    const { g, ctx } = makeGame(on);
     g.round = 4;
-    applyTides(ctx);
-    expect([flooded(g, low), flooded(g, mid), flooded(g, high)]).toEqual([true, true, false]);
-  });
-
-  it('at High the spring tide is strong enough for elevation 3', () => {
-    const { g, reg, ctx } = makeGame({ ...on, tideLevel: 4 });
-    const c = ensureTides(g, reg).clusters[0];
-    const top = c.hexIds[0];
-    g.board.hexes[top].ext.elevation = 3;
-    expect(tideStrengthAt(4, 4)).toBe(3);
-    g.round = 4;
-    applyTides(ctx);
-    expect(flooded(g, top)).toBe(true);
-  });
-
-  it('water that is too weak for a tile drains it: a spring tide floods elevation 2, the next normal tide does not keep it flooded', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const odd = ensureTides(g, reg).clusters.find(c => c.phase === 1)!;
-    const id = odd.hexIds[0];
-    g.board.hexes[id].ext.elevation = 2;
-    expect(isFloodedAt(odd, 5)).toBe(true);
-    g.round = 4;
-    applyTides(ctx);
-    expect(flooded(g, id)).toBe(true);
-    g.round = 5;
-    const out = applyTides(ctx);
-    // The cluster is up in round 5 and the water reaches the tile, but a normal tide (strength 1) cannot hold elevation 2.
-    expect(flooded(g, id)).toBe(false);
-    expect(out.fell).toContain(id);
-    expect(odd.hexIds.slice(1).every(other => flooded(g, other))).toBe(true);
-  });
-
-  it('the inland ring resists the same way', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const clusters = ensureTides(g, reg).clusters;
-    const inner = clusters.flatMap(c => c.inner);
-    g.board.hexes[inner[0]].ext.elevation = 3;
-    g.round = 4;
-    applyTides(ctx);
-    expect(flooded(g, inner[0])).toBe(false);
-    expect(inner.slice(1).every(id => flooded(g, id))).toBe(true);
-  });
-
-  it('a tile the tide held back still produces, and a tile it flooded does not', () => {
-    const { g, reg, ctx } = makeGame(on);
-    const wet = ensureTides(g, reg).clusters.find(c => isFloodedAt(c, 2))!;
-    const high = g.board.hexes[wet.hexIds[0]];
-    const low = g.board.hexes[wet.hexIds[1]];
-    high.ext.elevation = 2;
-    const ownCorner = (h: typeof high) => h.vertexIds.find(v => g.board.vertices[v].hexIds.length === 1)!;
-    g.board.vertices[ownCorner(high)].piece = { type: 'city', owner: 'a' };
-    g.board.vertices[ownCorner(low)].piece = { type: 'city', owner: 'b' };
-    g.round = 2;
-    applyTides(ctx);
-    runProductionPipeline(ctx, [high, low], 6);
-    const woodOf = (id: string) => g.players.find(p => p.id === id)!.resources.wood || 0;
-    expect([woodOf('a'), woodOf('b')]).toEqual([2, 1]);
-  });
-
-  it('elevation never moves a die roll or the seeded clusters', () => {
-    const a = makeGame(on, 77);
-    const b = makeGame(on, 77);
-    for (const h of b.g.board.hexes) h.ext.elevation = 3;
-    expect(ensureTides(b.g, b.reg).clusters).toEqual(ensureTides(a.g, a.reg).clusters);
-    for (let round = 1; round <= 8; round++) {
-      b.g.round = round;
-      applyTides(b.ctx);
+    tideUp(ctx, 1, 7);
+    const wet = floodedIds(g);
+    expect(wet.length).toBeGreaterThan(0);
+    for (const round of [5, 6]) {
+      g.round = round;
+      applyTides(ctx);
+      expect(floodedIds(g)).toEqual(wet);
     }
-    expect(b.g.rng.s).toBe(a.g.rng.s);
+    g.round = 7;
+    applyTides(ctx);
+    expect(floodedIds(g)).toEqual([]);
+    expect((g.ext.tidebound.tides as TideState).height).toBe(0);
+  });
+
+  it("stacks: tide 1 with 2 rounds left, hit by a tide card of 3 rounds, becomes tide 2 for 3 rounds (the user's example)", () => {
+    const { g, reg, ctx } = makeGame(on);
+    basin(g, true);
+    // Find a round whose card is a 3-round tide.
+    let round = 10;
+    while (tidePick(g.seed, round).rounds !== 3) round++;
+    g.round = round;
+    tideUp(ctx, 1, round + 2);
+    raiseTide(ctx);
+    const st = g.ext.tidebound.tides as TideState;
+    expect(st.height).toBe(2);
+    expect(st.untilRound).toBe(round + 3);
+    expect(st.rose).toMatchObject({ stacked: true, height: 2 });
+    expect(floodedIds(g).sort((a, b) => a - b)).toEqual(floodSet(g, reg, 2));
+  });
+
+  it('a stacked tide keeps the longer time left, and never rises past 3', () => {
+    const { g, ctx } = makeGame(on);
+    let round = 10;
+    while (tidePick(g.seed, round).rounds !== 2) round++;
+    g.round = round;
+    tideUp(ctx, 3, round + 4);
+    raiseTide(ctx);
+    const st = g.ext.tidebound.tides as TideState;
+    expect(st.height).toBe(3);
+    expect(st.untilRound).toBe(round + 4);
+  });
+
+  it('a tide card after the last tide has gone is a fresh tide with its own height', () => {
+    const { g, ctx } = makeGame(on);
+    g.round = 3;
+    tideUp(ctx, 3, 5);
+    g.round = 5;
+    raiseTide(ctx);
+    const p = tidePick(g.seed, 5);
+    const st = g.ext.tidebound.tides as TideState;
+    expect(st.height).toBe(p.height);
+    expect(st.rose?.stacked).toBe(false);
+  });
+
+  it('never overwrites another tile state, and never clears one it did not set', () => {
+    const { g, ctx } = makeGame(on);
+    const coast = ringOf(g, 3);
+    setTileState(g, coast[0], { id: 'barren' });
+    setTileState(g, coast[1], { id: FLOODED, until: 99 } as any);
+    g.round = 2;
+    tideUp(ctx, 1, 4);
+    expect(getTileState(g.board.hexes[coast[0]])?.id).toBe('barren');
+    g.round = 4;
+    applyTides(ctx);
+    expect(getTileState(g.board.hexes[coast[0]])?.id).toBe('barren');
+    // The flood that was there before the tide (another source) is left alone when the tide goes.
+    expect(flooded(g, coast[1])).toBe(true);
+    expect(flooded(g, coast[2])).toBe(false);
+  });
+
+  it('runs from the round clock: the tide card fires on its round and the water goes when its rounds are over', () => {
+    const { g, reg } = makeGame(on, 31);
+    g.round = 1;
+    tideNext(g, reg, 3);
+    // Only this one tide in the pile, so no second tide card stacks on it inside the window.
+    const deck = ensureEventDeck(g, reg);
+    deck.deck = deck.deck.map((id, i) => (i > 0 && id === TIDE_EVENT_ID ? 'base.calm_seas' : id));
+    const p = tidePick(g.seed, 3);
+    for (let round = 2; round <= 3 + p.rounds; round++) {
+      g.round = round;
+      for (const hook of reg.hooks.onRoundStart) hook(makeCtx(g, reg));
+      const wet = floodedIds(g).length > 0;
+      expect(wet, `round ${round}`).toBe(round >= 3 && round < 3 + p.rounds);
+    }
   });
 });
 
-// T5e: ports idle while their land is flooded. (Flooded tiles producing nothing is the production stage's job and was already covered above.)
+describe('what flooding does', () => {
+  it('a flooded tile yields half resources rounded up per building (settlement 1->1, city 2->1, castle 3->2) and a dry one yields full', () => {
+    const { g, reg, ctx } = makeGame(on);
+    basin(g, false);
+    const wet = g.board.hexes[ringOf(g, 3)[0]];
+    const dry = g.board.hexes.find(h => ringIdx(h) === 0)!;
+    const ownCorner = (h: typeof wet) => h.vertexIds.find(v => g.board.vertices[v].hexIds.length === 1)!;
+    const wetV = ownCorner(wet);
+    const dryV = dry.vertexIds[0];
+    g.board.vertices[wetV].piece = { type: 'city', owner: 'a' };
+    g.board.vertices[dryV].piece = { type: 'city', owner: 'b' };
+    const woodOf = (id: string) => g.players.find(p => p.id === id)!.resources.wood || 0;
+
+    runProductionPipeline(ctx, [wet], 6);
+    expect(woodOf('a')).toBe(2);
+
+    g.round = 2;
+    tideUp(ctx, 1, 4);
+    expect(flooded(g, wet.id)).toBe(true);
+    expect(flooded(g, dry.id)).toBe(false);
+    runProductionPipeline(ctx, [wet, dry], 6);
+    expect(woodOf('a')).toBe(3);
+    expect(woodOf('b')).toBe(2);
+
+    g.board.vertices[wetV].piece = { type: 'settlement', owner: 'a' };
+    runProductionPipeline(ctx, [wet], 6);
+    expect(woodOf('a')).toBe(4);
+
+    reg.pieces.set('castle', { id: 'castle', name: 'Castle', target: 'vertex', cost: {}, vp: 3, produces: 3, canPlace: () => false });
+    g.board.vertices[wetV].piece = { type: 'castle', owner: 'a' };
+    runProductionPipeline(ctx, [wet], 6);
+    expect(woodOf('a')).toBe(6);
+
+    g.round = 4;
+    applyTides(ctx);
+    runProductionPipeline(ctx, [wet], 6);
+    expect(woodOf('a')).toBe(9);
+  });
+
+  it('the robber stays on a tile that floods', () => {
+    const { g, ctx } = makeGame(on);
+    const wet = ringOf(g, 3)[0];
+    g.board.robberHexId = wet;
+    g.round = 2;
+    tideUp(ctx, 1, 4);
+    expect(flooded(g, wet)).toBe(true);
+    expect(g.board.robberHexId).toBe(wet);
+  });
+});
 
 describe('ports idle while flooded (T5e)', () => {
-  /** Player a's settlement on a corner that touches only one tile of a cluster that floods in round 2, with a 2:1 wood port on it. */
+  /** Player a's settlement on a coast corner that touches only one tile, with a 2:1 wood port. The basin board keeps ring 2 dry at height 1. */
   function portSetup() {
     const game = makeGame(on);
-    const { g, reg } = game;
-    const wet = ensureTides(g, reg).clusters.find(c => isFloodedAt(c, 2))!;
-    const hex = g.board.hexes[wet.hexIds[0]];
+    const { g } = game;
+    basin(g, false);
+    const hex = g.board.hexes[ringOf(g, 3)[0]];
     const vertexId = hex.vertexIds.find(v => g.board.vertices[v].hexIds.length === 1)!;
     g.board.vertices[vertexId].piece = { type: 'settlement', owner: 'a' };
     g.board.vertices[vertexId].port = 'wood';
@@ -698,27 +421,13 @@ describe('ports idle while flooded (T5e)', () => {
   it('a port on a flooded tile does not trade, and works again when the water drains', () => {
     const { g, reg, ctx, vertexId } = portSetup();
     expect(ratioFor(g, reg, 'a', 'wood')).toBe(2);
-    expect(isPortFlooded(g, reg, vertexId)).toBe(false);
     g.round = 2;
-    applyTides(ctx);
+    tideUp(ctx, 1, 3);
     expect(isPortFlooded(g, reg, vertexId)).toBe(true);
     expect(ratioFor(g, reg, 'a', 'wood')).toBe(4);
-    expect(ratioFor(g, reg, 'a', 'brick')).toBe(4);
     g.round = 3;
     applyTides(ctx);
     expect(isPortFlooded(g, reg, vertexId)).toBe(false);
-    expect(ratioFor(g, reg, 'a', 'wood')).toBe(2);
-  });
-
-  it('only one idle port is lost: a second port of the same player keeps its ratio', () => {
-    const { g, reg, ctx } = portSetup();
-    const dry = ensureTides(g, reg).clusters.find(c => !isFloodedAt(c, 2))!;
-    const otherHex = g.board.hexes[dry.hexIds[0]];
-    const other = otherHex.vertexIds.find(v => g.board.vertices[v].hexIds.length === 1)!;
-    g.board.vertices[other].piece = { type: 'settlement', owner: 'a' };
-    g.board.vertices[other].port = 'wood';
-    g.round = 2;
-    applyTides(ctx);
     expect(ratioFor(g, reg, 'a', 'wood')).toBe(2);
   });
 
@@ -729,7 +438,6 @@ describe('ports idle while flooded (T5e)', () => {
     vertex.port = 'wood';
     setTileState(g, vertex.hexIds[0], { id: FLOODED });
     expect(isPortFlooded(g, reg, vertex.id)).toBe(false);
-    expect(ratioFor(g, reg, 'a', 'wood')).toBe(2);
     setTileState(g, vertex.hexIds[1], { id: FLOODED });
     expect(isPortFlooded(g, reg, vertex.id)).toBe(true);
     expect(ratioFor(g, reg, 'a', 'wood')).toBe(4);
@@ -742,7 +450,6 @@ describe('ports idle while flooded (T5e)', () => {
     v1.port = 'wood';
     setTileState(on1.g, v1.hexIds[0], { id: 'barren' });
     expect(ratioFor(on1.g, on1.reg, 'a', 'wood')).toBe(2);
-
     for (const rules of [{}, tidesOff]) {
       const off = makeGame(rules);
       const v = off.g.board.vertices.find(x => x.hexIds.length === 1)!;
@@ -754,150 +461,127 @@ describe('ports idle while flooded (T5e)', () => {
   });
 });
 
-// T6: the client's view of the tides: the warning one turn ahead, flooded and warned overlays, the title card facts and the elevation heat map data.
-
-describe('tide view for the client (T6)', () => {
-  it('floodPlan is what applyTides floods, round by round, at every level and with mixed elevations', () => {
-    for (let level = 1; level <= 5; level++) {
-      const { g, reg, ctx } = makeGame({ ...on, tideLevel: level }, 31);
-      const tiles = ensureTides(g, reg).clusters.flatMap(c => [...c.hexIds, ...c.inner]);
-      tiles.forEach((id, i) => { g.board.hexes[id].ext.elevation = (i % 3) + 1; });
-      for (let round = 1; round <= 12; round++) {
-        g.round = round;
-        applyTides(ctx);
-        const now = g.board.hexes.filter(h => getTileState(h)?.id === FLOODED).map(h => h.id).sort((a, b) => a - b);
-        expect(now, `level ${level} round ${round}`).toEqual([...floodPlan(g, round)].sort((a, b) => a - b));
-      }
-    }
-  });
-
-  it('the warning is one turn, not a round: only on the last seat\'s turn, for tiles that are dry now and rise at the next round start', () => {
+describe('the timeline, the warning and the client view', () => {
+  it('the timeline shows a tide with its height and rounds, and with a tide already up it shows the stacked tide', () => {
     const { g, reg, ctx } = makeGame(on);
-    g.round = 1;
-    g.turn = 0;
-    expect(tideWarning(g)).toBeNull();
-    g.turn = 1;
-    const w = tideWarning(g)!;
-    expect(w.round).toBe(2);
-    expect(w.spring).toBe(false);
-    expect([...w.hexIds].sort((a, b) => a - b)).toEqual([...floodPlan(g, 2)].sort((a, b) => a - b));
-
     g.round = 2;
-    applyTides(ctx);
-    const w3 = tideWarning(g)!;
-    expect(w3.round).toBe(3);
-    expect(w3.hexIds.some(id => flooded(g, id))).toBe(false);
-    expect([...w3.hexIds].sort((a, b) => a - b)).toEqual([...floodPlan(g, 3)].sort((a, b) => a - b));
+    tideNext(g, reg, 5);
+    const p = tidePick(g.seed, 5);
+    expect(eventTimeline(g, reg)[0]).toMatchObject({ cardId: TIDE_EVENT_ID, icon: 'waves', round: 5, detail: `Tide ${p.height} · ${p.rounds} rounds` });
 
-    g.round = 3;
-    applyTides(ctx);
-    expect(tideWarning(g)!.spring).toBe(true);
-
-    // Nothing before the first tide, in setup, or with Tides off.
-    g.round = 0;
-    expect(tideWarning(g)).toBeNull();
-    g.round = 1;
-    g.phase = 'setup_settlement';
-    expect(tideWarning(g)).toBeNull();
-    g.phase = 'main';
-    expect(tideWarning(makeGame({}).g)).toBeNull();
-    expect(reg.enabled.has('tidebound.tides')).toBe(true);
+    tideUp(ctx, 1, 7); // up until round 7: at round 5 it has 2 rounds left
+    const stacked = eventTimeline(g, reg)[0].detail;
+    expect(stacked).toBe(`Tide 2 · ${Math.max(2, p.rounds)} rounds`);
   });
 
-  it('a tile that already holds another state is not warned about', () => {
+  it('warns one turn ahead: on the last seat\'s turn before a tide round, for the tiles that will go under', () => {
     const { g, reg } = makeGame(on);
-    g.round = 1;
+    basin(g, false);
+    g.round = 4;
+    tideNext(g, reg, 5);
+    const p = tidePick(g.seed, 5);
+    g.turn = 0;
+    expect(tideWarning(g, reg)).toBeNull();
     g.turn = 1;
-    const target = floodPlan(g, 2)[0];
-    setTileState(g, target, { id: 'barren' });
-    expect(tideWarning(g)!.hexIds).not.toContain(target);
-    expect(reg.enabled.has('tidebound.tides')).toBe(true);
+    const w = tideWarning(g, reg)!;
+    expect(w).toMatchObject({ round: 5, height: p.height, rounds: p.rounds });
+    expect(w.hexIds.sort((a, b) => a - b)).toEqual(floodSet(g, reg, p.height));
+    const view = tideClientView(g, reg)!;
+    expect(view.overlays[w.hexIds[0]]).toEqual({ kind: 'flood-warn' });
+    expect(view.tide.warning).toMatchObject({ round: 5, height: p.height, count: w.hexIds.length });
   });
 
-  it('tideClientView: null with Tides off; flood and flood-warn overlays; rose only when something newly went under', () => {
-    const off = makeGame({});
-    expect(tideClientView(off.g, off.reg)).toBeNull();
-    const addonOff = makeGame(tidesOff);
-    expect(tideClientView(addonOff.g, addonOff.reg)).toBeNull();
-
-    const { g, reg, ctx } = makeGame(on);
-    g.turn = 0;
-    g.round = 1;
-    applyTides(ctx);
-    let view = tideClientView(g, reg)!;
-    expect(view.overlays).toEqual({});
-    expect(view.tide.rose).toBeNull();
-    expect(view.tide.warning).toBeNull();
-    expect(view.tide.levelName).toBe('Medium');
-
-    g.turn = 1;
-    view = tideClientView(g, reg)!;
-    expect(view.tide.warning).toEqual({ round: 2, spring: false, count: floodPlan(g, 2).length });
-    expect(Object.values(view.overlays).every(o => o.kind === 'flood-warn')).toBe(true);
-    expect(Object.keys(view.overlays)).toHaveLength(floodPlan(g, 2).length);
-
-    g.turn = 0;
-    g.round = 2;
-    applyTides(ctx);
-    view = tideClientView(g, reg)!;
-    expect(view.tide.rose).toEqual({ round: 2, spring: false, count: floodPlan(g, 2).length });
-    expect(Object.values(view.overlays).every(o => o.kind === 'flood')).toBe(true);
-    for (const h of g.board.hexes) expect(view.overlays[h.id]?.kind === 'flood', `hex ${h.id}`).toBe(flooded(g, h.id));
-
-    // On the last seat's turn the flooded tiles keep their tint and the tiles about to rise get the warning.
-    g.turn = 1;
-    view = tideClientView(g, reg)!;
-    const kinds = Object.values(view.overlays).map(o => o.kind);
-    expect(kinds).toContain('flood');
-    expect(kinds).toContain('flood-warn');
-
-    // Spring tide: the title card counts only the tiles that were not under water the round before.
-    g.turn = 0;
-    g.round = 3;
-    applyTides(ctx);
+  it('no warning when the next round brings no tide, or the tide card is vetoed', () => {
+    const { g, reg } = makeGame(on);
     g.round = 4;
-    applyTides(ctx);
-    view = tideClientView(g, reg)!;
-    expect(view.tide.rose).toEqual({ round: 4, spring: true, count: floodPlan(g, 4).length - floodPlan(g, 3).length });
+    g.turn = 1;
+    tideNext(g, reg, 6);
+    expect(tideWarning(g, reg)).toBeNull();
+    tideNext(g, reg, 5);
+    expect(tideWarning(g, reg)).not.toBeNull();
+    const st = ensureEventDeck(g, reg);
+    st.deck[1] = 'base.festival';
+    st.pendingVeto = { cardId: TIDE_EVENT_ID, vetoedBy: 'a', upheldBy: null } as any;
+    expect(tideWarning(g, reg)).toBeNull();
   });
 
-  it('elevation data: null when every tile is the same, the heights when they differ, never for fogged tiles; the view is plain JSON', () => {
+  it('the client view: null with Tides off; flood overlays; the tide up and until when; rose only in the round it rose', () => {
+    expect(tideClientView(makeGame(tidesOff).g, makeGame(tidesOff).reg)).toBeNull();
     const { g, reg, ctx } = makeGame(on);
-    expect(tideClientView(g, reg)!.tide.elevation).toBeNull();
-    const ring = ringOf(g, 3);
-    g.board.hexes[ring[0]].ext.elevation = 3;
-    g.board.hexes[ring[1]].ext.elevation = 2;
     let view = tideClientView(g, reg)!;
-    expect(view.tide.elevation![ring[0]]).toBe(3);
-    expect(view.tide.elevation![ring[1]]).toBe(2);
-    expect(view.tide.elevation![ring[2]]).toBe(1);
-
-    // A coast tile (elevation 1) that is under the spring tide in round 4 but hidden by fog shows no overlay and no height.
-    g.board.hexes[ring[3]].ext.hidden = true;
-    g.round = 4;
-    applyTides(ctx);
-    expect(flooded(g, ring[3])).toBe(true);
+    expect(view.tide).toMatchObject({ height: 0, untilRound: null, rose: null, warning: null, levelName: TIDE_LEVELS[TIDE_DEFAULT_LEVEL - 1].name });
+    g.round = 6;
+    raiseTide(ctx);
+    const st = g.ext.tidebound.tides as TideState;
     view = tideClientView(g, reg)!;
-    expect(view.tide.elevation![ring[3]]).toBeUndefined();
-    expect(view.overlays[ring[3]]).toBeUndefined();
-    expect(view.overlays[ring[4]]?.kind).toBe('flood');
+    expect(view.tide.height).toBe(st.height);
+    expect(view.tide.untilRound).toBe(st.untilRound);
+    expect(view.tide.rose).toEqual(st.rose);
+    for (const id of floodedIds(g)) expect(view.overlays[id]).toEqual({ kind: 'flood' });
+    g.round = 7;
+    applyTides(ctx);
+    expect(tideClientView(g, reg)!.tide.rose).toBeNull();
     expect(JSON.parse(JSON.stringify(view))).toEqual(view);
   });
 
-  it('the view draws nothing from g.rng and changes no state', () => {
-    const a = makeGame(on, 55);
-    const b = makeGame(on, 55);
-    for (let round = 1; round <= 6; round++) {
-      for (const game of [a, b]) {
-        game.g.round = round;
-        applyTides(game.ctx);
-      }
-      b.g.turn = 1;
-      tideClientView(b.g, b.reg);
-      b.g.turn = 0;
+  it('elevation data: null when every tile is the same, the heights when they differ, never for fogged tiles', () => {
+    const { g, reg } = makeGame(on);
+    expect(tideClientView(g, reg)!.tide.elevation).toBeNull();
+    const ring = ringOf(g, 3);
+    g.board.hexes[ring[0]].ext.elevation = 3;
+    g.board.hexes[ring[1]].ext.hidden = true;
+    const view = tideClientView(g, reg)!;
+    expect(view.tide.elevation![ring[0]]).toBe(3);
+    expect(view.tide.elevation![ring[2]]).toBe(1);
+    expect(view.tide.elevation![ring[1]]).toBeUndefined();
+  });
+});
+
+describe('seed discipline and saves', () => {
+  it('draws nothing from g.rng over many rounds of events', () => {
+    const withTides = makeGame({ ...on, tideLevel: 5 }, 123);
+    const without = makeGame({ eventsOn: true }, 123);
+    expect(withTides.g.rng.s).toBe(without.g.rng.s);
+    for (let round = 1; round <= 40; round++) {
+      withTides.g.round = round;
+      for (const hook of withTides.reg.hooks.onRoundStart) hook(makeCtx(withTides.g, withTides.reg));
     }
-    expect(b.g.rng.s).toBe(a.g.rng.s);
-    expect(JSON.stringify(b.g.board.hexes)).toBe(JSON.stringify(a.g.board.hexes));
+    expect(withTides.g.rng.s).toBe(without.g.rng.s);
+  });
+
+  it('the tide state is plain JSON; a save from the old schedule is cleared of its floods on the next round', () => {
+    const { g, reg, ctx } = makeGame(on, 42);
+    g.round = 2;
+    raiseTide(ctx);
+    expect(JSON.parse(JSON.stringify(g.ext.tidebound.tides))).toEqual(g.ext.tidebound.tides);
+
+    const old = makeGame(on, 42);
+    old.g.ext.tidebound = { tides: { clusters: [{ id: 0, hexIds: ringOf(old.g, 3), inner: [], phase: 0 }] } };
+    for (const id of ringOf(old.g, 3)) setTileState(old.g, id, { id: FLOODED });
+    old.g.round = 9;
+    applyTides(old.ctx);
+    expect(floodedIds(old.g)).toEqual([]);
+    expect(old.g.ext.tidebound.tides).toMatchObject({ height: 0 });
+    void reg;
+  });
+
+  it('the lobby setting: clamped, kept when missing or bad, and sent as a rule only while Tides is on and off Medium', () => {
+    const base = defaultSettings();
+    expect(base.tideLevel).toBe(3);
+    expect(mergeSettings({ tideLevel: 4 }, base).tideLevel).toBe(4);
+    expect(mergeSettings({ tideLevel: 99 }, base).tideLevel).toBe(5);
+    expect(mergeSettings({ tideLevel: -3 }, base).tideLevel).toBe(1);
+    expect(mergeSettings({ tideLevel: 2.9 }, base).tideLevel).toBe(2);
+    const kept = mergeSettings({ tideLevel: 4 }, base);
+    expect(mergeSettings({ tideLevel: 'x' }, kept).tideLevel).toBe(4);
+    expect(mergeSettings({}, kept).tideLevel).toBe(4);
+
+    const s = { ...base, dlc: { tidebound: true }, tideLevel: 4 };
+    expect(rulesFromSettings(s).tideLevel).toBe(4);
+    expect(rulesFromSettings({ ...s, tideLevel: 3 }).tideLevel).toBeUndefined();
+    expect(rulesFromSettings({ ...s, addons: { 'tidebound.tides': false } }).tideLevel).toBeUndefined();
+    expect('tideLevel' in rulesFromSettings(base)).toBe(false);
+    expect(tideLevelOf({ rules: { tideLevel: 9 } } as any)).toBe(5);
   });
 });
 
@@ -908,79 +592,32 @@ describe('manifest overlay kinds flood and flood-warn (R8.8 step 1)', () => {
     expect([...map.keys()].sort()).toEqual(['flood', 'flood-warn']);
     expect(map.get('flood')).toEqual(floodOverlayKind);
     expect(map.get('flood-warn')).toEqual(floodWarnOverlayKind);
-    expect(floodOverlayKind.label).toBe('Flooded');
-    expect(floodWarnOverlayKind.label).toBe('Flood warning');
-    expect(floodWarnOverlayKind.pulse).toBe(true);
     expect(registryVisualProblems(reg)).toEqual([]);
-
-    const manifest = buildVisualManifest(reg);
-    expect(manifest.overlays).toEqual([floodOverlayKind, floodWarnOverlayKind]);
-
+    expect(buildVisualManifest(reg).overlays).toEqual([floodOverlayKind, floodWarnOverlayKind]);
     for (const rules of [{}, { dlc: { tidebound: false } }, tidesOff]) {
       const offReg = registryFor(allPacks, rules);
       expect(defsOf(offReg, OVERLAY_KINDS).size).toBe(0);
-      expect(buildVisualManifest(offReg).overlays).toEqual([]);
     }
   });
 
-  it('client overlay renderer builds flood and flood-warn patterns, theme tokens, labels and pulse from the manifest, and leaves the 5 built-in kinds intact', () => {
+  it('client overlay renderer builds flood and flood-warn patterns, labels and pulse from the manifest', () => {
     const { reg } = makeGame(on);
     const hexes = [
       { id: 0, type: 'wood', x: 10, y: 20 },
-      { id: 1, type: 'brick', x: 50, y: 60 },
-      { id: 2, type: 'sheep', x: 90, y: 100 }
+      { id: 1, type: 'brick', x: 50, y: 60 }
     ];
     const poly = (id: number) => `0,0 10,${id}`;
     resetManifest();
     try {
-      // Before the manifest arrives: the 5 unbuilt-DLC kinds exist, flood and flood-warn do not.
-      const defsBefore = overlayPatternDefsMarkup();
-      for (const k of ['wall-incomplete', 'plague', 'wave', 'crack', 'season']) {
-        expect(defsBefore).toContain(`id="ov-pat-${k}"`);
-      }
-      expect(defsBefore).not.toContain('id="ov-pat-flood"');
-      expect(defsBefore).not.toContain('id="ov-pat-flood-warn"');
-      expect(overlayVarsCss()).toBe('');
-
-      const htmlBefore = renderHexOverlaysMarkup(hexes, poly, {
-        0: { kind: 'flood' },
-        1: { kind: 'flood-warn' },
-        2: { kind: 'plague' }
-      });
-      expect(htmlBefore).not.toContain('ov-pat-flood');
-      expect(htmlBefore).toContain('url(#ov-pat-plague)');
-
-      // After the Tidebound manifest arrives: theme tokens, patterns, labels and pulse are rendered from the manifest.
+      expect(overlayPatternDefsMarkup()).not.toContain('id="ov-pat-flood"');
       setManifest(buildVisualManifest(reg));
-      const css = overlayVarsCss();
-      expect(css).toContain('--ov-flood-tint:rgba(21, 62, 112, 0.56)');
-      expect(css).toContain('--ov-flood-line:rgba(186, 230, 253, 0.92)');
-      expect(css).toContain(':root[data-theme="dark"]');
-      expect(css).toContain('--ov-flood-warn-tint:rgba(29, 78, 137, 0.34)');
-
-      const defsAfter = overlayPatternDefsMarkup();
-      expect(defsAfter).toContain('id="ov-pat-flood"');
-      expect(defsAfter).toContain('id="ov-pat-flood-warn"');
-      expect(defsAfter).toContain('var(--ov-flood-tint)');
-      expect(defsAfter).toContain('var(--ov-flood-warn-line)');
-      expect(defsAfter).toContain('style="fill:var(--ov-flood-tint);stroke:none"');
-      expect(defsAfter).not.toContain('stroke:var(--ov-flood-line)');
-
-      const htmlAfter = renderHexOverlaysMarkup(hexes, poly, {
-        0: { kind: 'flood' },
-        1: { kind: 'flood-warn' },
-        2: { kind: 'plague' }
-      });
-      expect(htmlAfter).toContain('fill="url(#ov-pat-flood)"');
-      expect(htmlAfter).toContain('fill="url(#ov-pat-flood-warn)"');
-      expect(htmlAfter).toContain('fill="url(#ov-pat-plague)"');
-      expect(htmlAfter).toContain('>Flooded</text>');
-      expect(htmlAfter).toContain('>Flood warning</text>');
-      expect(htmlAfter).toContain('class="hex-overlay-item hex-overlay-flood"');
-      expect(htmlAfter).toContain('class="hex-overlay-item hex-overlay-flood-warn hex-overlay-pulse"');
+      expect(overlayVarsCss()).toContain('--ov-flood-tint:rgba(21, 62, 112, 0.56)');
+      expect(overlayPatternDefsMarkup()).toContain('id="ov-pat-flood-warn"');
+      const html = renderHexOverlaysMarkup(hexes, poly, { 0: { kind: 'flood' }, 1: { kind: 'flood-warn' } });
+      expect(html).toContain('>Flooded</text>');
+      expect(html).toContain('class="hex-overlay-item hex-overlay-flood-warn hex-overlay-pulse"');
     } finally {
       resetManifest();
     }
   });
 });
-

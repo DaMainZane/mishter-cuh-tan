@@ -33,7 +33,9 @@ function renderStrip(): void {
   if (!el) return;
   const tl = state.eventTimeline;
   const upcoming = tl?.upcoming ?? [];
-  if (!tl || upcoming.length === 0 || state.status === 'LOBBY' || state.status === 'GAMEOVER') {
+  const tide = state.tide;
+  const tideUp = !!tide && tide.height > 0 && tide.untilRound !== null;
+  if (!tl || (upcoming.length === 0 && !tideUp) || state.status === 'LOBBY' || state.status === 'GAMEOVER') {
     if (lastStripHtml !== '') {
       lastStripHtml = '';
       el.innerHTML = '';
@@ -43,7 +45,14 @@ function renderStrip(): void {
   }
   el.style.display = '';
   const round = Number(state.round) || 0;
-  const html = upcoming
+  // The tide that is up now: it is not on the timeline any more (it fired), so its own chip says how high and when it goes.
+  const nowChip = tideUp
+    ? `<div class="event-chip now" title="${esc(`Tide ${tide!.height} is up: it retreats at the start of round ${tide!.untilRound}`)}">
+        <span class="event-chip-icon">${iconFor('waves')}</span>
+        <span class="event-chip-text"><span class="event-chip-round">Tide ${esc(tide!.height)}</span><span class="event-chip-detail">until R${esc(tide!.untilRound)}</span></span>
+      </div>`
+    : '';
+  const html = nowChip + upcoming
     .map((e, i) => {
       const inRounds = Math.max(0, e.round - round);
       const when = inRounds <= 0 ? 'now' : inRounds === 1 ? 'next round' : `in ${inRounds} rounds`;

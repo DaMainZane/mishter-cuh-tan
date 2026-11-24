@@ -46,6 +46,7 @@ import {
   TECH_SALVAGE_CREW,
   UPGRADE_BRIDGE,
   UPGRADE_HARBOR,
+  coastHexIds,
   drownHex,
   ensureTides,
   fishBotGoal,
@@ -126,14 +127,13 @@ function makeTideboundGame(seed = 1301, extraRules: Record<string, any> = {}): {
 
 describe('T13a: Flood & rising-sea exposure in vertex scoring', () => {
   it('discounts flood-exposed low-elevation coastal vertices and rewards elevated coastal ground', () => {
-    const { g, reg } = makeTideboundGame(1302);
-    const tides = ensureTides(g, reg);
-    const ctx = makeCtx(g, reg);
+    // Tides are Event Deck cards (2026-11-24), so the deck is on; the flood lookup is cached per ctx, so each reading gets a fresh one.
+    const { g, reg } = makeTideboundGame(1302, { eventsOn: true });
+    ensureTides(g, reg);
+    const ctx = () => makeCtx(g, reg);
 
-    // Pick a coastal land hex in a tide cluster
-    const clusters = tides.clusters;
-    const coastCluster = clusters[0];
-    const hexId = coastCluster.hexIds[0];
+    // Pick a coastal land hex
+    const hexId = coastHexIds(g, reg)[0];
     const hex = g.board.hexes[hexId];
     hex.type = 'wheat';
     hex.number = 6;
@@ -143,18 +143,18 @@ describe('T13a: Flood & rising-sea exposure in vertex scoring', () => {
     hex.ext = { ...hex.ext, elevation: 1 };
     const lowShare = tideFloodShareForHex(g, reg, hexId);
     expect(lowShare).toBeGreaterThan(0);
-    const lowDelta = tidesBotGoal.vertexDelta!(ctx, 'p1', vId);
+    const lowDelta = tidesBotGoal.vertexDelta!(ctx(), 'p1', vId);
 
-    // High elevation (2) resists normal tides (strength 1) -> lower flood share and higher vertexDelta
+    // High elevation (2): only tides of height 2 or more reach it -> lower flood share and higher vertexDelta
     hex.ext = { ...hex.ext, elevation: 2 };
     const highShare = tideFloodShareForHex(g, reg, hexId);
     expect(highShare).toBeLessThan(lowShare);
-    const highDelta = tidesBotGoal.vertexDelta!(ctx, 'p1', vId);
+    const highDelta = tidesBotGoal.vertexDelta!(ctx(), 'p1', vId);
     expect(highDelta).toBeGreaterThan(lowDelta);
 
     // Currently flooded hex receives an extra penalty
     setTileState(g, hexId, { id: FLOODED });
-    const floodedDelta = tidesBotGoal.vertexDelta!(ctx, 'p1', vId);
+    const floodedDelta = tidesBotGoal.vertexDelta!(ctx(), 'p1', vId);
     expect(floodedDelta).toBeLessThan(highDelta);
   });
 

@@ -46,16 +46,23 @@ describe.each([
     for (const l of levels) expect(l.alpha).toBeGreaterThanOrEqual(0.7);
   });
 
-  it('gets clearly darker with every height step', () => {
+  // 2026-11-24: low ground (the ground tides reach) is orange, high ground is green, with an olive step between. The ▲ labels carry the height too.
+  it('each height step is clearly a different colour', () => {
     for (let i = 1; i < levels.length; i++) {
-      const drop = luminance(levels[i - 1].rgb) - luminance(levels[i].rgb);
-      expect(drop).toBeGreaterThanOrEqual(0.15);
+      const [a, b] = [levels[i - 1].rgb, levels[i].rgb];
+      expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThanOrEqual(60);
     }
   });
 
-  it('ends in red at the highest level (red is highest)', () => {
+  it('starts in orange at the lowest level', () => {
+    const [r, g, b] = levels[0].rgb;
+    expect(r).toBeGreaterThan(g * 1.4);
+    expect(r).toBeGreaterThan(b * 3);
+  });
+
+  it('ends in green at the highest level (green is highest, safest)', () => {
     const [r, g, b] = levels[2].rgb;
-    expect(r).toBeGreaterThan(g * 2);
-    expect(r).toBeGreaterThan(b * 2);
+    expect(g).toBeGreaterThan(r * 1.5);
+    expect(g).toBeGreaterThan(b * 1.5);
   });
 });
