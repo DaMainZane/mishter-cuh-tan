@@ -21,6 +21,8 @@ export const stoneWallPiece: PieceDef = {
   produces: 0,
   upgradeFrom: WALL,
   canPlace: canUpgradeToStone,
+  // Only offered to players with a building inside some zone (the only ones who may upgrade a wall).
+  available: (g, pid) => !!g.ext?.bulwark && bulwarkState(g).zones.some(z => hasBuildingIn(g, z, pid)),
   visual: {
     slot: 'edge',
     button: {

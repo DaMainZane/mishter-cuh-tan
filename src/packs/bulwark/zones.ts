@@ -42,6 +42,9 @@ export interface BulwarkState {
   gates: Record<number, GateRec>;
   /** Corner id -> complete zone id, for every corner inside a complete zone (rebuilt by `syncZones`). */
   vertexZone: Record<number, number>;
+  /** Wall corners and each zone's inside corners as of the last `syncZones` (lookups that run for every spot, so big maps stay fast). */
+  corners?: number[];
+  zoneCorners?: Record<number, number[]>;
   /** Tiles given the +1 elevation bonus (so it can be taken off again). */
   bonusHexes: number[];
   /** Who placed the most recent wall piece (the closer of a ring it closes). */
@@ -132,6 +135,25 @@ export function wallCorners(g: GameState, st: BulwarkState): Set<number> {
     }
   }
   return out;
+}
+
+const cornerSets = new WeakMap<number[], Set<number>>();
+
+/** Wall corners as a set: from the last `syncZones` when there is one (cached), else computed now. */
+export function wallCornerSet(g: GameState, st: BulwarkState): Set<number> {
+  if (!st.corners) return wallCorners(g, st);
+  let s = cornerSets.get(st.corners);
+  if (!s) {
+    s = new Set(st.corners);
+    cornerSets.set(st.corners, s);
+  }
+  return s;
+}
+
+/** A zone's inside corners: from the last `syncZones` when there is one, else computed now. */
+export function zoneCorners(g: GameState, z: ZoneRec): number[] {
+  const st = g.ext?.bulwark as BulwarkState | undefined;
+  return st?.zoneCorners?.[z.id] ?? interiorVertices(g, z.hexIds);
 }
 
 /** Edges around a set of hexes: exactly one side inside (or the rim of the board beside an inside hex). */
@@ -245,7 +267,7 @@ export function zonesOfWall(g: GameState, st: BulwarkState, edgeId: number): Zon
 
 /** Does `pid` have a building on a corner inside this zone? */
 export function hasBuildingIn(g: GameState, z: ZoneRec, pid: Id): boolean {
-  return interiorVertices(g, z.hexIds).some(v => g.board.vertices[v]?.piece?.owner === pid);
+  return zoneCorners(g, z).some(v => g.board.vertices[v]?.piece?.owner === pid);
 }
 
 /** May `pid` build inside a complete zone (its controller, a permit holder, or anyone while nobody controls it)? */
@@ -318,6 +340,11 @@ export function syncZones(ctx: Ctx, opts: { highGround?: boolean } = {}): void {
   }
   for (const h of want) if (g.board.hexes[h]) g.board.hexes[h].ext.elevationBonus = 1;
   st.bonusHexes = [...want].sort((a, b) => a - b);
+
+  // 4. Lookups for the spot checks (a fresh array each sync, so cached sets built from the old one drop away).
+  st.corners = [...wallCorners(g, st)].sort((a, b) => a - b);
+  st.zoneCorners = {};
+  for (const z of st.zones) st.zoneCorners[z.id] = interiorVertices(g, z.hexIds);
 }
 
 function announceControl(ctx: Ctx, z: ZoneRec, to: Id): void {

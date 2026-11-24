@@ -123,7 +123,17 @@ export const repairWallAction: ActionDef = {
     button: { label: 'Repair', icon: '<path d="M14 6l4 4-9 9H5v-4z"/><path d="M13 7l4 4"/>', order: 47 },
     hints: { noSupply: '', cannotAfford: 'A repair costs 1 wood', noSpots: 'No damaged palisade in a zone of yours' }
   },
-  price: () => REPAIR_COST
+  price: () => REPAIR_COST,
+  // Shown only while a damaged palisade stands in a zone you have a building in.
+  available: (g: GameState, pid: Id) => {
+    if (!g.ext?.bulwark) return false;
+    const st = bulwarkState(g);
+    const dur = (g.ext?.core?.durability ?? {}) as Record<string, number>;
+    return Object.keys(dur).some(k => {
+      const eid = Number(k.slice(2));
+      return k.startsWith('e:') && g.board.edges[eid]?.piece?.type === WALL && zonesOfWall(g, st, eid).some(z => hasBuildingIn(g, z, pid));
+    });
+  }
 } as ActionDef;
 
 /** Bots repair a palisade of their zones once it is down to 1 (one more hit breaks it). */

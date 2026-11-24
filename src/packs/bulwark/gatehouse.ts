@@ -101,7 +101,12 @@ export const buildGateAction: ActionDef = {
     button: { label: 'Gate', icon: '<path d="M4 21V10a8 8 0 0 1 16 0v11"/><path d="M8 21v-9a4 4 0 0 1 8 0v9"/>', order: 48 },
     hints: { noSupply: '', cannotAfford: 'A gate costs 2 brick and 1 ore', noSpots: 'Build a gate on the wall of a zone you hold' }
   },
-  price: () => GATE_COST
+  price: () => GATE_COST,
+  // The button shows only to a lord whose zone has no gate yet.
+  available: (g: GameState, pid: Id) => {
+    const st = g.ext?.bulwark as BulwarkState | undefined;
+    return !!st && st.zones.some(z => z.complete && z.controller === pid && !Object.values(st.gates).some(gr => gr.zoneId === z.id));
+  }
 } as ActionDef;
 
 /** Open or close your gate (only on your own turn). Payload `{ vertexId }`. */
@@ -132,6 +137,10 @@ export const toggleGateAction: ActionDef = {
     spotKey: 'vertexId',
     button: { label: 'Open/close', icon: '<path d="M5 21V10a7 7 0 0 1 14 0v11"/><path d="M12 13v4"/>', order: 49 },
     hints: { noSupply: '', cannotAfford: 'Opening or closing your gate is free', noSpots: 'You hold no gate' }
+  },
+  available: (g: GameState, pid: Id) => {
+    const st = g.ext?.bulwark as BulwarkState | undefined;
+    return !!st && Object.values(st.gates).some(gr => zoneById(st, gr.zoneId)?.controller === pid);
   }
 } as ActionDef;
 
@@ -173,6 +182,10 @@ export const setPermitAction: ActionDef = {
     spotKey: 'vertexId',
     button: { label: 'Permit', icon: '<path d="M6 3h9l3 3v15H6z"/><path d="M9 10h6M9 14h6M9 18h3"/>', order: 50 },
     hints: { noSupply: '', cannotAfford: 'Permits are free', noSpots: 'No guest in a zone you hold' }
+  },
+  available: (g: GameState, pid: Id) => {
+    const st = g.ext?.bulwark as BulwarkState | undefined;
+    return !!st && Object.keys(st.vertexZone ?? {}).some(v => guestAt(g, st, pid, Number(v)) !== null);
   }
 } as ActionDef;
 

@@ -55,7 +55,8 @@ import {
   pendingZones,
   ringEdges,
   syncZones,
-  wallCorners,
+  wallCornerSet,
+  zoneCorners,
   zoneById,
   zonesOfWall
 } from './zones';
@@ -113,6 +114,7 @@ export const wallPiece: PieceDef = {
   baseLimit: WALL_BASE_LIMIT,
   scaleWithRadius: true,
   canPlace: canPlaceWall,
+  available: (g: GameState, pid: Id) => !!stateOf(g)?.zones.some(z => hasBuildingIn(g, z, pid)),
   visual: {
     slot: 'edge',
     button: {
@@ -153,7 +155,7 @@ export const zonePlacementCheck: PlacementCheckDef = {
     if (!st || !st.zones.length && !Object.keys(st.gates).length) return null;
     if (def.id === WALL || def.id === STONE_WALL) return null;
     if (def.target === 'vertex') {
-      if (wallCorners(g, st).has(loc)) return 'No building may stand on a wall';
+      if (wallCornerSet(g, st).has(loc)) return 'No building may stand on a wall';
       if (st.gates[loc]) return 'A gate stands there';
       const zid = st.vertexZone[loc];
       const z = zid === undefined ? undefined : zoneById(st, zid);
@@ -168,7 +170,9 @@ export const zonePlacementCheck: PlacementCheckDef = {
       if (z && !mayBuildIn(st, z, pid)) return 'The gate is closed to you';
     }
     const z = zoneOfEdge(g, st, loc);
-    if (z && mode === 'build' && !mayBuildIn(st, z, pid)) return 'Only the lord of this zone or a permit holder may build inside';
+    // An open gate lets anyone through: roads may run inside then (buildings still need the lord or a permit).
+    const gateOpen = !!z && Object.values(st.gates).some(gr => gr.zoneId === z.id && gr.open);
+    if (z && mode === 'build' && !gateOpen && !mayBuildIn(st, z, pid)) return 'Only the lord of this zone or a permit holder may build inside';
     return null;
   }
 };
@@ -236,7 +240,7 @@ export function peasantRevolt(ctx: Ctx): ZoneRec | null {
   const n = 1 + rngInt(rng, 3);
   st.meters[z.id] = {};
   const skips = (st.skips[z.id] ??= {});
-  const guests = [...localVp(g, reg, interiorVertices(g, z.hexIds)).keys()].filter(p => p !== z.controller);
+  const guests = [...localVp(g, reg, zoneCorners(g, z)).keys()].filter(p => p !== z.controller);
   for (const p of guests) skips[p] = (skips[p] ?? 0) + n;
   const lord = getPlayer(g, z.controller!);
   ctx.log(`🔥 Peasant revolt in ${lord ? `${lord.avatar} ${lord.name}'s` : 'a'} zone: tax meters reset, guests skip ${n} ${n === 1 ? 'tax' : 'taxes'}`, null);
@@ -298,7 +302,7 @@ export function bulwarkView(g: GameState, reg: Registry): BulwarkView | null {
       controller: z.controller,
       meters: zoneMeters(st, z.id),
       permits: [...(st.permits[z.id] ?? [])],
-      vp: Object.fromEntries(localVp(g, reg, interiorVertices(g, z.hexIds)))
+      vp: Object.fromEntries(localVp(g, reg, zoneCorners(g, z)))
     })),
     pending: pendingZones(g, reg).map(p => p.hexIds),
     gates: Object.entries(st.gates).map(([v, gr]) => ({ vertexId: Number(v), arch: gr.arch, open: gr.open, zoneId: gr.zoneId })),
@@ -371,9 +375,9 @@ export const zonesBotGoal: BotGoalDef = {
   vertexDelta(ctx: Ctx, pid: Id, vertexId: number): number {
     const st = stateOf(ctx.g);
     if (!st) return 0;
-    if (wallCorners(ctx.g, st).has(vertexId)) return -50;
+    if (wallCornerSet(ctx.g, st).has(vertexId)) return -50;
     const zid = st.vertexZone[vertexId];
-    const z = zid === undefined ? st.zones.find(zz => zz.spawned && !zz.complete && interiorVertices(ctx.g, zz.hexIds).includes(vertexId)) : zoneById(st, zid);
+    const z = zid === undefined ? st.zones.find(zz => zz.spawned && !zz.complete && zoneCorners(ctx.g, zz).includes(vertexId)) : zoneById(st, zid);
     if (!z) return 0;
     const pipSum = ctx.g.board.vertices[vertexId].hexIds.reduce((a, h) => a + pipsOf(ctx.g.board.hexes[h]?.number), 0);
     if (z.controller && z.controller !== pid) return -0.3 * pipSum;
@@ -390,7 +394,7 @@ export const zonesBotGoal: BotGoalDef = {
     const out: BotGoalItem[] = [];
     for (const z of st.zones) {
       if (z.complete) continue;
-      const corners = interiorVertices(g, z.hexIds);
+      const corners = zoneCorners(g, z);
       const vp = localVp(g, reg, corners);
       const mine = vp.get(pid) ?? 0;
       if (mine <= 0) continue;

@@ -33,6 +33,7 @@ import {
   dispatch,
   getPieceDurability,
   makeCtx,
+  mergeViewPlayer,
   registryFor
 } from '../src/shared';
 import type { HexInit } from '../src/shared';
@@ -394,6 +395,45 @@ describe('gatehouse', () => {
     expect(longestRoadFor(m.ctx, 'b')).toBe(2);
     bulwarkState(m.g).gates[v].open = false;
     expect(longestRoadFor(m.ctx, 'b')).toBe(1);
+  });
+
+  it('an open gate lets a rival\'s road on inside the zone; closed it stops at the arch (buildings still need the lord or a permit)', () => {
+    const { m } = held();
+    const legal = m.reg.actions.get(BUILD_GATE)!.legal!(m.ctx, 'a');
+    act(m, 'a', BUILD_GATE, legal[0]);
+    const v = legal[0].vertexId;
+    const gate = bulwarkState(m.g).gates[v];
+    const free = m.g.board.vertices[v].edgeIds.find(eid => eid !== gate.arch && !m.g.board.edges[eid].piece)!;
+    m.g.board.edges[free].piece = { type: 'road', owner: 'b' };
+    m.g.board.edges[gate.arch].piece = { type: 'road', owner: 'b' };
+    resync(m);
+    // The first edge inside, past the arch's far corner.
+    const arch = m.g.board.edges[gate.arch];
+    const far = arch.v1 === v ? arch.v2 : arch.v1;
+    const inner = m.g.board.vertices[far].edgeIds.find(eid => eid !== gate.arch && !m.g.board.edges[eid].piece)!;
+    m.g.players[1].resources = { ...rich };
+    m.g.turn = 1;
+    expect(act(m, 'b', 'build', { piece: 'road', loc: inner }).ok).toBe(false);
+    bulwarkState(m.g).gates[v].open = true;
+    expect(act(m, 'b', 'build', { piece: 'road', loc: inner }).ok).toBe(true);
+  });
+});
+
+describe('the buttons a seated player gets (generic piece and action spots from the server)', () => {
+  it('the lord gets Wall, Castle and Gate spots; a player with nothing in a zone sees no Wall, Stone, Gate, Open/close, Permit or Repair button', () => {
+    const m = makeGame();
+    const z = bulwarkState(m.g).zones[0];
+    const inside = interiorVertices(m.g, z.hexIds);
+    put(m, inside[0], 'a', 'city');
+    m.g.players[0].resources = { ...rich };
+    const view = (pid: string) => mergeViewPlayer(m.g, m.reg, m.g.players.find(p => p.id === pid)!, { self: true, over: false } as any).pieces;
+    const a = view('a');
+    expect(a[CASTLE].spots).toEqual([inside[0]]);
+    expect(a[WALL].spots.length).toBeGreaterThan(0);
+    expect(a[BUILD_GATE].spots.length).toBeGreaterThan(0);
+    expect(a[TOGGLE_GATE]).toBeUndefined();
+    const b = view('b');
+    for (const id of [WALL, STONE_WALL, BUILD_GATE, TOGGLE_GATE, SET_PERMIT, REPAIR_WALL]) expect(b[id], id).toBeUndefined();
   });
 });
 
