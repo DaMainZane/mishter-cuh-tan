@@ -30,6 +30,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `change log.md`            | What changed, pass by pass                         |
 | `Ideas.md`                 | Idea dump                                          |
 | `Development Plan.md`      | Stage 0 build plan (services, order, decisions)    |
+| `Bulwark Design.md` | Bulwark DLC spec decided 2026-11-24: castle, walls and zones, 30% tax meter, palisade and stone, decay and rot, elevation +1 inside zones, gatehouse and rebellion, events, bots |
 | `Map Generation Design.md` | Map generator design (recipes, stages, validation) |
 | `Bot AI Design.md`         | Bot tiers and brain design                         |
 | `Bot Dialogue Design.md`   | Bot chat design                                    |
@@ -67,6 +68,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `noise.ts` | seeded lattice value noise (integer hash, only + - * / and floor, so a saved seed gives the same map on any engine) |
 | `numbers.ts` | number tokens (real-game pool, scaled to any board size, red numbers never touch) |
 | `palette.ts` | player colors and avatars |
+| `placementChecks.ts` | placement vetoes and Longest Road breaks (generic extension points: an addon can forbid a piece on a spot, or break a road at a corner, without the base rules naming it) |
 | `pricing.ts` | piece cost and limit service (placed counts, base limit with doubled cost above it, registered cost modifiers) |
 | `production.ts` | S0.6 production pipeline (service 6: ordered stages for number shift, tile state, base yield, piece multiplier, wild token, tax, bank-short, discard check) |
 | `registry.ts` | registry + pack loader (all game content is registered here) |
@@ -128,6 +130,17 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `base/techEffects.ts` | effects of the 5 root techs (Stockpiling, Road levy, Harbor charters = raise a whole port 3:1 to 2:1, Plunder, Ground work): modifiers, state helpers, and the lists the tech panel shows |
 | `base/techRoots.ts` | the 5 root techs of the tech tree (one per DLC branch, base-tier so they never need their DLC) and their effects |
 | `base/trading.ts` | trade helpers (bank ratios from ratioFor service, resource parsing, multi-offer stack, player trade execution) |
+| `bulwark/index.ts` | bulwark pack (DLC: castle, walls and zones with tax and rebellion, stone walls, wall decay and rot, gatehouse with permits, high ground; spec in Bulwark Design.md) |
+| `bulwark/addons.generated.ts` | generated addon list for bulwark (dependency-ordered by scripts/addons.mjs; do not edit by hand) |
+| `bulwark/castle.ts` | bulwark.castle addon (the step after a city: 9 cards, 4x production, 3 public VP, 2 before the doubled price; the robber's favourite target; a bot goal to build one) |
+| `bulwark/constants.ts` | Bulwark ids and numbers (piece ids, action ids, prices, durability, tax rate, zone sizes; spec in Bulwark Design.md) |
+| `bulwark/gatehouse.ts` | bulwark.gatehouse addon (a gate on a wall corner turns one wall edge beside it into a gateway arch roads can pass; open lets anyone through, closed only the lord and permit holders; free permits by clicking a guest's building; a closed gate cuts other players' Longest Road; bots build a gate to get out and keep it closed) |
+| `bulwark/highGround.ts` | bulwark.high_ground addon (land inside a finished wall zone counts +1 elevation, through the generic `ext.elevationBonus` tides and rising sea read; a broken zone loses it; replaces the old Sea wall idea) |
+| `bulwark/spawn.ts` | Bulwark map spawn (plans walled zones while the map generates: count and size grow with the radius, never a lone zone, a mix of whole and broken rings, good numbers moved in when needed; then puts the walls up at game start, broken rings with 1 or 2 gaps) |
+| `bulwark/wallDecay.ts` | bulwark.wall_decay addon (palisades have 3 durability: each 7 takes 1, each round a tide floods a tile next to one takes 1 (rot), the Palisade fire event takes 1 to 2; at 0 the piece is gone and the zone opens; repair for 1 wood back to full; bots repair at 1) |
+| `bulwark/wallTiers.ts` | bulwark.wall_tiers addon (stone: a palisade upgrade for 2 brick + 1 ore that never decays or rots; only a player with a building inside one of its zones may upgrade it) |
+| `bulwark/walls.ts` | bulwark.walls addon (wall rings the map spawns, palisade wall pieces players extend from an existing wall, zones and control by public VP, rebellion, building only for the lord and permit holders, the 30% tax meter, the Peasant revolt event, the client view and the zone bot goal) |
+| `bulwark/zones.ts` | Bulwark zone state and board geometry (wall edges, gate arches, zone records, enclosure flood, interior corners, controllers, rebellion, the would-be-inside tiles of an open wall, the elevation bonus) |
 | `fog/index.ts` | fog pack (hidden tiles, revealed by building next to them, Fog Island preset) |
 | `gold/index.ts` | gold pack (gold tile = pick-a-resource on production, Gold Rush preset) |
 | `tidebound/index.ts` | tidebound pack (DLC: 8 addons with links; T1 sea tiles, T2 wide water + sea data, T3 bridges, T4 rickety bridges, T5a tides schedule, T5b spring tide, T5c tide level, T5d elevation, T5e idle ports, T6 tide view for the client, T7a fish token, T7b1 fishing nets, T7b2 net spots + net bot goal, T7c fish icon boosts, T7d tide replenish, T7e feed the sea, T8a harbor 1:1 upgrade, T8b 4 trades/turn + invalid-ratio prompt, T9 wrecks, T10 pirates, T11 tech tree nodes & gates, T12 rising sea lowest-elevation drowning & rate settings) |

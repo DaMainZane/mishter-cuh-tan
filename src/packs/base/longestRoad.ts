@@ -1,4 +1,5 @@
 // MODULE: longest road metric (DFS over a player's roads and road-like edge pieces, blocked by opponent pieces) | DEPENDS ON: packs/base/placement, shared/index | USED BY: packs/base/awards, server/debug
+import { roadBrokenAt } from '../../shared';
 import type { Ctx, Edge, Id } from '../../shared';
 import { isRoadPiece } from './placement';
 
@@ -17,6 +18,8 @@ export function longestRoadFor(ctx: Ctx, pid: Id): number {
     const v = board.vertices[vertexId];
     if (!v) return;
     if (len > 0 && v.piece && v.piece.owner !== pid) return;
+    // Something registered (a closed gate, say) can cut the road at a corner too.
+    if (len > 0 && roadBrokenAt(ctx, pid, vertexId)) return;
     for (const edgeId of v.edgeIds) {
       if (used.has(edgeId)) continue;
       const edge = board.edges[edgeId];

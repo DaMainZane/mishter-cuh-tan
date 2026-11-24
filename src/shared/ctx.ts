@@ -1,4 +1,4 @@
-// MODULE: action context (state + registry + event/log emitters) | DEPENDS ON: shared/registry, shared/types | USED BY: shared/botGoals, shared/coreServices, shared/engine, shared/eventDeck, shared/history, shared/index, +6 more
+// MODULE: action context (state + registry + event/log emitters) | DEPENDS ON: shared/registry, shared/types | USED BY: shared/botGoals, shared/coreServices, shared/engine, shared/eventDeck, shared/history, shared/index, +7 more
 import type { Registry } from './registry';
 import type { GameState } from './types';
 

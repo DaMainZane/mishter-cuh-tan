@@ -1,4 +1,4 @@
-// MODULE: registry + pack loader (all game content is registered here) | DEPENDS ON: shared/addons, shared/ctx, shared/mapoptions, shared/rng, shared/types, shared/visual | USED BY: shared/addons, shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, +17 more
+// MODULE: registry + pack loader (all game content is registered here) | DEPENDS ON: shared/addons, shared/ctx, shared/mapoptions, shared/rng, shared/types, shared/visual | USED BY: shared/addons, shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, +18 more
 import type { AddonDef, AddonInfo, DlcInfo } from './addons';
 import type { Ctx } from './ctx';
 import type { MapOptionBase, NumbersDef, PerkDef, QuickStartDef, ShapeOpDef, TerrainDef } from './mapoptions';

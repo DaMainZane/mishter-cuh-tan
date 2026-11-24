@@ -3,6 +3,7 @@ import {
   allTechDefs,
   botGoalActionScore,
   botGoalEdgeDelta,
+  canPlacePiece,
   botGoalEdgeReach,
   botGoalMainPortUpgrades,
   botGoalPortUpgradeOnSettlement,
@@ -353,7 +354,7 @@ function placeable(dc: Dc, pieceId: string): number[] {
       for (const id of dc.net) for (const eId of vertices[id].edgeIds) s.add(eId);
       cand = [...s];
     }
-    out = cand.filter(id => def.canPlace(dc.ctx, dc.p.id, id, 'build'));
+    out = cand.filter(id => canPlacePiece(dc.ctx, dc.p.id, def, id, 'build'));
   }
   dc.placeMemo.set(pieceId, out);
   return out;
@@ -364,7 +365,7 @@ function isSpot(dc: Dc, vId: number): boolean {
   const hit = dc.spotMemo.get(vId);
   if (hit !== undefined) return hit;
   const def = dc.reg.pieces.get(SETTLEMENT);
-  const ok = !!def && def.canPlace(dc.ctx, dc.p.id, vId, 'setup');
+  const ok = !!def && canPlacePiece(dc.ctx, dc.p.id, def, vId, 'setup');
   dc.spotMemo.set(vId, ok);
   return ok;
 }

@@ -183,6 +183,7 @@ src/shared/tradeRatio.ts
 src/shared/production.ts
 src/shared/sevenResolver.ts
 src/shared/eventDeck.ts
+src/shared/placementChecks.ts
 src/shared/history.ts
 src/shared/coreServices.ts
 ```
@@ -234,11 +235,13 @@ src/client/techView.ts
 - **gold**: a tile that lets you pick a resource on production.
 - **fog**: tiles hidden until you build next to them.
 - **tidebound**: the big one. Sea tiles and wide water, bridges and rickety bridges, tides and rising sea (tile state `flooded` and `drowned`), fishing (fish token, nets on sea tiles, fish icons, feeding the sea), harbors (1:1 ports), wrecks, pirates, and its own tech nodes. Each part is an addon with `links` so the audit can check its dependencies.
+- **bulwark**: castles, walled zones (spawned rings, palisade and stone walls, decay and rot), zone control by public VP with a 30% tax meter and rebellion, the gatehouse with permits, and high ground (+1 elevation inside a finished zone). Spec: `Bulwark Design.md`. It hooks the engine only through generic registries (`PLACEMENT_CHECKS`, `LONGEST_ROAD_BREAKS` in `shared/placementChecks.ts`, the tax slot of the production pipeline, `ext.elevationBonus`).
 
 ```owns
 src/packs/fog/*
 src/packs/gold/*
 src/packs/tidebound/*
+src/packs/bulwark/*
 ```
 
 ## 9. Views and the visual manifest

@@ -114,14 +114,12 @@ const CATALOG_DLCS: DlcInfoView[] = [
     id: 'bulwark',
     name: 'Bulwark',
     addons: [
-      'bulwark.walls',
-      'bulwark.wall_tiers',
-      'bulwark.siege',
       'bulwark.castle',
-      'bulwark.wall_decay',
+      'bulwark.walls',
       'bulwark.gatehouse',
-      'bulwark.castle_sieges',
-      'bulwark.sea_wall'
+      'bulwark.high_ground',
+      'bulwark.wall_decay',
+      'bulwark.wall_tiers'
     ]
   },
   {
@@ -198,14 +196,12 @@ const CATALOG_ADDONS: AddonInfoView[] = [
   { id: 'tidebound.pirates', name: 'Pirates', description: 'Pirate raid events: players with enough played knights take loot, the rest lose 2 random cards. Needs the Event Deck.', pack: 'tidebound', deps: [], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'event-deck', kind: 'content' }, { target: 'bot-goals', kind: 'bot' }] },
 
   // 4. Bulwark
-  { id: 'bulwark.walls', name: 'Walls & Zone Control', description: 'Build wall rings on edges to enclose territory; controller taxes outside production (~30%).', pack: 'bulwark', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'bulwark.wall_tiers', name: 'Wall Tiers', description: 'Upgrade from wooden palisade to permanent stone wall or ore-reinforced siege wall.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }] },
-  { id: 'bulwark.siege', name: 'Siege', description: 'Break enemy walls with siege engines while defenders burn resources to repair.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'strength', kind: 'mechanic' }] },
-  { id: 'bulwark.castle', name: 'Castle', description: 'Upgrade a city using all 5 resources for 4x production and 3 public VP.', pack: 'bulwark', deps: [], links: [{ target: 'score', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }] },
-  { id: 'bulwark.wall_decay', name: 'Wall Decay', description: 'Wooden palisades lose durability on a 7 roll unless repaired with wood.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'seven-resolver', kind: 'mechanic' }, { target: 'durability', kind: 'mechanic' }] },
-  { id: 'bulwark.gatehouse', name: 'Gatehouse', description: 'Grant taxed building permits inside your wall; if a guest exceeds your local VP, they overthrow you.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'ledger', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }] },
-  { id: 'bulwark.castle_sieges', name: 'Castle Sieges', description: 'A besieged castle produces half until the siege breaks.', pack: 'bulwark', deps: ['bulwark.castle', 'bulwark.siege'], links: [{ target: 'production', kind: 'mechanic' }, { target: 'strength', kind: 'mechanic' }] },
-  { id: 'bulwark.sea_wall', name: 'Sea Wall', description: 'Coastline walls block Tides and Rising Sea for enclosed tiles.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'durability', kind: 'mechanic' }] },
+  { id: 'bulwark.castle', name: 'Castle', description: 'Upgrade a city to a castle: 9 cards (1 of each, +1 wheat, +2 ore, +1 brick) for 4x production and 3 public VP.', pack: 'bulwark', deps: [], links: [{ target: 'piece-cost', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }, { target: 'score', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },
+  { id: 'bulwark.walls', name: 'Walls & zones', description: 'Walled zones spawn on the map (radius 4+). The most public VP inside controls a zone; guests pay 30% tax; a guest who passes the lord takes over. Walls extend from existing walls.', pack: 'bulwark', deps: [], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'production', kind: 'mechanic' }, { target: 'score', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }, { target: 'event-deck', kind: 'content' }, { target: 'bot-goals', kind: 'bot' }] },
+  { id: 'bulwark.gatehouse', name: 'Gatehouse', description: 'The lord builds a gate on a wall corner (2 brick + 1 ore). Open lets anyone through; closed only permit holders. Permits are free. A closed gate cuts other players\' Longest Road.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'piece-cost', kind: 'mechanic' }, { target: 'overlay', kind: 'ui' }, { target: 'bulwark.walls', kind: 'content' }, { target: 'bot-goals', kind: 'bot' }] },
+  { id: 'bulwark.high_ground', name: 'High ground', description: 'Land inside a finished wall zone counts +1 elevation (up to 4, which no tide reaches). A broken zone loses it until repaired.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'tile-state', kind: 'mechanic' }, { target: 'bulwark.walls', kind: 'content' }] },
+  { id: 'bulwark.wall_decay', name: 'Wall decay', description: 'Palisades have 3 durability: a 7 takes 1, a flooded tile next to one rots 1 a round, fire takes 1 to 2. At 0 the zone opens. Repair: 1 wood.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'seven-resolver', kind: 'mechanic' }, { target: 'round-clock', kind: 'mechanic' }, { target: 'event-deck', kind: 'content' }, { target: 'bot-goals', kind: 'bot' }] },
+  { id: 'bulwark.wall_tiers', name: 'Stone walls', description: 'Upgrade a palisade to stone (2 brick + 1 ore). Stone never decays or rots.', pack: 'bulwark', deps: ['bulwark.walls'], links: [{ target: 'durability', kind: 'mechanic' }, { target: 'piece-cost', kind: 'mechanic' }, { target: 'bulwark.walls', kind: 'content' }] },
 
   // 5. Warlords
   { id: 'warlords.knights_armies', name: 'Knights as Armies', description: 'Play knights in classic robber mode or recruit mode to garrison strength tokens on buildings and walls.', pack: 'warlords', deps: [], links: [{ target: 'strength', kind: 'mechanic' }, { target: 'bot-goals', kind: 'bot' }] },

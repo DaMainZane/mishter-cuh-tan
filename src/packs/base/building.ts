@@ -1,5 +1,5 @@
 // MODULE: build validation and piece placement (cost, supply, upgrade, onBuild hooks) | DEPENDS ON: packs/base/constants, shared/index | USED BY: packs/base/actions/build, packs/base/piecesView, server/bots/brain, server/view
-import { aboveBaseLimit, canAfford, doubledCost, getPlayer, payToBank, priceOf } from '../../shared';
+import { aboveBaseLimit, canAfford, doubledCost, getPlayer, payToBank, placementBlock, priceOf } from '../../shared';
 import type { Ctx, GameState, Id, PieceDef, PlayerState, Registry, Resources } from '../../shared';
 import { BASE_PIECE_LIMITS, ROAD, SETUP_PIECE } from './constants';
 
@@ -50,6 +50,8 @@ export function validateBuild(ctx: Ctx, pid: Id, payload: any): string | null {
   const p = getPlayer(g, pid)!;
   if ((p.pieces[def.id] || 0) <= 0) return `No ${def.name} pieces left`;
   if (!def.canPlace(ctx, pid, loc, mode)) return `Cannot place a ${def.name} there`;
+  const veto = placementBlock(ctx, pid, def, loc, mode);
+  if (veto) return veto;
   const cost = pieceCost(g, p, def, reg);
   if (mode === 'build' && !isFree(p, def) && !canAfford(p, cost)) return 'Not enough resources';
   return null;

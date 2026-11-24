@@ -99,10 +99,14 @@ export function tidePick(seed: number, round: number): { height: number; rounds:
   return { height, rounds };
 }
 
-/** The elevation of a tile: `ext.elevation` from the wide-water perk, 1 to 3. A tile without it (no perk, or painted by the host) counts as 1. */
+/**
+ * The elevation of a tile: `ext.elevation` from the wide-water perk, 1 to 3 (a tile without it counts as 1), plus `ext.elevationBonus`, which other
+ * content may write (Bulwark: +1 for land inside a finished wall zone). With the bonus a tile can stand above 3, where no tide reaches.
+ */
 export function hexElevation(hex: Hex): number {
   const n = Math.round(Number(hex?.ext?.elevation));
-  return Number.isFinite(n) ? Math.min(ELEVATION_MAX, Math.max(ELEVATION_MIN, n)) : ELEVATION_MIN;
+  const base = Number.isFinite(n) ? Math.min(ELEVATION_MAX, Math.max(ELEVATION_MIN, n)) : ELEVATION_MIN;
+  return base + Math.max(0, Math.round(Number(hex?.ext?.elevationBonus)) || 0);
 }
 
 const keyOf = (q: number, r: number): string => `${q},${r}`;

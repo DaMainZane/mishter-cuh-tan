@@ -71,12 +71,16 @@ describe('buildVisualManifest (R8.4)', () => {
     expect(buildVisualManifest(createRegistry([basePack]))).toEqual(empty);
     expect(buildVisualManifest(createRegistry(allPacks))).toEqual(empty);
     expect(buildVisualManifest(registryFor(allPacks, { dlc: { tidebound: true }, addons: { 'tidebound.tides': false } }))).toEqual(empty);
-    for (const reg of [createRegistry(allPacks, {}, 'all'), registryFor(allPacks, { dlc: { tidebound: true } })]) {
-      const m = buildVisualManifest(reg);
-      expect(m.pieces).toEqual([]);
-      expect(m.overlays.map(o => o.id)).toEqual(['flood', 'flood-warn']);
-      expect(registryVisualProblems(reg)).toEqual([]);
-    }
+    const tide = registryFor(allPacks, { dlc: { tidebound: true } });
+    expect(buildVisualManifest(tide).pieces).toEqual([]);
+    expect(buildVisualManifest(tide).overlays.map(o => o.id)).toEqual(['flood', 'flood-warn']);
+    expect(registryVisualProblems(tide)).toEqual([]);
+    // Every addon on: Bulwark adds its pieces (castle, palisade, stone), its actions (repair, gate, open/close, permit) and its zone looks.
+    const all = createRegistry(allPacks, {}, 'all');
+    const m = buildVisualManifest(all);
+    expect(m.pieces.map(e => e.id)).toEqual(['castle', 'wall', 'stone_wall', 'repair_wall', 'build_gate', 'toggle_gate', 'set_permit']);
+    expect(m.overlays.map(o => o.id)).toEqual(['flood', 'flood-warn', 'zone-closed', 'zone-open']);
+    expect(registryVisualProblems(all)).toEqual([]);
   });
 
   it('lists pieces and actions with a visual, takes id and kind from the def, and sorts by order then id', () => {

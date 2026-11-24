@@ -1,5 +1,5 @@
 // MODULE: bridge placement rule, Bridge piece def and bridge bot goal (the base of the bridge addons, so rickety bridges need not import bridges.ts) | DEPENDS ON: packs/base/constants, packs/base/placement, packs/tidebound/bridgeConsts, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/ricketyBridges
-import { getPlayer, priceOf } from '../../shared';
+import { canPlacePiece, getPlayer, priceOf } from '../../shared';
 import type { BotGoalDef, BotGoalItem, Ctx, Id, PieceDef } from '../../shared';
 import { SETTLEMENT } from '../base/constants';
 import { ownsRoadAt } from '../base/placement';
@@ -80,12 +80,12 @@ export const bridgeBotGoal: BotGoalDef = {
         const v = vertices[vId];
         if (!v) continue;
         // Direct landing on an open coastal settlement spot
-        if (settleDef && settleDef.canPlace(ctx, pid, vId, 'setup')) {
+        if (settleDef && canPlacePiece(ctx, pid, settleDef, vId, 'setup')) {
           score = Math.max(score, 84);
         } else {
           // One step away from an open coastal settlement spot
           for (const adjV of v.adjacentVertices) {
-            if (settleDef && settleDef.canPlace(ctx, pid, adjV, 'setup')) {
+            if (settleDef && canPlacePiece(ctx, pid, settleDef, adjV, 'setup')) {
               score = Math.max(score, 72);
             }
           }
@@ -112,7 +112,7 @@ export const bridgeBotGoal: BotGoalDef = {
     if (!e) return 0;
     const settleDef = ctx.reg.pieces.get(SETTLEMENT);
     for (const vId of [e.v1, e.v2]) {
-      if (settleDef && settleDef.canPlace(ctx, pid, vId, 'setup')) return 18;
+      if (settleDef && canPlacePiece(ctx, pid, settleDef, vId, 'setup')) return 18;
     }
     return 6;
   }

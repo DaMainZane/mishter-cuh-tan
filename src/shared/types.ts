@@ -1,4 +1,4 @@
-// MODULE: core engine types (game state, board, players, rules) | DEPENDS ON: shared/rng | USED BY: shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, shared/history, +16 more
+// MODULE: core engine types (game state, board, players, rules) | DEPENDS ON: shared/rng | USED BY: shared/botGoals, shared/coreServices, shared/ctx, shared/engine, shared/eventDeck, shared/history, +17 more
 import type { RngState } from './rng';
 
 export type Id = string;
