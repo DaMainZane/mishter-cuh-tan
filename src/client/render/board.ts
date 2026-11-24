@@ -1,13 +1,12 @@
-// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/icons, client/pieceModel, client/pieceui, +12 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
+// MODULE: board SVG renderer, camera, board input and board animations | DEPENDS ON: client/audio, client/buildMenu, client/constants, client/icons, client/pieceModel, client/pieceui, +11 more | USED BY: client/actions, client/debug, client/main, client/render/bridgepicker, client/render/hand, client/render/index
 // Flat style from "Design UI Philosophy.md": matte tiles with a small gap, pictogram glyph + circle number token,
 // pieces with a light rim, quiet highlights (accent color) for anything the player can click.
 import { RES_META } from '../constants';
-import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netTileMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, wreckMarkup, hexIconLayout } from '../icons';
+import { getBoardIconSvg, getMiniSvg, getDevSvg, uiIcon, settlementMarkup, cityMarkup, netTileMarkup, bridgeEdgeMarkup, robberMarkup, fishGroundMarkup, hexIconLayout } from '../icons';
 import {
   playTone,
   playPlaceRoadSound,
   playBridgeCollapseSound,
-  playWreckSpawnSound,
   playPlaceSettlementSound,
   playPlaceCitySound,
   playPlaceRobberSound,
@@ -29,7 +28,6 @@ import { renderSidebar, visibleRect } from './sidebar';
 import { esc } from '../util';
 import { clickPlacedBridge, openBridgePicker } from './bridgepicker';
 import { openBuildMenu, syncBuildMenu } from './buildmenu';
-import { renderPiratesMarkup } from './pirates';
 import { upgradePortClick } from './techpanel';
 import { hasPlacedShape, isPieceMode, pieceSpotsMarkup, placedEdgeMarkup, placedVertexMarkup } from '../pieceui';
 import { portRaiseSpots } from '../pieceModel';
@@ -61,8 +59,6 @@ const knownBuildings = new Map<number, string>();
 const knownFogHexes = new Set<number>();
 // Sea tiles that already carry a net, so a new one plays its placing sound once.
 const knownNetTiles = new Set<number>();
-const knownWrecks = new Set<string>();
-const WRECK_ANIM_MS = 760;
 let knownRobberHexId: number | null = null;
 // Tiles that just produced go dark for a moment, then fade back. Keyed so repaints do not restart it.
 const ROLL_DIM_MS = 2000;
@@ -117,8 +113,6 @@ let lastOverlayHtml = '';
 let lastFishHtml = '';
 // Fishing nets over the sea tiles they fish (fishing net bug): rewritten only when their markup changes.
 let lastNetsHtml = '';
-let lastWrecksHtml = '';
-let lastPiratesHtml = '';
 // R8.7: the generic spot layer for manifest pieces is only rewritten when its markup changes.
 let lastPieceSpotsHtml = '';
 let lastHexDynamicHtml = '';
@@ -206,8 +200,8 @@ export function updateCameraViewBox(): void {
   const panLayer = document.getElementById('boardPan');
   if (panLayer?.style.transform) panLayer.style.transform = '';
 
-  // Scale settlements, cities, robber, shipwrecks, pirates, and roads up as the camera zooms out (or on larger boards).
-  // Scoped to the vertex/spot, dynamic/wreck/pirate, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
+  // Scale settlements, cities, robber, and roads up as the camera zooms out (or on larger boards).
+  // Scoped to the vertex/spot, dynamic, and road layers (never set on #boardSvg) so zooming does not invalidate styles on #boardTerrainLayer (Bug 14).
   const zoomFactor = Math.max(camZoom, Math.max(baseW, baseH) / 720);
   const buildingScale = Math.min(2.8, BUILDING_BASE_SCALE * Math.pow(Math.max(1, zoomFactor), 0.62));
   const roadScale = Math.min(2.45, ROAD_BASE_SCALE * Math.pow(Math.max(1, zoomFactor), 0.58));
@@ -218,7 +212,7 @@ export function updateCameraViewBox(): void {
     for (const id of ['boardVerticesLayer', 'boardPieceSpotsLayer']) {
       document.getElementById(id)?.style.setProperty('--building-scale', bs);
     }
-    for (const id of ['boardHexDynamicLayer', 'boardWrecksLayer', 'boardPiratesLayer', 'boardDebugLayer']) {
+    for (const id of ['boardHexDynamicLayer', 'boardDebugLayer']) {
       document.getElementById(id)?.style.setProperty('--piece-zoom', pz);
     }
   }
@@ -300,8 +294,6 @@ function ensureBoardLayers(svg: HTMLElement): {
   overlayLayer: HTMLElement;
   netsLayer: Element;
   fishLayer: Element;
-  wrecksLayer: Element;
-  piratesLayer: Element;
   pieceSpotsLayer: Element;
   portsLayer: HTMLElement;
   hexDynamicLayer: HTMLElement;
@@ -319,8 +311,6 @@ function ensureBoardLayers(svg: HTMLElement): {
       <g id="boardOverlayLayer"></g>
       <g id="boardNetsLayer"></g>
       <g id="boardFishLayer"></g>
-      <g id="boardWrecksLayer"></g>
-      <g id="boardPiratesLayer"></g>
       <g id="boardHexDynamicLayer"></g>
       <g id="boardPortsLayer"></g>
       <g id="roadHighlightLayer"></g>
@@ -338,8 +328,6 @@ function ensureBoardLayers(svg: HTMLElement): {
     lastOverlayHtml = '';
     lastNetsHtml = '';
     lastFishHtml = '';
-    lastWrecksHtml = '';
-    lastPiratesHtml = '';
     lastPieceSpotsHtml = '';
     lastHexDynamicHtml = '';
     lastRoadSpotsHtml = '';
@@ -365,14 +353,6 @@ function ensureBoardLayers(svg: HTMLElement): {
     fishLayer.before(netsLayer);
     lastNetsHtml = '';
   }
-  let wrecksLayer: Element | null = document.getElementById('boardWrecksLayer');
-  if (!wrecksLayer) {
-    wrecksLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    wrecksLayer.id = 'boardWrecksLayer';
-    fishLayer.after(wrecksLayer);
-    lastWrecksHtml = '';
-    lastBuildingScale = -1;
-  }
   // Same for the generic piece spots layer (R8.7), which sits above the vertices so its spots can be clicked.
   let pieceSpotsLayer: Element | null = document.getElementById('boardPieceSpotsLayer');
   if (!pieceSpotsLayer) {
@@ -382,22 +362,11 @@ function ensureBoardLayers(svg: HTMLElement): {
     lastPieceSpotsHtml = '';
     lastBuildingScale = -1;
   }
-  // Same for the pirates layer (T10).
-  let piratesLayer: Element | null = document.getElementById('boardPiratesLayer');
-  if (!piratesLayer) {
-    piratesLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    piratesLayer.id = 'boardPiratesLayer';
-    wrecksLayer.after(piratesLayer);
-    lastPiratesHtml = '';
-    lastBuildingScale = -1;
-  }
   return {
     terrainLayer,
     overlayLayer: document.getElementById('boardOverlayLayer')!,
     netsLayer,
     fishLayer,
-    wrecksLayer,
-    piratesLayer,
     pieceSpotsLayer,
     portsLayer: document.getElementById('boardPortsLayer')!,
     hexDynamicLayer: document.getElementById('boardHexDynamicLayer')!,
@@ -454,15 +423,11 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     knownBuildings.clear();
     knownFogHexes.clear();
     knownNetTiles.clear();
-    knownWrecks.clear();
     pieceAnimTimestamps.clear();
     roadAnalysisCache.clear();
     knownRobberHexId = robberHexId;
     for (const h of hexes) {
       if (h.fog || h.type === 'fog') knownFogHexes.add(h.id);
-    }
-    for (const w of state.wrecks || []) {
-      knownWrecks.add(w.id);
     }
   }
 
@@ -763,11 +728,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   const fishIds = new Set<number>(Object.keys(fishIcons).map(Number));
   if (feedSpotSet) for (const id of feedSpotSet) fishIds.add(id);
 
-  const wrecks = state.wrecks || [];
-  const pirates = state.pirates || [];
-  const seaWreckHexIds = new Set<number>(wrecks.filter(w => w.site === 'sea').map(w => w.hexId));
-  const pirateHexIds = new Set<number>(pirates.map(p => p.hexId));
-
   const fishSigParts: string[] = [cachedGeomBoardKey];
   const nextFish: CanvasFishLike[] = [];
   for (const id of [...fishIds].sort((a, b) => a - b)) {
@@ -775,11 +735,7 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
     if (!h || h.fog) continue;
     const hasIcon = fishIcons[id] !== undefined;
     const left = hasIcon ? fishIcons[id] : 0;
-    const { fishOffset } = hexIconLayout({
-      hasFish: true,
-      hasSeaWreck: seaWreckHexIds.has(id),
-      hasPirate: pirateHexIds.has(id)
-    });
+    const { fishOffset } = hexIconLayout({ hasFish: true });
     const fx = Number(h.x) + fishOffset.dx;
     const fy = Number(h.y) + fishOffset.dy;
     const tilePoly = hasIcon ? hexGeomCache.get(id)?.tilePoly : undefined;
@@ -798,85 +754,6 @@ export function renderBoard(me: any, isMyTurn: boolean): void {
   if (lastFishHtml !== '' || layers.fishLayer.innerHTML !== '') {
     lastFishHtml = '';
     layers.fishLayer.innerHTML = '';
-  }
-
-  // Shipwrecks (T9, Bugs 5, 9, 17): sea wrecks sit on the ocean tile (or top-right slot when sharing with fish/pirate);
-  // shore wrecks beach in a coastal flank slot away from the tile's number token.
-  const currentWreckIds = new Set<string>();
-  let playedWreckSfx = false;
-  for (const w of wrecks) {
-    currentWreckIds.add(w.id);
-    if (!knownWrecks.has(w.id)) {
-      knownWrecks.add(w.id);
-      pieceAnimTimestamps.set(`wreck_${w.id}`, now);
-      if (state.status !== 'LOBBY' && !playedWreckSfx) {
-        playedWreckSfx = true;
-        playWreckSpawnSound(w.site);
-      }
-      setTimeout(() => syncInFlightUi(), WRECK_ANIM_MS + 30);
-    }
-  }
-  for (const id of [...knownWrecks]) {
-    if (!currentWreckIds.has(id)) knownWrecks.delete(id);
-  }
-
-  let wrecksHtml = '';
-  for (const w of wrecks) {
-    const h = hexes[w.hexId];
-    if (!h || h.fog) continue;
-    const start = pieceAnimTimestamps.get(`wreck_${w.id}`);
-    const elapsed = start !== undefined ? now - start : Infinity;
-    const isAnimating = elapsed < WRECK_ANIM_MS;
-    const delayStyle = isAnimating ? `animation-delay: -${Math.max(0, Math.round(elapsed))}ms;` : '';
-
-    const { wreckOffset } = hexIconLayout({
-      hasFish: fishIds.has(w.hexId),
-      hasSeaWreck: w.site === 'sea',
-      hasPirate: pirateHexIds.has(w.hexId),
-      shoreDir: w.site === 'shore' ? w.shoreDir : null,
-      hasNumber: !!h.number
-    });
-    const wx = Number(h.x) + wreckOffset.dx;
-    const wy = Number(h.y) + wreckOffset.dy;
-
-    const animClass = isAnimating
-      ? w.site === 'sea'
-        ? 'wreck-spawn-sea-anim'
-        : 'wreck-spawn-shore-anim'
-      : '';
-    const spawnEffect = isAnimating
-      ? w.site === 'sea'
-        ? `<circle cx="0" cy="0" r="22" class="wreck-sea-whirlpool-ring" style="${delayStyle}" />`
-        : `<path d="M-20,-10 Q-10,0 -20,10 M-12,-14 Q-2,0 -12,14" class="wreck-shore-surf-wave" style="${delayStyle}" />`
-      : '';
-    const siteLabel = w.site === 'sea' ? 'Sea shipwreck' : 'Shore shipwreck';
-    wrecksHtml += `
-      <g transform="translate(${wx.toFixed(1)}, ${wy.toFixed(1)})" style="pointer-events:none" data-wreck-id="${esc(w.id)}" data-wreck-site="${w.site}">
-        <title>${siteLabel} (${w.countdown} round${w.countdown === 1 ? '' : 's'} left — connect a road, bridge, or port to claim)</title>
-        <g class="piece-zoom-scale">
-          ${spawnEffect}
-          <g class="${animClass}" style="${delayStyle}">
-            <g transform="scale(1.18)">${wreckMarkup(w.site, w.countdown)}</g>
-          </g>
-        </g>
-      </g>`;
-  }
-  if (wrecksHtml !== lastWrecksHtml) {
-    lastWrecksHtml = wrecksHtml;
-    layers.wrecksLayer.innerHTML = wrecksHtml;
-  }
-
-  // Pirates (T10): one ship per pirate on its sea tile with a strength badge.
-  const piratesHtml = renderPiratesMarkup(
-    pirates,
-    hexes,
-    isMyTurn && state.phase === 'MAIN' && me ? (me.pirateDrives ?? []) : [],
-    fishIds,
-    seaWreckHexIds
-  );
-  if (piratesHtml !== lastPiratesHtml) {
-    lastPiratesHtml = piratesHtml;
-    layers.piratesLayer.innerHTML = piratesHtml;
   }
 
   // BUG 5: on your main-phase turn with no build mode, every corner and edge where a piece may stand gets a hotspot that opens the build menu.

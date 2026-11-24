@@ -1,4 +1,4 @@
-// MODULE: ids and small maps shared inside the base pack | DEPENDS ON: none | USED BY: packs/base/actions/build, packs/base/actions/techActions, packs/base/building, packs/base/pieces, packs/base/placement, packs/base/ports, +12 more
+// MODULE: ids and small maps shared inside the base pack | DEPENDS ON: none | USED BY: packs/base/actions/build, packs/base/actions/techActions, packs/base/building, packs/base/pieces, packs/base/placement, packs/base/ports, +10 more
 export const ROAD = 'road';
 export const SETTLEMENT = 'settlement';
 export const CITY = 'city';

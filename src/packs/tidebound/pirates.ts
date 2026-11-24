@@ -1,790 +1,175 @@
-// MODULE: tidebound.pirates addon (T10a: pirate marker, max 2, ocean tiles only, random move each round, event card + passive spawn cadence; T10b: strength grows slowly with the round, `drive_off_pirate` needs played knights and a road/bridge/port touching the tile, loot grows with strength; T10c: a pirate robs 2 cards from every settlement/city in contact; T10d: flee mode (flee chance climbs after every rob, runs at least 2 tiles from the robbed city), avoids tiles within 2 of a city of a player with more knights than its strength; client view and minimal bot goal) | DEPENDS ON: packs/base/constants, packs/tidebound/bridgeConsts, packs/tidebound/fishing, packs/tidebound/ricketyBridges, packs/tidebound/tech, packs/tidebound/wrecks, +1 more | USED BY: packs/tidebound/addons.generated, packs/tidebound/index
-import {
-  addMarker,
-  addonOn,
-  appendPublicHistory,
-  bankGive,
-  BOT_GOALS,
-  createRng,
-  EVENT_CARDS,
-  getMarkers,
-  getPlayer,
-  hasTech,
-  hexDistance,
-  priceOf,
-  removeMarker,
-  rngInt,
-  rngNext,
-  VIEW_DATA
-} from '../../shared';
-import type {
-  ActionDef,
-  AddonDef,
-  BotGoalDef,
-  BotGoalItem,
-  Ctx,
-  EventCardDef,
-  GameState,
-  Id,
-  MarkerEntry,
-  PlayerState,
-  Registry,
-  RngState,
-  ViewDataDef
-} from '../../shared';
-import { CITY, ROAD, SETTLEMENT } from '../base/constants';
-import { BRIDGE } from './bridgeConsts';
-import { seaHexIdsAt } from './fishing';
-import { RICKETY } from './ricketyBridges';
-import { registerTideboundTechs, TECH_PIRATE_HUNTER, TECH_RICKETY_BRIDGES, techGate } from './tech';
-import {
-  WRECK_MAX_PLAYER_DIST,
-  edgesOfHex,
-  isWreckSeaHex,
-  minPlayerDistanceToHex,
-  playerTouchesWreck,
-  verticesOfHex
-} from './wrecks';
+// MODULE: tidebound.pirates addon (pirate raid event in the Event Deck, 2026-11-24 rework: every player at once compares their played knights with the pirates' strength; equal or more wins loot scaled by strength and round, fewer loses 2 random cards; Pirate hunter +2 knights and +1 loot; no pirate pieces on the board any more, old ones are cleared; bots want knights before a raid) | DEPENDS ON: packs/tidebound/fishing, packs/tidebound/seaEvents, packs/tidebound/tech, shared/index | USED BY: packs/tidebound/addons.generated, packs/tidebound/index
+import { addonOn, BOT_GOALS, EVENT_CARDS, eventTimeline, getMarkers, getPlayer, getWildTokens, hasTech, removeMarker, rngNext, takeWildToken } from '../../shared';
+import type { AddonDef, BotGoalDef, Ctx, EventCardDef, GameState, Id, Resources, RngState } from '../../shared';
+import { FISH } from './fishing';
+import { cardList, eventStream, giveRandomResources } from './seaEvents';
+import { registerTideboundTechs, TECH_PIRATE_HUNTER } from './tech';
 
-export { TECH_PIRATE_HUNTER };
-
-/** Marker kind stored in `g.ext.core.markers` for pirates. Pirates have no countdown: they stay until driven off. */
-export const PIRATE_MARKER_KIND = 'pirate';
-/** Event card id registered in `EVENT_CARDS` for pirate raids. */
+/** Event card id in the Event Deck. */
 export const PIRATE_EVENT_ID = 'tidebound.pirate_raid';
-/** Action type: a player with enough played knights drives a pirate off its tile and takes the loot. */
-export const DRIVE_OFF_PIRATE = 'drive_off_pirate';
-/** Pirates on the board at once, across the whole table (T10a). */
-export const PIRATE_MAX = 2;
-/** Passive spawn schedule when the optional Event Deck setting (`rules.eventsOn`) is off: first pirate on this round, then every `PIRATE_CADENCE_ROUNDS`. */
+/** Copies of the pirate card in the deck. */
+export const PIRATE_COPIES = 2;
+/** Marker kind of the old pirate pieces (cleared from older saves). */
+export const PIRATE_MARKER_KIND = 'pirate';
+/** Strength = played knights needed: `PIRATE_BASE_STRENGTH`, +1 every `PIRATE_GROWTH_ROUNDS` rounds after `PIRATE_FIRST_ROUND`, at most `PIRATE_MAX_STRENGTH`. */
 export const PIRATE_FIRST_ROUND = 4;
-export const PIRATE_CADENCE_ROUNDS = 4;
-/** Strength (= played knights needed) of a new pirate, one more every `PIRATE_GROWTH_ROUNDS` rounds after `PIRATE_FIRST_ROUND`, capped at `PIRATE_MAX_STRENGTH` (T10b). Tune in T14. */
+export const PIRATE_GROWTH_ROUNDS = 10;
 export const PIRATE_BASE_STRENGTH = 1;
-export const PIRATE_GROWTH_ROUNDS = 6;
 export const PIRATE_MAX_STRENGTH = 5;
-/** Loot cards = `PIRATE_LOOT_BASE + strength`, one resource type, paid from the bank (sea wreck pays 3 to 5 before scaling). Loot and knights needed scale by the same step. */
-export const PIRATE_LOOT_BASE = 4;
-/** Expansion tier 3b tech (`TECH_PIRATE_HUNTER`, T11d): 2 fewer knights needed (never below 1) and +50% loot. */
-export const PIRATE_CREW_KNIGHT_DISCOUNT = 2;
-export const PIRATE_CREW_LOOT_MULT = 1.5;
-/** Cards a pirate takes from each settlement or city in contact with it: 2x the 1 card of a robber steal (T10c). */
+/** Cards a player who loses to the pirates gives up (resources go back to the bank, fish are gone). */
 export const PIRATE_ROB_CARDS = 2;
-/** A pirate will not enter a tile this close (in tiles, counted from the tiles at the city's corner) to a settlement/city of a player with MORE played knights than its strength (T10d). */
-export const PIRATE_AVOID_RADIUS = 2;
-/** Flee mode runs until the pirate is at least this many tiles from the city it robbed, up to `PIRATE_FLEE_STEPS` tiles per round (T10d). */
-export const PIRATE_FLEE_DISTANCE = 2;
-export const PIRATE_FLEE_STEPS = 2;
-/** Chance to enter flee mode on the round after a rob. Starts at the base, rises by `PIRATE_FLEE_ROB_STEP` after EVERY rob, plus up to `PIRATE_FLEE_CLOSE_STEP` more when the victim's knights are close to the pirate's strength. */
-export const PIRATE_FLEE_BASE = 0.1;
-export const PIRATE_FLEE_ROB_STEP = 0.3;
-export const PIRATE_FLEE_CLOSE_STEP = 0.3;
-export const PIRATE_FLEE_MAX = 0.95;
+/** Loot for a win: `2 + strength + floor(round / PIRATE_LOOT_ROUND_STEP)`, at most `PIRATE_LOOT_MAX` (about 3 early, 8 by round 40, when a roll pays about 7). */
+export const PIRATE_LOOT_ROUND_STEP = 15;
+export const PIRATE_LOOT_MAX = 8;
+/** Pirate hunter: counts as this many extra knights against pirates, and adds this much loot (it may go past the cap). */
+export const PIRATE_HUNTER_KNIGHTS = 2;
+export const PIRATE_HUNTER_LOOT = 1;
+const PIRATE_SALT = 0x50495241; // 'PIRA'
 
-/** Mixed into the world seed to get the pirate RNG stream (wrecks, tides and the event deck use other salts). */
-const PIRATE_RNG_SALT = 0x50495254; // 'PIRT'
-/** Piece types a pirate robs. A castle (Bulwark) is deliberately not in this list. */
-const ROBBABLE_PIECES: string[] = [SETTLEMENT, CITY];
-/** Neighbour of a hex across its edge i. Same table as `shared/topology.ts`. */
-const EDGE_DIR: [number, number][] = [[1, 0], [0, 1], [-1, 1], [-1, 0], [0, -1], [1, -1]];
-
-export type PirateMode = 'roam' | 'flee';
-
-export interface PiratePayload {
-  strength: number;
-  spawnRound: number;
-  mode: PirateMode;
-  /** Chance to enter flee mode on the next round decision (only used while the pirate sits next to something it robbed). */
-  fleeChance: number;
-  /** Vertex of the city a fleeing pirate is running from. */
-  fleeFrom: number | null;
-  /** Last vertex robbed (flee target). */
-  lastVertex: number | null;
-  /** True when the pirate robbed this stay, so it decides each round between fleeing and robbing again. */
-  lastRobbed: boolean;
-  /** Rob count over the pirate's life. */
-  robs: number;
-}
-
-export interface PirateClientItem {
-  id: string;
-  hexId: number;
-  strength: number;
-  mode: PirateMode;
-}
-
-// ---- T10a: derived RNG stream (zero `g.rng` draws) --------------------------------------------------------------
-
-/** Derives an independent RNG stream from `seed`, so pirates never advance `g.rng`. */
-export function derivePirateRng(seed: number): RngState {
-  return createRng(((Number(seed) || 1) ^ PIRATE_RNG_SALT) >>> 0);
-}
-
-/** Returns (and lazily creates in `g.ext.tidebound.pirates.rng`) the pirate RNG state. */
-export function ensurePirateRng(g: GameState): RngState {
-  if (!g.ext) g.ext = {};
-  if (!g.ext.tidebound) g.ext.tidebound = {};
-  const cur = g.ext.tidebound.pirates;
-  if (!cur || !cur.rng || typeof cur.rng.s !== 'number') {
-    g.ext.tidebound.pirates = { rng: derivePirateRng(g.seed) };
-  }
-  return g.ext.tidebound.pirates.rng as RngState;
-}
-
-// ---- Markers and payloads ---------------------------------------------------------------------------------------
-
-/** All pirates on the board, in the order they arrived. */
-export function activePirates(g: GameState): MarkerEntry[] {
-  return getMarkers(g, { kind: PIRATE_MARKER_KIND, target: 'hex' });
-}
-
-/** The pirate on `hexId`, if any. */
-export function pirateAt(g: GameState, hexId: number): MarkerEntry | undefined {
-  return activePirates(g).find(m => Number(m.loc) === hexId);
-}
-
-function freshPayload(strength: number, round: number): PiratePayload {
-  return {
-    strength,
-    spawnRound: round,
-    mode: 'roam',
-    fleeChance: PIRATE_FLEE_BASE,
-    fleeFrom: null,
-    lastVertex: null,
-    lastRobbed: false,
-    robs: 0
-  };
-}
-
-/** The pirate's payload with defaults for any key an old or hand-made marker misses. A copy: nothing is written back (use for views and checks). */
-function readPayload(m: MarkerEntry, g?: GameState): PiratePayload {
-  const base = freshPayload(pirateStrengthAt(g?.round || 0), g?.round || 0);
-  return Object.assign(base, m.payload || {}) as PiratePayload;
-}
-
-/** The pirate's payload, completed with defaults IN PLACE (the same object every call), so the caller can change it and others see the change. */
-function payloadOf(m: MarkerEntry, g?: GameState): PiratePayload {
-  if (!m.payload || typeof m.payload !== 'object') m.payload = {};
-  const base = freshPayload(pirateStrengthAt(g?.round || 0), g?.round || 0) as unknown as Record<string, any>;
-  for (const k of Object.keys(base)) {
-    if (m.payload[k] === undefined) m.payload[k] = base[k];
-  }
-  return m.payload as unknown as PiratePayload;
-}
-
-/** Strength of a pirate in `round`: starts at `PIRATE_BASE_STRENGTH`, +1 every `PIRATE_GROWTH_ROUNDS` rounds after `PIRATE_FIRST_ROUND`, capped. */
+/** Strength of a pirate raid in `round`. */
 export function pirateStrengthAt(round: number): number {
   const r = Math.max(0, Math.floor(Number(round) || 0));
   const growth = Math.floor(Math.max(0, r - PIRATE_FIRST_ROUND) / PIRATE_GROWTH_ROUNDS);
   return Math.min(PIRATE_MAX_STRENGTH, PIRATE_BASE_STRENGTH + growth);
 }
 
-/** Knights `pid` has played (the same number Largest Army counts). Public, so bots can read it too. */
+/** Cards a player who beats a raid of `strength` in `round` takes from the bank (`hunter`: with Pirate hunter). */
+export function pirateLoot(strength: number, round: number, hunter = false): number {
+  const s = Math.max(1, Math.floor(Number(strength) || 1));
+  const base = Math.min(PIRATE_LOOT_MAX, 2 + s + Math.floor(Math.max(0, Number(round) || 0) / PIRATE_LOOT_ROUND_STEP));
+  return base + (hunter ? PIRATE_HUNTER_LOOT : 0);
+}
+
+/** Knights `pid` has played (the same number Largest Army counts). */
 export function pirateKnights(g: GameState, pid: Id): number {
   return Math.max(0, Math.floor(Number(getPlayer(g, pid)?.stats?.knightsPlayed) || 0));
 }
 
-/** Played knights `pid` needs to drive off a pirate of `strength`: the strength itself, 2 fewer with Pirate hunter (never below 1). */
-export function pirateKnightsNeeded(g: GameState, pid: Id, strength: number): number {
-  const s = Math.max(1, Math.floor(Number(strength) || 1));
-  return hasTech(g, pid, TECH_PIRATE_HUNTER) ? Math.max(1, s - PIRATE_CREW_KNIGHT_DISCOUNT) : s;
+/** What `pid` brings against pirates: played knights, +2 with Pirate hunter. */
+export function pirateDefence(g: GameState, pid: Id): number {
+  return pirateKnights(g, pid) + (hasTech(g, pid, TECH_PIRATE_HUNTER) ? PIRATE_HUNTER_KNIGHTS : 0);
 }
 
-/** Cards a pirate of `strength` pays out: `PIRATE_LOOT_BASE + strength`, +50% with Pirate hunter. */
-export function pirateLootCards(strength: number, hasCrew = false): number {
-  const s = Math.max(1, Math.floor(Number(strength) || 1));
-  const base = PIRATE_LOOT_BASE + s;
-  return Math.max(1, Math.round(base * (hasCrew ? PIRATE_CREW_LOOT_MULT : 1)));
+/** One player's result of a raid. */
+export interface PirateResult {
+  playerId: Id;
+  defence: number;
+  strength: number;
+  won: boolean;
+  /** Loot taken from the bank (a win). */
+  got: Resources;
+  /** Resources taken (a loss; back to the bank) and fish taken (gone). */
+  lost: Resources;
+  lostFish: number;
 }
 
-// ---- Geometry ---------------------------------------------------------------------------------------------------
-
-const axialIndexCache = new WeakMap<GameState['board'], Map<string, number>>();
-
-function hexIdAtAxial(g: GameState, q: number, r: number): number | undefined {
-  let index = axialIndexCache.get(g.board);
-  if (!index || index.size !== g.board.hexes.length) {
-    index = new Map();
-    for (const h of g.board.hexes) index.set(`${h.q},${h.r}`, h.id);
-    axialIndexCache.set(g.board, index);
+/** Takes up to `n` random cards from `pid`'s hand (resources and fish alike). Resources go back to the bank; fish are removed. */
+function robRandomCards(ctx: Ctx, pid: Id, n: number, rng: RngState): { lost: Resources; lostFish: number } {
+  const { g } = ctx;
+  const p = getPlayer(g, pid)!;
+  const lost: Resources = {};
+  let lostFish = 0;
+  for (let i = 0; i < n; i++) {
+    const pool: string[] = [];
+    for (const [r, c] of Object.entries(p.resources)) for (let k = 0; k < (c || 0); k++) pool.push(r);
+    for (let k = 0; k < getWildTokens(g, pid, FISH); k++) pool.push(FISH);
+    if (pool.length === 0) break;
+    const pick = pool[Math.floor(rngNext(rng) * pool.length)];
+    if (pick === FISH) {
+      lostFish += takeWildToken(g, pid, FISH, 1);
+    } else {
+      p.resources[pick] -= 1;
+      g.bank[pick] = (g.bank[pick] || 0) + 1;
+      lost[pick] = (lost[pick] || 0) + 1;
+    }
   }
-  return index.get(`${q},${r}`);
-}
-
-/** Sea tiles (ids, ascending) next to `hexId`. Hidden (fog) tiles never count. */
-export function seaNeighborIds(g: GameState, reg: Registry, hexId: number): number[] {
-  const h = g.board.hexes[hexId];
-  if (!h) return [];
-  const out: number[] = [];
-  for (const [dq, dr] of EDGE_DIR) {
-    const id = hexIdAtAxial(g, h.q + dq, h.r + dr);
-    if (id !== undefined && isWreckSeaHex(reg, g.board.hexes[id])) out.push(id);
-  }
-  return out.sort((a, b) => a - b);
-}
-
-/** The settlements and cities touching the corners of `hexId`: what a pirate on that tile robs. Ascending vertex ids. */
-export function pirateContactVertices(g: GameState, reg: Registry, hexId: number): number[] {
-  return verticesOfHex(g, reg, hexId)
-    .filter(vId => {
-      const pc = g.board.vertices[vId]?.piece;
-      return !!pc && ROBBABLE_PIECES.includes(pc.type);
-    })
-    .sort((a, b) => a - b);
-}
-
-/** Every tile that touches vertex `vId` (land tiles plus the sea tiles at its corner). */
-function cornerHexIds(g: GameState, reg: Registry, vId: number): number[] {
-  const v = g.board.vertices[vId];
-  if (!v) return [];
-  return [...new Set<number>([...v.hexIds, ...seaHexIdsAt(g, reg, vId)])];
+  return { lost, lostFish };
 }
 
 /**
- * Distance in tiles from `hexId` to the nearest tile that touches vertex `vId`. 0 = the hex touches that corner (contact).
- * `Infinity` when either id is unknown.
+ * Resolves a pirate raid for the whole table, in seat order: a player whose played knights (+2 with Pirate hunter) reach the strength wins loot
+ * from the bank; one who falls short loses `PIRATE_ROB_CARDS` random cards. Seeded by the world seed and the round, never `g.rng`.
  */
-export function hexVertexDistance(g: GameState, reg: Registry, hexId: number, vId: number): number {
-  const h = g.board.hexes[hexId];
-  if (!h || !g.board.vertices[vId]) return Infinity;
-  if (verticesOfHex(g, reg, hexId).includes(vId)) return 0;
-  let best = Infinity;
-  for (const cId of cornerHexIds(g, reg, vId)) {
-    const c = g.board.hexes[cId];
-    if (c) best = Math.min(best, hexDistance(h, c));
-  }
-  return best;
-}
-
-/** Settlements and cities (vertex ids) of players who have MORE played knights than `strength`. A pirate keeps clear of these (T10d). */
-export function guardedVertices(g: GameState, strength: number): number[] {
-  const out: number[] = [];
-  for (const v of g.board.vertices) {
-    const pc = v.piece;
-    if (!pc || !ROBBABLE_PIECES.includes(pc.type)) continue;
-    if (pirateKnights(g, pc.owner) > strength) out.push(v.id);
-  }
-  return out;
-}
-
-/** Is `hexId` within `PIRATE_AVOID_RADIUS` tiles of a guarded city? */
-export function isGuardedHex(g: GameState, reg: Registry, hexId: number, guarded: number[]): boolean {
-  return guarded.some(vId => hexVertexDistance(g, reg, hexId, vId) <= PIRATE_AVOID_RADIUS);
-}
-
-/** Sea tiles a pirate could step to from its tile: next door, free of other pirates, and not near a guarded city. */
-function stepOptions(g: GameState, reg: Registry, m: MarkerEntry, strength: number): number[] {
-  const taken = new Set<number>(activePirates(g).filter(o => o.id !== m.id).map(o => Number(o.loc)));
-  const guarded = guardedVertices(g, strength);
-  return seaNeighborIds(g, reg, Number(m.loc)).filter(id => !taken.has(id) && !isGuardedHex(g, reg, id, guarded));
-}
-
-// ---- T10a: spawn ------------------------------------------------------------------------------------------------
-
-/** Sea tiles a new pirate may appear on: ocean only, free, within 4 tiles of a player (like wrecks) and not near a guarded city. */
-export function pirateSpawnCandidates(g: GameState, reg: Registry): number[] {
-  const strength = pirateStrengthAt(g.round || 0);
-  const guarded = guardedVertices(g, strength);
-  const taken = new Set<number>(activePirates(g).map(m => Number(m.loc)));
-  const out: number[] = [];
-  for (const h of g.board.hexes) {
-    if (taken.has(h.id) || !isWreckSeaHex(reg, h)) continue;
-    if (minPlayerDistanceToHex(g, reg, h.id) > WRECK_MAX_PLAYER_DIST) continue;
-    if (isGuardedHex(g, reg, h.id, guarded)) continue;
-    out.push(h.id);
-  }
-  return out;
-}
-
-/**
- * Spawns a pirate on a random legal sea tile (from the pirate RNG stream), or on `opts.hexId` when it is legal.
- * Returns null when pirates are off, `PIRATE_MAX` are already out, or no tile fits. A new pirate does not rob until the next round starts.
- */
-export function spawnPirate(ctx: Ctx, opts?: { hexId?: number }): MarkerEntry | null {
-  const { g, reg } = ctx;
-  if (!addonOn(reg, 'tidebound.pirates')) return null;
-  if (activePirates(g).length >= PIRATE_MAX) return null;
-
-  let hexId: number;
-  if (opts?.hexId !== undefined) {
-    const h = g.board.hexes[opts.hexId];
-    if (!h || !isWreckSeaHex(reg, h) || pirateAt(g, opts.hexId)) return null;
-    hexId = opts.hexId;
-  } else {
-    const cands = pirateSpawnCandidates(g, reg);
-    if (cands.length === 0) return null;
-    // The RNG state is made only now that a pirate will really appear, so a game with no legal tile stores nothing.
-    hexId = cands[rngInt(ensurePirateRng(g), cands.length)];
-  }
-
+export function resolvePirateRaid(ctx: Ctx): PirateResult[] {
+  const { g } = ctx;
   const round = g.round || 0;
   const strength = pirateStrengthAt(round);
-  const marker = addMarker(g, {
-    kind: PIRATE_MARKER_KIND,
-    target: 'hex',
-    loc: hexId,
-    ownerId: null,
-    public: true,
-    payload: freshPayload(strength, round) as unknown as Record<string, any>
-  });
-  ctx.emit('pirateSpawned', { id: marker.id, hexId, strength });
-  appendPublicHistory(g, {
-    type: 'pirateSpawned',
-    actorId: null,
-    targetId: null,
-    summary: `A pirate ship (strength ${strength}) appeared on tile #${hexId}`,
-    data: { id: marker.id, hexId, strength }
-  });
-  ctx.log(`🏴‍☠️ A pirate ship appeared on tile #${hexId} (strength ${strength}, takes ${strength} played knight${strength === 1 ? '' : 's'} to drive off)!`, null);
-  return marker;
+  const rng = eventStream(g.seed, PIRATE_SALT, round);
+  const results: PirateResult[] = [];
+  for (const p of g.players) {
+    const defence = pirateDefence(g, p.id);
+    if (defence >= strength) {
+      const got = giveRandomResources(ctx, p.id, pirateLoot(strength, round, hasTech(g, p.id, TECH_PIRATE_HUNTER)), rng);
+      p.stats.piratesBeaten = (p.stats.piratesBeaten || 0) + 1;
+      results.push({ playerId: p.id, defence, strength, won: true, got, lost: {}, lostFish: 0 });
+      ctx.log(`⚔️ ${p.avatar} ${p.name} (${defence} knights vs strength ${strength}) beat the pirates and took ${cardList(got)}`, p.color);
+    } else {
+      const { lost, lostFish } = robRandomCards(ctx, p.id, PIRATE_ROB_CARDS, rng);
+      p.stats.piratesLost = (p.stats.piratesLost || 0) + 1;
+      results.push({ playerId: p.id, defence, strength, won: false, got: {}, lost, lostFish });
+      const what = cardList(lost, lostFish ? [`${lostFish} fish`] : []);
+      ctx.log(`🏴‍☠️ ${p.avatar} ${p.name} (${defence} knights vs strength ${strength}) lost ${what} to the pirates`, p.color);
+    }
+  }
+  ctx.emit('pirateEvent', { round, strength, results });
+  return results;
 }
 
-/** Event card registered in `EVENT_CARDS` for `tidebound.pirates`. */
+/** The pirate raid card of the Event Deck. */
 export const pirateRaidCard: EventCardDef = {
   id: PIRATE_EVENT_ID,
-  title: 'Pirate Raid',
-  description: 'A pirate ship appears on the ocean (at most 2 at once). It raids coastal settlements and cities until enough knights drive it off.',
-  pack: 'tidebound.pirates',
-  copies: 1,
-  apply(ctx: Ctx) {
-    spawnPirate(ctx);
+  title: 'Pirate raid',
+  description: 'Pirates raid every coast. Each player with as many played knights as the pirates\' strength (or more) takes loot; everyone else loses 2 random cards.',
+  pack: 'tidebound',
+  copies: PIRATE_COPIES,
+  icon: 'pirate',
+  detail: (_g, round) => `Strength ${pirateStrengthAt(round)}`,
+  apply(ctx) {
+    if (!addonOn(ctx.reg, 'tidebound.pirates')) return;
+    resolvePirateRaid(ctx);
   }
 };
 
-// ---- T10c: robbing ----------------------------------------------------------------------------------------------
-
-/** Rob one settlement or city: `PIRATE_ROB_CARDS` random resource cards go back to the bank. Returns the cards taken (0 when the hand was empty). */
-function robVertex(ctx: Ctx, m: MarkerEntry, vertexId: number): number {
-  const { g, reg } = ctx;
-  const pc = g.board.vertices[vertexId]?.piece;
-  const victim = pc ? getPlayer(g, pc.owner) : undefined;
-  if (!pc || !victim) return 0;
-  const pl = payloadOf(m, g);
-  const rng = ensurePirateRng(g);
-
-  let taken = 0;
-  for (let n = 0; n < PIRATE_ROB_CARDS; n++) {
-    const pool: string[] = [];
-    for (const r of reg.resources.keys()) {
-      for (let i = 0; i < (victim.resources[r] || 0); i++) pool.push(r);
-    }
-    if (pool.length === 0) break;
-    const r = pool[rngInt(rng, pool.length)];
-    victim.resources[r] -= 1;
-    g.bank[r] = (g.bank[r] || 0) + 1;
-    // kind 'pirate' (not 'steal'): the turn history and the bots' grudge notes read 'steal' as a player taking a card, and here the bank gets it.
-    ctx.emit('transferred', { from: victim.id, to: 'bank', resource: r, amount: 1, kind: 'pirate', secret: true });
-    taken++;
-  }
-
-  victim.stats.piratesRobbedCards = (victim.stats.piratesRobbedCards || 0) + taken;
-  victim.stats.piratesRobbedTimes = (victim.stats.piratesRobbedTimes || 0) + 1;
-  pl.robs += 1;
-  pl.lastRobbed = true;
-  pl.lastVertex = vertexId;
-
-  // After EVERY rob the chance to run rises sharply, and more when the victim's knights are close to the pirate's strength (T10d).
-  const closeness = Math.min(1, pirateKnights(g, victim.id) / Math.max(1, pl.strength));
-  pl.fleeChance = Math.min(PIRATE_FLEE_MAX, pl.fleeChance + PIRATE_FLEE_ROB_STEP + PIRATE_FLEE_CLOSE_STEP * closeness);
-
-  const label = pc.type === CITY ? 'city' : 'settlement';
-  ctx.emit('pirateRobbed', { id: m.id, hexId: Number(m.loc), vertexId, victimId: victim.id, amount: taken });
-  appendPublicHistory(g, {
-    type: 'pirateRobbed',
-    actorId: null,
-    targetId: victim.id,
-    summary: taken > 0 ? `Pirates robbed ${victim.name}'s ${label} of ${taken} card${taken === 1 ? '' : 's'}` : `Pirates raided ${victim.name}'s ${label}, but found no cards`,
-    data: { id: m.id, hexId: Number(m.loc), vertexId, amount: taken }
-  });
-  ctx.log(
-    taken > 0
-      ? `🏴‍☠️ Pirates raided ${victim.avatar} ${victim.name}'s ${label} and took ${taken} card${taken === 1 ? '' : 's'}!`
-      : `🏴‍☠️ Pirates raided ${victim.avatar} ${victim.name}'s ${label}, but they had no cards!`,
-    victim.color
-  );
-  return taken;
+/** Older saves had pirate pieces on the board: removes their markers and tile data. Returns how many were cleared. */
+export function clearOldPirates(g: GameState): number {
+  let n = 0;
+  for (const m of getMarkers(g, { kind: PIRATE_MARKER_KIND })) if (removeMarker(g, m.id)) n++;
+  for (const h of g.board.hexes) if (h.ext?.pirate) { delete h.ext.pirate; n++; }
+  return n;
 }
 
-/** Robs every settlement and city in `vertexIds` (ascending). */
-function robContact(ctx: Ctx, m: MarkerEntry, vertexIds: number[]): number {
-  let total = 0;
-  for (const vId of vertexIds) total += robVertex(ctx, m, vId);
-  return total;
+/** The next pirate raid on the timeline, if any: its round and strength. */
+export function nextPirateRaid(g: GameState, reg: Ctx['reg']): { round: number; strength: number } | null {
+  const item = eventTimeline(g, reg).find(e => e.cardId === PIRATE_EVENT_ID);
+  return item ? { round: item.round, strength: pirateStrengthAt(item.round) } : null;
 }
 
-// ---- T10a & T10d: movement and flee mode ------------------------------------------------------------------------
-
-function movePirate(ctx: Ctx, m: MarkerEntry, toHexId: number, fleeing: boolean): void {
-  const from = Number(m.loc);
-  m.loc = toHexId;
-  ctx.emit('pirateMoved', { id: m.id, from, to: toHexId, fleeing });
-}
-
-/** Random step to a free, unguarded neighbouring sea tile (the pirate stays put when there is none). */
-function moveRoam(ctx: Ctx, m: MarkerEntry, rng: RngState): void {
-  const pl = payloadOf(m, ctx.g);
-  const opts = stepOptions(ctx.g, ctx.reg, m, pl.strength);
-  if (opts.length === 0) return;
-  movePirate(ctx, m, opts[rngInt(rng, opts.length)], false);
-}
-
-function endFlee(m: MarkerEntry, g: GameState): void {
-  const pl = payloadOf(m, g);
-  pl.mode = 'roam';
-  pl.lastRobbed = false;
-  pl.fleeChance = PIRATE_FLEE_BASE;
-  pl.fleeFrom = null;
-}
-
-/** Up to `PIRATE_FLEE_STEPS` steps, each to the neighbour farthest from the robbed city. Flee ends at `PIRATE_FLEE_DISTANCE` tiles, or when the pirate cannot get any farther. */
-function fleeStep(ctx: Ctx, m: MarkerEntry, rng: RngState): void {
-  const { g, reg } = ctx;
-  const pl = payloadOf(m, g);
-  const from = pl.fleeFrom;
-  if (from === null || from === undefined) {
-    endFlee(m, g);
-    return;
-  }
-  let moved = 0;
-  for (let i = 0; i < PIRATE_FLEE_STEPS; i++) {
-    const dCur = hexVertexDistance(g, reg, Number(m.loc), from);
-    if (dCur >= PIRATE_FLEE_DISTANCE) break;
-    const scored = stepOptions(g, reg, m, pl.strength)
-      .map(id => ({ id, d: hexVertexDistance(g, reg, id, from) }))
-      .filter(o => o.d > dCur);
-    if (scored.length === 0) break;
-    const best = Math.max(...scored.map(o => o.d));
-    const pool = scored.filter(o => o.d === best);
-    movePirate(ctx, m, pool[rngInt(rng, pool.length)].id, true);
-    moved++;
-  }
-  const dEnd = hexVertexDistance(g, reg, Number(m.loc), from);
-  if (dEnd >= PIRATE_FLEE_DISTANCE || moved === 0) endFlee(m, g);
-}
-
-function startFlee(ctx: Ctx, m: MarkerEntry, rng: RngState): void {
-  const pl = payloadOf(m, ctx.g);
-  pl.mode = 'flee';
-  pl.fleeFrom = pl.lastVertex;
-  ctx.emit('pirateFleeing', { id: m.id, hexId: Number(m.loc), from: pl.fleeFrom });
-  ctx.log('🏴‍☠️ The pirate ship raises its sails and runs for open water!', null);
-  fleeStep(ctx, m, rng);
-}
-
-/**
- * Round start for every pirate, in the order they arrived:
- *  1. Strength follows the round (`pirateStrengthAt`).
- *  2. Fleeing: run on (no robbing while it runs).
- *  3. Just robbed and still in contact: roll `fleeChance`; on success start fleeing, otherwise stick around and rob again.
- *  4. Otherwise take one random step (never next to a guarded city), then rob whatever it now touches.
- * All draws come from the pirate RNG stream.
- */
-export function pirateRoundStep(ctx: Ctx): void {
-  const { g, reg } = ctx;
-  if (!addonOn(reg, 'tidebound.pirates')) return;
-  const pirates = activePirates(g);
-  if (pirates.length === 0) return;
-  const rng = ensurePirateRng(g);
-  const strength = pirateStrengthAt(g.round || 0);
-
-  for (const m of pirates) {
-    const pl = payloadOf(m, g);
-    pl.strength = strength;
-
-    if (pl.mode === 'flee') {
-      fleeStep(ctx, m, rng);
-      continue;
-    }
-
-    const here = pirateContactVertices(g, reg, Number(m.loc));
-    if (pl.lastRobbed && here.length > 0) {
-      if (rngNext(rng) < pl.fleeChance) {
-        startFlee(ctx, m, rng);
-      } else {
-        robContact(ctx, m, here);
-      }
-      continue;
-    }
-
-    pl.lastRobbed = false;
-    moveRoam(ctx, m, rng);
-    const contact = pirateContactVertices(g, reg, Number(m.loc));
-    if (contact.length > 0) robContact(ctx, m, contact);
-    else pl.fleeChance = PIRATE_FLEE_BASE;
-  }
-}
-
-/** Passive spawn when the Event Deck is off: round `PIRATE_FIRST_ROUND`, then every `PIRATE_CADENCE_ROUNDS`. */
-export function passivePirateSpawn(ctx: Ctx): void {
-  const { g, reg } = ctx;
-  if (!addonOn(reg, 'tidebound.pirates')) return;
-  if (g.rules?.eventsOn) return;
-  const r = g.round || 0;
-  if (r >= PIRATE_FIRST_ROUND && (r - PIRATE_FIRST_ROUND) % PIRATE_CADENCE_ROUNDS === 0) {
-    spawnPirate(ctx);
-  }
-}
-
-// ---- T10b: drive off a pirate -----------------------------------------------------------------------------------
-
-/** Why `pid` cannot drive off the pirate on `hexId` right now, or `null` when they can. */
-export function canDrivePirate(g: GameState, reg: Registry, pid: Id, hexId: number): string | null {
-  if (!addonOn(reg, 'tidebound.pirates')) return 'Pirates are not in this game';
-  if (!getPlayer(g, pid)) return 'Unknown player';
-  if (!Number.isInteger(hexId)) return 'Choose a pirate';
-  const m = pirateAt(g, hexId);
-  if (!m) return 'There is no pirate on that tile';
-  const need = pirateKnightsNeeded(g, pid, readPayload(m, g).strength);
-  const have = pirateKnights(g, pid);
-  if (have < need) return `Driving off this pirate takes ${need} played knight${need === 1 ? '' : 's'} (you have ${have})`;
-  if (!playerTouchesWreck(g, reg, pid, hexId)) return "Build a road, bridge or port that touches the pirate's tile first";
-  return null;
-}
-
-/** Tiles of the pirates `pid` could drive off right now. */
-export function drivablePirateHexIds(g: GameState, reg: Registry, pid: Id): number[] {
-  return activePirates(g)
-    .map(m => Number(m.loc))
-    .filter(hexId => canDrivePirate(g, reg, pid, hexId) === null)
-    .sort((a, b) => a - b);
-}
-
-export const driveOffPirateAction: ActionDef = {
-  type: DRIVE_OFF_PIRATE,
-  validate(ctx: Ctx, pid: Id, payload: any): string | null {
-    return canDrivePirate(ctx.g, ctx.reg, pid, Number(payload?.hexId));
-  },
-  apply(ctx: Ctx, pid: Id, payload: any): void {
-    const { g, reg } = ctx;
-    const p = getPlayer(g, pid)!;
-    const hexId = Number(payload.hexId);
-    const m = pirateAt(g, hexId)!;
-    const pl = payloadOf(m, g);
-    const rng = ensurePirateRng(g);
-
-    // One resource type (like a wreck), picked from what the bank still has; the bank pays what it can.
-    const stocked = [...reg.resources.keys()].filter(r => (g.bank[r] || 0) > 0);
-    const kinds = stocked.length > 0 ? stocked : [...reg.resources.keys()];
-    const resource = kinds[rngInt(rng, Math.max(1, kinds.length))] || 'wood';
-    const wanted = pirateLootCards(pl.strength, hasTech(g, pid, TECH_PIRATE_HUNTER));
-    const paid = bankGive(ctx, pid, resource, wanted);
-
-    removeMarker(g, m.id);
-    p.stats.piratesDriven = (p.stats.piratesDriven || 0) + 1;
-    ctx.emit('pirateDriven', { id: m.id, hexId, playerId: pid, strength: pl.strength, resource, wanted, amount: paid });
-    appendPublicHistory(g, {
-      type: 'pirateDriven',
-      actorId: pid,
-      targetId: null,
-      summary: `${p.name} drove off a pirate ship (strength ${pl.strength}) and took ${paid} ${resource}`,
-      data: { hexId, strength: pl.strength, resource, amount: paid }
-    });
-    ctx.log(
-      `⚔️ ${p.avatar} ${p.name} drove off the pirate ship (strength ${pl.strength}) and took ${paid} ${resource}!`,
-      p.color
-    );
-  },
-  legal(ctx: Ctx, pid: Id): { hexId: number }[] {
-    return drivablePirateHexIds(ctx.g, ctx.reg, pid).map(hexId => ({ hexId }));
-  }
-};
-
-// ---- Client views -----------------------------------------------------------------------------------------------
-
-/** Public list of pirates for the board (`null` when Pirates is off or none are out). Nothing here is secret: strength and tile are public. */
-export function pirateClientView(g: GameState, reg: Registry): PirateClientItem[] | null {
-  if (!addonOn(reg, 'tidebound.pirates')) return null;
-  const list = activePirates(g);
-  if (list.length === 0) return null;
-  return list.map(m => {
-    const pl = readPayload(m, g);
-    return { id: m.id, hexId: Number(m.loc), strength: pl.strength, mode: pl.mode };
-  });
-}
-
-/**
- * VIEW_DATA entry (R7a.5, group 4): the public `pirates` field of the client state. Registered inside the pirates addon, so it exists only while
- * Pirates is on. While it is off the pack's always-on `tidebound.view_defaults` entry supplies `pirates: null` (a public field is null when off).
- */
-export const pirateViewData: ViewDataDef = {
-  id: 'tidebound.pirates.view',
-  shared: (g: GameState, reg: Registry) => ({ pirates: pirateClientView(g, reg) })
-};
-
-/**
- * Tiles of the pirates `p` can drive off now, for the player's own view. `undefined` when the action is not in the game or it is not
- * `p`'s main-phase turn; `[]` when nothing can be driven off.
- */
-export function pirateDriveView(g: GameState, reg: Registry, p: PlayerState): number[] | undefined {
-  if (!reg.actions.has(DRIVE_OFF_PIRATE)) return undefined;
-  if (g.phase !== 'main' || g.players[g.turn]?.id !== p.id) return undefined;
-  return drivablePirateHexIds(g, reg, p.id);
-}
-
-/**
- * VIEW_DATA entry (R7a.5, group 9): `pirateDrives`, the tiles of the pirates you could drive off right now (yourself only). `pirateDriveView` returns
- * `undefined` unless the action is in the game and it is your main-phase turn, so the field is absent otherwise, as before.
- */
-export const pirateDriveViewData: ViewDataDef = {
-  id: 'tidebound.pirates.drive_view',
-  player: (g, reg, p, who) => ({ pirateDrives: who.self ? pirateDriveView(g, reg, p) : undefined })
-};
-
-// ---- T13d: Pirate avoidance & hunting (`BOT_GOALS`) -------------------------------------------------------------
-
-/**
- * T13d:
- * - `vertexDelta`: Unprotected bots (`knightsPlayed < needed` and `knightsPlayed <= strength`) avoid settling on or right beside an active pirate's
- *   ocean tile, while armed bots (`knightsPlayed >= needed`) get a bonus for port vertices that immediately touch a pirate they can drive off.
- * - `edgeDelta` & `goals`: Drives off a pirate at once when touching (`tidebound.pirates.drive:${hexId}`, priority 78), or builds a road/bridge to
- *   touch an active pirate when already armed (`tidebound.pirates.intercept:${hexId}`, priority 72).
- */
+/** Bot goal: a bot wants to play a knight while a raid on the timeline would beat it. The brain itself names no pirate (`wantsKnight` hook). */
 export const pirateBotGoal: BotGoalDef = {
   id: 'tidebound.pirates',
   goalClass: 'generic',
-  /** Any pirate on the board is a reason to play a knight (knights are what drives it off, and what keeps it away from your cities). */
-  wantsKnight(ctx: Ctx): boolean {
-    return activePirates(ctx.g).length > 0;
-  },
-  vertexDelta(ctx: Ctx, pid: Id, vertexId: number): number {
-    const { g, reg } = ctx;
-    if (!addonOn(reg, 'tidebound.pirates')) return 0;
-    const pirates = activePirates(g);
-    if (pirates.length === 0) return 0;
-    const v = g.board.vertices[vertexId];
-    if (!v) return 0;
-
-    const knights = pirateKnights(g, pid);
-    let delta = 0;
-    for (const m of pirates) {
-      const seaHexId = Number(m.loc);
-      const pl = readPayload(m, g);
-      const needed = pirateKnightsNeeded(g, pid, pl.strength);
-      const dist = hexVertexDistance(g, reg, seaHexId, vertexId);
-      if (knights >= needed) {
-        if (dist === 0 && Boolean(v.port)) {
-          delta += 2.5 + pirateLootCards(pl.strength, hasTech(g, pid, TECH_PIRATE_HUNTER)) * 0.4;
-        }
-        continue;
-      }
-      if (knights > pl.strength) continue;
-      if (dist === 0) {
-        delta -= pl.mode === 'flee' ? 1.8 : 4.5;
-      } else if (dist === 1 && pl.mode === 'roam') {
-        delta -= 2.0;
-      } else if (dist === 2 && pl.mode === 'roam') {
-        delta -= 0.75;
-      }
-    }
-    return delta;
-  },
-  edgeDelta(ctx: Ctx, pid: Id, edgeId: number): number {
-    const { g, reg } = ctx;
-    if (!addonOn(reg, 'tidebound.pirates')) return 0;
-    const pirates = activePirates(g);
-    if (pirates.length === 0) return 0;
-    const e = g.board.edges[edgeId];
-    if (!e) return 0;
-
-    const knights = pirateKnights(g, pid);
-    let delta = 0;
-    for (const m of pirates) {
-      const seaHexId = Number(m.loc);
-      const pl = readPayload(m, g);
-      const needed = pirateKnightsNeeded(g, pid, pl.strength);
-      const hexEdges = edgesOfHex(g, reg, seaHexId);
-      const hexVerts = new Set(verticesOfHex(g, reg, seaHexId));
-      const touches = hexEdges.includes(edgeId) || hexVerts.has(e.v1) || hexVerts.has(e.v2);
-      if (!touches) continue;
-      if (knights >= needed && !playerTouchesWreck(g, reg, pid, seaHexId)) {
-        delta += 24;
-      } else if (knights < needed && knights <= pl.strength) {
-        delta -= 3;
-      }
-    }
-    return delta;
-  },
-  goals(ctx: Ctx, pid: Id): BotGoalItem[] {
-    const { g, reg } = ctx;
-    if (!addonOn(reg, 'tidebound.pirates') || g.phase !== 'main') return [];
-    const hexId = drivablePirateHexIds(g, reg, pid)[0];
-    if (hexId !== undefined) {
-      return [
-        {
-          id: `tidebound.pirates.drive:${hexId}`,
-          priority: 78,
-          cost: {},
-          action: { type: DRIVE_OFF_PIRATE, payload: { hexId } }
-        }
-      ];
-    }
-
-    const p = getPlayer(g, pid);
-    if (!p) return [];
-    const knights = pirateKnights(g, pid);
-    for (const m of activePirates(g)) {
-      const seaHexId = Number(m.loc);
-      const pl = readPayload(m, g);
-      if (knights < pirateKnightsNeeded(g, pid, pl.strength)) continue;
-      if (playerTouchesWreck(g, reg, pid, seaHexId)) continue;
-
-      const edgeSet = new Set<number>(edgesOfHex(g, reg, seaHexId));
-      const vSet = new Set<number>(verticesOfHex(g, reg, seaHexId));
-      for (const pieceId of [RICKETY, ROAD, BRIDGE]) {
-        const def = reg.pieces.get(pieceId);
-        if (!def || def.target !== 'edge' || (p.pieces[pieceId] || 0) <= 0) continue;
-        if (pieceId === RICKETY && !techGate(g, pid, TECH_RICKETY_BRIDGES)) continue;
-        for (const e of g.board.edges) {
-          const touches = edgeSet.has(e.id) || vSet.has(e.v1) || vSet.has(e.v2);
-          if (!touches) continue;
-          if (def.canPlace(ctx, pid, e.id, 'build')) {
-            return [
-              {
-                id: `tidebound.pirates.intercept:${seaHexId}`,
-                priority: 72,
-                cost: priceOf(g, reg, p, def),
-                action: { type: 'build', payload: { piece: pieceId, loc: e.id } },
-                needsTags: ['sea', 'combat']
-              }
-            ];
-          }
-        }
-      }
-    }
-    return [];
-  },
-  actionScore(ctx: Ctx, pid: Id, action: { type: string; payload: any }): number {
-    if (action.type !== DRIVE_OFF_PIRATE) return 0;
-    const hexId = Number(action.payload?.hexId);
-    if (canDrivePirate(ctx.g, ctx.reg, pid, hexId) !== null) return 0;
-    const m = pirateAt(ctx.g, hexId);
-    const strength = m ? readPayload(m, ctx.g).strength : PIRATE_BASE_STRENGTH;
-    return 68 + pirateLootCards(strength, hasTech(ctx.g, pid, TECH_PIRATE_HUNTER));
+  wantsKnight(ctx: Ctx, pid: Id): boolean {
+    const raid = nextPirateRaid(ctx.g, ctx.reg);
+    return !!raid && pirateDefence(ctx.g, pid) < raid.strength;
   }
 };
 
 export const piratesAddon: AddonDef = {
   id: 'tidebound.pirates',
   name: 'Pirates',
-  description: 'Up to 2 pirates roam the ocean and rob coastal settlements. Beating one takes knights, and it pays more than a wreck.',
+  description: 'Pirate raid events: players with enough played knights take loot, the rest lose 2 random cards. Needs the Event Deck.',
   links: [
     { target: 'strength', kind: 'mechanic' },
-    { target: 'marker', kind: 'mechanic' },
-    { target: 'bot-goals', kind: 'bot' },
-    { target: 'tidebound.wrecks', kind: 'content' }
+    { target: 'event-deck', kind: 'content' },
+    { target: 'bot-goals', kind: 'bot' }
   ],
   register(api) {
     registerTideboundTechs(api);
     api.define(EVENT_CARDS, pirateRaidCard);
     api.define(BOT_GOALS, pirateBotGoal);
-    // R7a.5: the public pirate markers for the client state.
-    api.define(VIEW_DATA, pirateViewData);
-    api.define(VIEW_DATA, pirateDriveViewData);
-    api.action(driveOffPirateAction);
-    api.phaseAction('main', DRIVE_OFF_PIRATE);
     api.hook('onRoundStart', (ctx: Ctx) => {
-      pirateRoundStep(ctx);
-      passivePirateSpawn(ctx);
+      clearOldPirates(ctx.g);
     });
   }
 };
+

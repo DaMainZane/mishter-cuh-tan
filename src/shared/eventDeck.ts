@@ -3,7 +3,7 @@ import type { Ctx } from './ctx';
 import { appendPublicHistory } from './history';
 import { defsOf } from './registry';
 import type { Registry } from './registry';
-import { createRng, rngShuffle } from './rng';
+import { createRng, rngInt, rngShuffle } from './rng';
 import type { RngState } from './rng';
 import { bankGive, getPlayer } from './state';
 import { setTileState } from './tileState';
@@ -17,8 +17,12 @@ export interface EventCardDef {
   description: string;
   /** Optional pack/DLC id; only included when that pack/addon is enabled or for base events. */
   pack?: string;
-  /** Number of copies in the deck (default 1). */
-  copies?: number;
+  /** Number of copies in the deck (default 1). A function reads the game's rules (the Tide level slider sets how many tide cards there are). */
+  copies?: number | ((g: GameState | undefined) => number);
+  /** UI icon name for the event timeline and title card (`client/icons.ts`). */
+  icon?: string;
+  /** One short line the timeline shows under the card, for the round it fires in (a pirate's strength, a tide's height). */
+  detail?(g: GameState, round: number): string | undefined;
   /** Runs when the event is drawn and resolved at round start. */
   apply(ctx: Ctx): void;
   replace?: boolean;
@@ -30,6 +34,10 @@ export interface EventDeckState {
   discard: string[];
   activeEventId: string | null;
   fateTokens: Record<Id, number>;
+  /** Rounds the next cards fire in: `rounds[i]` is the round of `deck[i]` (the event timeline). Filled by `ensureEventTimeline`. */
+  rounds?: number[];
+  /** The last event that fired (the client shows its title card once). */
+  lastEvent?: { cardId: string; title: string; icon?: string; round: number } | null;
   /** Pending veto state for the current preview card (`deck[0]`). */
   pendingVeto: {
     cardId: string;
@@ -120,11 +128,12 @@ export function allEventCards(reg: Registry): Map<string, EventCardDef> {
   return map;
 }
 
-function buildShuffledDeckIds(reg: Registry, rng: RngState): string[] {
+function buildShuffledDeckIds(reg: Registry, rng: RngState, g?: GameState): string[] {
   const cards = allEventCards(reg);
   const ids: string[] = [];
   for (const c of cards.values()) {
-    const count = Math.max(1, c.copies ?? 1);
+    const raw = typeof c.copies === 'function' ? c.copies(g) : c.copies;
+    const count = Math.max(1, Math.floor(Number(raw ?? 1)) || 1);
     for (let i = 0; i < count; i++) ids.push(c.id);
   }
   return rngShuffle(rng, ids);
@@ -136,7 +145,7 @@ export function ensureEventDeck(g: GameState, reg: Registry): EventDeckState {
   g.ext.core = g.ext.core || {};
   if (!g.ext.core.eventDeck) {
     const rng = deriveEventRng(g.seed);
-    const deck = buildShuffledDeckIds(reg, rng);
+    const deck = buildShuffledDeckIds(reg, rng, g);
     const startTokens = Math.max(0, Number(g.rules?.fateTokens ?? 2));
     const fateTokens: Record<Id, number> = {};
     for (const p of g.players) fateTokens[p.id] = startTokens;
@@ -151,10 +160,76 @@ export function ensureEventDeck(g: GameState, reg: Registry): EventDeckState {
   }
   const st = g.ext.core.eventDeck as EventDeckState;
   if (st.deck.length === 0) {
-    st.deck = buildShuffledDeckIds(reg, st.rng);
+    st.deck = buildShuffledDeckIds(reg, st.rng, g);
     st.discard = [];
   }
   return st;
+}
+
+// ---- Event timeline (2026-11-24): the next cards and the rounds they fire in, shown to every player --------------------------
+
+/** Upcoming events the timeline knows (and shows). */
+export const EVENT_TIMELINE_LENGTH = 3;
+/** Rounds between two events: random from this range, drawn from the deck's own stream. */
+export const EVENT_GAP_MIN = 2;
+export const EVENT_GAP_MAX = 4;
+
+/** One upcoming event as the timeline shows it. */
+export interface EventTimelineItem {
+  cardId: string;
+  title: string;
+  icon?: string;
+  round: number;
+  detail?: string;
+}
+
+/**
+ * Makes sure the deck holds at least `EVENT_TIMELINE_LENGTH` cards (a fresh shuffled pile is put under a short deck) and that each of the next
+ * cards has the round it fires in: the first 2 to 4 rounds after `fromRound`, each next one 2 to 4 rounds after the one before. Never `g.rng`.
+ */
+export function ensureEventTimeline(g: GameState, reg: Registry, fromRound = g.round || 0): EventDeckState {
+  const st = ensureEventDeck(g, reg);
+  while (st.deck.length < EVENT_TIMELINE_LENGTH) st.deck.push(...buildShuffledDeckIds(reg, st.rng, g));
+  if (!Array.isArray(st.rounds)) st.rounds = [];
+  const gap = () => EVENT_GAP_MIN + rngInt(st.rng, EVENT_GAP_MAX - EVENT_GAP_MIN + 1);
+  while (st.rounds.length < EVENT_TIMELINE_LENGTH) {
+    const last = st.rounds.length ? st.rounds[st.rounds.length - 1] : fromRound;
+    st.rounds.push(last + gap());
+  }
+  return st;
+}
+
+/** The next events with their rounds, for the timeline. Empty when the deck is off. Reads the state only (call `ensureEventTimeline` first). */
+export function eventTimeline(g: GameState, reg: Registry): EventTimelineItem[] {
+  const st = g.ext?.core?.eventDeck as EventDeckState | undefined;
+  if (!g.rules?.eventsOn || !st || !Array.isArray(st.rounds)) return [];
+  const cards = allEventCards(reg);
+  const out: EventTimelineItem[] = [];
+  for (let i = 0; i < Math.min(st.rounds.length, st.deck.length, EVENT_TIMELINE_LENGTH); i++) {
+    const card = cards.get(st.deck[i]);
+    if (!card) continue;
+    const round = st.rounds[i];
+    out.push({ cardId: card.id, title: card.title, icon: card.icon, round, detail: card.detail?.(g, round) });
+  }
+  return out;
+}
+
+/**
+ * Round start with the deck on: the first time it lays out the timeline; when the first card's round has come, that card is drawn and applied,
+ * and the timeline gets its next card. Returns the card that fired, if any.
+ */
+export function runRoundEvents(ctx: Ctx): EventCardDef | null {
+  const { g, reg } = ctx;
+  const round = g.round || 0;
+  const st = ensureEventTimeline(g, reg, round);
+  let fired: EventCardDef | null = null;
+  if (st.rounds!.length > 0 && st.rounds![0] <= round) {
+    st.rounds!.shift();
+    fired = drawAndApplyRoundEvent(ctx);
+    if (fired) st.lastEvent = { cardId: fired.id, title: fired.title, icon: fired.icon, round };
+    ensureEventTimeline(g, reg, round);
+  }
+  return fired;
 }
 
 /** Returns the top card of the event deck (the 1-round-ahead preview), without mutating the deck. */
@@ -263,7 +338,7 @@ export function drawAndApplyRoundEvent(ctx: Ctx): EventCardDef | null {
   st.pendingVeto = null;
 
   if (st.deck.length === 0) {
-    st.deck = buildShuffledDeckIds(reg, st.rng);
+    st.deck = buildShuffledDeckIds(reg, st.rng, g);
     st.discard = [];
   }
   const cardId = st.deck.shift();
@@ -272,7 +347,7 @@ export function drawAndApplyRoundEvent(ctx: Ctx): EventCardDef | null {
   st.activeEventId = cardId;
 
   if (st.deck.length === 0) {
-    st.deck = buildShuffledDeckIds(reg, st.rng);
+    st.deck = buildShuffledDeckIds(reg, st.rng, g);
     st.discard = [];
   }
 

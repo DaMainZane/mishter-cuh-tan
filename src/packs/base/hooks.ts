@@ -1,16 +1,19 @@
-// MODULE: base hooks (game start state, S0.10 per-pack stats handler, round hooks, pick settling and trade pruning) | DEPENDS ON: packs/base/picks, packs/base/trading, shared/index | USED BY: packs/base/index
+// MODULE: base hooks (game start state, S0.10 per-pack stats handler, round hooks, pick settling and trade pruning) | DEPENDS ON: packs/base/eventTimelineView, packs/base/picks, packs/base/trading, shared/index | USED BY: packs/base/index
 import {
   clearExpiredMercenaries,
   currentPlayer,
-  drawAndApplyRoundEvent,
+  ensureEventTimeline,
   getPlayer,
+  runRoundEvents,
   runRoundStartTaxesAndCatchUp,
   runStatHandlers,
   STAT_HANDLERS,
   tickMarkers,
   tickTileStates
 } from '../../shared';
+import { VIEW_DATA } from '../../shared';
 import type { Ctx, PackApi } from '../../shared';
+import { eventTimelineViewData } from './eventTimelineView';
 import { settlePicks } from './picks';
 import { pruneInvalidTrades } from './trading';
 
@@ -153,19 +156,18 @@ export function registerHooks(api: PackApi): void {
   api.hook('onGameStart', ctx => {
     ctx.g.ext.base = { tradeSeq: 0 };
     for (let s = 2; s <= 12; s++) ctx.g.diceStats[s] = 0;
+    // The Event Deck shows its timeline from the start, so players see the first events coming.
+    if (ctx.g.rules?.eventsOn) ensureEventTimeline(ctx.g, ctx.reg, 0);
   });
+  api.define(VIEW_DATA, eventTimelineViewData);
 
   api.hook('onRoundStart', ctx => {
     tickTileStates(ctx);
     if (ctx.g.rules?.taxesOn || (ctx.g.rules?.catchUpMode && ctx.g.rules.catchUpMode !== 'off')) {
       runRoundStartTaxesAndCatchUp(ctx);
     }
-    if (ctx.g.rules?.eventsOn && (ctx.g.round || 0) >= 1) {
-      const cadence = Math.max(1, Number(ctx.g.rules?.eventCadenceRounds ?? 2));
-      if ((ctx.g.round || 0) % cadence === 0) {
-        drawAndApplyRoundEvent(ctx);
-      }
-    }
+    // The Event Deck (2026-11-24): an event every 2 to 4 rounds, the next three shown on the timeline (`runRoundEvents`).
+    if (ctx.g.rules?.eventsOn && (ctx.g.round || 0) >= 1) runRoundEvents(ctx);
   });
 
   api.hook('onRoundEnd', ctx => {

@@ -1,4 +1,4 @@
-// MODULE: build validation and piece placement (cost, supply, upgrade, onBuild hooks) | DEPENDS ON: packs/base/constants, shared/index | USED BY: packs/base/actions/build, packs/base/piecesView, packs/tidebound/wrecks, server/bots/brain, server/view
+// MODULE: build validation and piece placement (cost, supply, upgrade, onBuild hooks) | DEPENDS ON: packs/base/constants, shared/index | USED BY: packs/base/actions/build, packs/base/piecesView, server/bots/brain, server/view
 import { aboveBaseLimit, canAfford, doubledCost, getPlayer, payToBank, priceOf } from '../../shared';
 import type { Ctx, GameState, Id, PieceDef, PlayerState, Registry, Resources } from '../../shared';
 import { BASE_PIECE_LIMITS, ROAD, SETUP_PIECE } from './constants';

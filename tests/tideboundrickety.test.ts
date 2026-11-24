@@ -689,7 +689,8 @@ describe('Tidebound Bug 13 & Bug 14: bridge Edge SVG markup (sturdy vs rickety w
     expect(boardTs).toContain("lastRoadSpotsHtml");
     expect(css).toContain('.piece-zoom-scale');
     expect(boardTs).toContain("'--piece-zoom'");
-    expect(boardTs.match(/class="piece-zoom-scale"/g)).toHaveLength(2);
+    // 2026-11-24: shipwrecks are Event Deck events now, so only the robber layer is left with a zoom-scaled group.
+    expect(boardTs.match(/class="piece-zoom-scale"/g)).toHaveLength(1);
   });
 });
 

@@ -615,7 +615,8 @@ export function registerSocketHandlers(io: Server): void {
           vpToWin: sc.vpToWin,
           dlc: resetDlc,
           addons: sc.addons ?? {},
-          eventsOn: !!sc.eventsOn,
+          // Tidebound's tides, pirates and shipwrecks are Event Deck cards, so a Tidebound scenario always has the deck on.
+          eventsOn: !!sc.eventsOn || !!resetDlc.tidebound,
           fateTokens: sc.fateTokens ?? 2,
           ...(resetDlc.tidebound ? { techTreeOn: true } : {})
         },

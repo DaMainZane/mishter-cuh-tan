@@ -1,4 +1,4 @@
-// MODULE: renderAll, draws every client panel (board, hand, sidebar, trade, tech, overlays) from the current state | DEPENDS ON: client/actions, client/avatars, client/icons, client/mapmenu, client/pieceui, client/presets, +14 more | USED BY: client/actions, client/main, client/render/drawer
+// MODULE: renderAll, draws every client panel (board, hand, sidebar, trade, tech, overlays) from the current state | DEPENDS ON: client/actions, client/avatars, client/icons, client/mapmenu, client/pieceui, client/presets, +15 more | USED BY: client/actions, client/main, client/render/drawer
 import { socket } from '../socket';
 import { state, buildMode, victoryTab, hideVictoryOverlay, elevationView } from '../store';
 import { isPendingSettingsPush } from '../actions';
@@ -9,6 +9,7 @@ import { renderSidebar } from './sidebar';
 import { renderSetupPage } from './setup';
 import { renderBoard } from './board';
 import { renderTimerPopups, showEventTitleCard } from './overlay';
+import { renderEventTimeline } from './eventTimeline';
 import { renderTechPanel } from './techpanel';
 import { renderBridgePicker } from './bridgepicker';
 import { renderPieceButtons } from '../pieceui';
@@ -242,6 +243,7 @@ export function renderAll(): void {
   renderTechPanel(isMyTurn);
   renderBridgePicker(isMyTurn);
   syncTideUi();
+  renderEventTimeline();
 
   const goKey = `${state.code || ''}:${state.finishedAt || 0}`;
   if (state.status !== 'GAMEOVER') {

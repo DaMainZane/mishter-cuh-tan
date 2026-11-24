@@ -79,26 +79,26 @@ export const TIDEBOUND_LINES: Line[] = [
     text: ["The sea pays.", "Nothing wasted.", "Every shore works."]
   },
 
-  // ---- A bot claims a shipwreck (private risk: never name what was salvaged) ----
+  // ---- A bot rolls best on a shipwreck event (private risk: never name what was salvaged) ----
   {
     id: 'wreckClaimed.main', event: 'wreckClaimed', style: ['friendly'], risk: 'private',
     text: [
       "Salvage crew on the wreck! Nice haul.",
-      "Reached the shipwreck just in time!",
+      "Best haul off that shipwreck!",
       "Treasure from the deep! Lucky me.",
       "Pulled the cargo off that wreck!"
     ]
   },
   {
     id: 'wreckClaimed.secondary', event: 'wreckClaimed', style: ['neutral'], risk: 'private',
-    text: ["Wreck salvaged.", "Claimed the wreck.", "Salvage secured."]
+    text: ["Wreck salvaged.", "Good salvage.", "Salvage secured."]
   },
   {
     id: 'wreckClaimed.overload', event: 'wreckClaimed', style: ['cold'], risk: 'private',
-    text: ["Salvage taken.", "Mine now.", "Cleared the wreck."]
+    text: ["Salvage taken.", "Mine now.", "The sea provides."]
   },
 
-  // ---- A pirate robs a bot's coastal piece (private risk: never name stolen cards) ----
+  // ---- A pirate raid robs a bot (private risk: never name stolen cards) ----
   {
     id: 'pirateRaid.main', event: 'pirateRaid', style: ['friendly'], risk: 'private',
     text: [
@@ -117,7 +117,7 @@ export const TIDEBOUND_LINES: Line[] = [
     text: ["Pirates. Not for long.", "A temporary nuisance.", "They will pay for that."]
   },
 
-  // ---- A bot drives off a pirate ship (private risk: never name the loot) ----
+  // ---- A bot beats a pirate raid (private risk: never name the loot) ----
   {
     id: 'pirateDriven.main', event: 'pirateDriven', style: ['friendly'], risk: 'private',
     text: [

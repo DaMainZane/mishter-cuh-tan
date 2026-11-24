@@ -142,6 +142,9 @@ const UI_ICONS: Record<string, string> = {
   fish: `<path d="M3.5 12c2.6-4.4 8.4-5.6 12.4-2.2L20.5 7v10l-4.6-2.8C11.9 17.6 6.1 16.4 3.5 12z"/><circle cx="8.5" cy="11" r="1" ${FILL}/>`,
   // Tidebound harbor: an anchor.
   harbor: `<circle cx="12" cy="5.5" r="2.2"/><path d="M12 7.7v12.8M8.5 10.5h7M5.5 15a6.5 6.5 0 0 0 13 0"/>`,
+  // Tidebound events (2026-11-24): a broken hull with a snapped mast (shipwreck), a flag with crossed bones (pirate raid).
+  wreck: `<path d="M3 14.5h18l-2.5 5h-13z"/><path d="M11 14.5V5.5l1.5-1.5M11 6.5l6 4.5h-6M2.5 21.5q2-1.2 4 0t4 0 4 0 4 0 4 0"/>`,
+  pirate: `<path d="M5 21V3.5"/><path d="M5 4h14l-2.5 4.5L19 13H5"/><path d="M9.5 6.5l5 4M14.5 6.5l-5 4"/>`,
   house: `<path ${FILL} d="M12 3.5L3.5 11H6v8.5h12V11h2.5z"/>`,
   city: `<path ${FILL} d="M3.5 20V9.5l4-4 4 4V20zM12.5 20v-7h8v7z"/>`,
   sword: `<path d="M10 14L19 5M7.5 11.5l5 5M10 14l-5 5"/>`,
@@ -388,81 +391,11 @@ export function robberMarkup(): string {
 }
 
 /**
- * Predetermined icon slot offsets (dx, dy) relative to a hex centre `(h.x, h.y)` (Bugs 5 & 9):
- * - On sea tiles, when a fish ground shares a tile with a pirate or sea shipwreck, each icon moves to a fixed vertex/corner slot so they never overlap.
- * - On shore/land tiles, a beached shipwreck shifts into a left/right coastal flank slot so it never covers the tile's number token at `(0, +22)` or resource glyph at `(0, -24)`.
+ * Icon slot offset (dx, dy) of a fish ground relative to its hex centre `(h.x, h.y)`. Pirates and shipwrecks used to share sea tiles with fish
+ * (Bugs 5 & 9); since 2026-11-24 they are Event Deck events with nothing on the board, so the fish sits in the middle.
  */
-export function hexIconLayout(opts: {
-  hasFish?: boolean;
-  hasSeaWreck?: boolean;
-  hasPirate?: boolean;
-  shoreDir?: { dq: number; dr: number } | null;
-  hasNumber?: boolean;
-}): {
-  fishOffset: { dx: number; dy: number };
-  pirateOffset: { dx: number; dy: number };
-  wreckOffset: { dx: number; dy: number };
-} {
-  const crowdedSea = (opts.hasFish ? 1 : 0) + (opts.hasSeaWreck ? 1 : 0) + (opts.hasPirate ? 1 : 0) > 1;
-  const fishOffset = crowdedSea && opts.hasFish ? { dx: -24, dy: -16 } : { dx: 0, dy: 0 };
-  const pirateOffset = crowdedSea && opts.hasPirate ? { dx: 20, dy: 10 } : { dx: 0, dy: -4 };
-
-  let wreckOffset = { dx: 0, dy: 0 };
-  if (opts.shoreDir) {
-    const rawDx = Math.sqrt(3) * (opts.shoreDir.dq + opts.shoreDir.dr / 2);
-    const rawDy = 1.5 * opts.shoreDir.dr;
-    const len = Math.hypot(rawDx, rawDy) || 1;
-    const ux = rawDx / len;
-    const uy = rawDy / len;
-    // Keep shore wrecks in a left/right coastal flank slot away from the number token at (0, +22) and resource glyph at (0, -24)
-    if (Math.abs(uy) > 0.25) {
-      const side = ux >= 0 ? 1 : -1;
-      wreckOffset = { dx: side * 34, dy: uy > 0 ? 2 : -8 };
-    } else {
-      wreckOffset = { dx: (ux >= 0 ? 1 : -1) * 34, dy: 0 };
-    }
-  } else if (crowdedSea && opts.hasSeaWreck) {
-    wreckOffset = { dx: 22, dy: -16 };
-  }
-
-  return { fishOffset, pirateOffset, wreckOffset };
-}
-
-/**
- * Tidebound shipwreck marker (T9, Bug 17): tilted broken wooden hull, snapped mast with tattered sail, and a round countdown badge.
- * `site === 'sea'` tilts deeper in water with a wave line; `site === 'shore'` sits beached at a shallower angle.
- * When `countdown <= 1`, renders an urgent 1-round expiration ring and `1R` indicator.
- */
-export function wreckMarkup(site: 'sea' | 'shore', countdown: number): string {
-  const tilt = site === 'sea' ? -14 : 11;
-  const hullFill = site === 'sea' ? '#8c5327' : '#a1622f';
-  const deckFill = '#5c3416';
-  const sailFill = '#e5dccb';
-  const rounds = Math.max(1, Math.round(countdown || 1));
-  const isUrgent = rounds <= 1;
-  const ship = rimmedLayers([
-    // Snapped mast
-    { d: 'M-1.5,-15 L1.5,-15 L2.2,2 L-1.2,2 Z', fill: deckFill },
-    // Tattered triangular sail
-    { d: 'M1,-14 L13,-6 L6,-3 L9,-1 L1,-2 Z', fill: sailFill },
-    // Broken tilted hull
-    { d: 'M-15,0 L14,-1 L10,8 L-11,8 Z', fill: hullFill }
-  ], 3.0);
-  const waterLine = site === 'sea'
-    ? `<path d="M-16,7 Q-8,3 0,7 T16,7" fill="none" stroke="var(--piece-rim)" stroke-width="2.2" stroke-linecap="round"/>`
-    : `<path d="M-15,8.5 L14,8.5" fill="none" stroke="var(--sand, #e6cf9e)" stroke-width="2.4" stroke-linecap="round"/>`;
-  const urgentRing = isUrgent
-    ? `<circle r="11.5" class="wreck-urgent-ring" style="fill:none;stroke:var(--token-hot, #ef4444);stroke-width:1.8;stroke-dasharray:3 2"/>`
-    : '';
-  const circleStroke = isUrgent ? 'var(--token-hot, #ef4444)' : 'var(--piece-rim)';
-  const textFill = isUrgent ? 'var(--token-hot, #ef4444)' : 'var(--token-ink)';
-  const badge = `
-    <g transform="translate(14, -12)" class="wreck-countdown-badge${isUrgent ? ' wreck-countdown-urgent' : ''}" data-rounds-left="${rounds}">
-      ${urgentRing}
-      <circle r="9.2" style="fill:var(--token);stroke:${circleStroke};stroke-width:${isUrgent ? '2' : '1.6'}"/>
-      <text y="3.2" text-anchor="middle" font-size="9.5" font-weight="800" style="fill:${textFill}">${rounds}R</text>
-    </g>`;
-  return `<g class="wreck-marker wreck-${site}${isUrgent ? ' wreck-expiring' : ''}"><g transform="rotate(${tilt})">${ship}</g>${waterLine}${badge}</g>`;
+export function hexIconLayout(_opts: { hasFish?: boolean }): { fishOffset: { dx: number; dy: number } } {
+  return { fishOffset: { dx: 0, dy: 0 } };
 }
 
 // ---------- Card stacks ----------

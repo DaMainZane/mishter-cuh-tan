@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  addMarker,
   BOT_GOALS,
+  botGoalWantsKnight,
   botGoalEdgeDelta,
   botGoalVertexDelta,
   buildTopology,
   createGame,
   defsOf,
   dispatch,
+  ensureEventTimeline,
   evaluateBotGoals,
   getPlayerTechs,
   grantWildToken,
@@ -27,13 +28,13 @@ import {
 import {
   BRIDGE,
   DEMOLISH_BRIDGE,
-  DRIVE_OFF_PIRATE,
   FEED_SEA,
   FISH,
   FLOODED,
   NET,
-  PIRATE_MARKER_KIND,
+  PIRATE_EVENT_ID,
   RICKETY,
+  SHIPWRECK_EVENT_ID,
   TECH_FISHING_NETS,
   TECH_GRAND_CAUSEWAY,
   TECH_HARBOR_CHARTERS,
@@ -45,35 +46,37 @@ import {
   TECH_SALVAGE_CREW,
   UPGRADE_BRIDGE,
   UPGRADE_HARBOR,
-  WRECK_MARKER_KIND,
   drownHex,
-  edgesOfHex,
   ensureTides,
-  expectedWreckLootValue,
   fishBotGoal,
   isOceanEdge,
   lowestElevationFrontierHexIds,
+  pirateBotGoal,
+  pirateStrengthAt,
   ricketyBotGoal,
   risingSeaBotGoal,
-  spawnWreckAt,
+  salvageBotGoal,
   tideFloodShareForHex,
-  tidesBotGoal,
-  verticesOfHex,
-  wreckBotGoal
+  tidesBotGoal
 } from '../src/packs/tidebound';
 import { chooseBotAction } from '../src/server/bots/brain';
 import {
   BOT_FEED_SEA_ACTION,
   BOT_NET_PIECE,
-  BOT_PIRATE_MARKER,
-  BOT_UPGRADE_HARBOR_ACTION,
-  BOT_WRECK_MARKER
+  BOT_PIRATE_EVENT,
+  BOT_SHIPWRECK_EVENT,
+  BOT_UPGRADE_HARBOR_ACTION
 } from '../src/packs/tidebound/tech';
 import { emitBotDialogue } from '../src/server/bots/dialogue';
 import { buildCtx } from '../src/server/bots/dialogue/context';
 import { ALL_LINES } from '../src/server/bots/dialogue/lines';
 import { TIDEBOUND_LINES } from '../src/server/bots/dialogue/lines/tidebound';
 import type { Room } from '../src/server/types';
+
+/** Corners of a tile (the shipwreck rework of 2026-11-24 removed the pack's copy; these tests only need the topology). */
+function verticesOfHex(g: GameState, _reg: Registry, hexId: number): number[] {
+  return [...(g.board.hexes[hexId]?.vertexIds ?? [])];
+}
 
 function grantTech(g: GameState, pid: Id, techId: string): void {
   const core = (g.ext.core ??= {});
@@ -184,58 +187,14 @@ describe('T13a: Flood & rising-sea exposure in vertex scoring', () => {
   });
 });
 
-describe('T13b: Salvage goal (1-step & 2-step wreck reach, demolish_bridge, rickety bridge upgrade)', () => {
-  it('computes expected wreck loot value and emits 1-step and 2-step salvage goals', () => {
+describe('T13b: Salvage goal (demolish_bridge, rickety bridge upgrade)', () => {
+  it('has no board goals any more: a shipwreck is an Event Deck event, nothing to reach (2026-11-24)', () => {
     const { g, reg } = makeTideboundGame(1304);
     const ctx = makeCtx(g, reg);
-    expect(expectedWreckLootValue(g, 'p1', 'sea', 2)).toBeGreaterThan(expectedWreckLootValue(g, 'p1', 'shore', 2));
-    grantTech(g, 'p1', TECH_SALVAGE_CREW);
-    expect(expectedWreckLootValue(g, 'p1', 'sea', 2)).toBeGreaterThan(4);
-
-    for (const v of g.board.vertices) v.piece = null;
-    for (const e of g.board.edges) e.piece = null;
-
-    // Find a 2-step path (vTwoSteps -> vFar -> vNear) where vNear touches wreckHex but vFar and vTwoSteps do not
-    const wreckHex = g.board.hexes[1];
-    spawnWreckAt(ctx, wreckHex.id, { site: 'shore' });
-    const wreckVerts = new Set(verticesOfHex(g, reg, wreckHex.id));
-
-    let path: { vNear: number; vFar: number; vTwoSteps: number; claimEdge: any; approachEdge: any } | null = null;
-    for (const vn of wreckVerts) {
-      for (const vf of g.board.vertices[vn].adjacentVertices) {
-        if (wreckVerts.has(vf)) continue;
-        const ce = g.board.edges.find(e => (e.v1 === vf && e.v2 === vn) || (e.v1 === vn && e.v2 === vf));
-        if (!ce) continue;
-        for (const v2 of g.board.vertices[vf].adjacentVertices) {
-          if (v2 === vn || wreckVerts.has(v2)) continue;
-          const ae = g.board.edges.find(e => (e.v1 === v2 && e.v2 === vf) || (e.v1 === vf && e.v2 === v2));
-          if (!ae) continue;
-          path = { vNear: vn, vFar: vf, vTwoSteps: v2, claimEdge: ce, approachEdge: ae };
-          break;
-        }
-        if (path) break;
-      }
-      if (path) break;
-    }
-    expect(path).not.toBeNull();
-    const { vFar, vTwoSteps, claimEdge, approachEdge } = path!;
-
-    // Place p1 settlement at vFar (1 edge from vNear, which is on wreckHex):
-    // building a road on claimEdge = (vFar, vNear) claims the wreck in 1 step!
-    g.board.vertices[vFar].piece = { type: SETTLEMENT, owner: 'p1' };
-    g.players[0].resources = { wood: 0, brick: 1, sheep: 0, wheat: 0, ore: 0 };
-    expect(wreckBotGoal.edgeDelta!(ctx, 'p1', claimEdge.id)).toBeGreaterThan(0);
-    // Even missing 1 wood, T13b emits the 1-step goal so the bot can trade for the missing card
-    const goals1 = wreckBotGoal.goals!(ctx, 'p1');
-    expect(goals1.some(item => item.id === 'tidebound.wrecks.salvage')).toBe(true);
-
-    // Move settlement back to vTwoSteps (2 edges from wreckHex) and give road resources -> emits 2-step approach goal
-    g.board.vertices[vFar].piece = null;
-    g.board.vertices[vTwoSteps].piece = { type: SETTLEMENT, owner: 'p1' };
-    g.players[0].resources = { wood: 2, brick: 2, sheep: 0, wheat: 0, ore: 0 };
-    expect(wreckBotGoal.edgeDelta!(ctx, 'p1', approachEdge.id)).toBeGreaterThan(0);
-    const goals2 = wreckBotGoal.goals!(ctx, 'p1');
-    expect(goals2.some(item => item.id.startsWith('tidebound.wrecks.approach:'))).toBe(true);
+    expect(salvageBotGoal.goals).toBeUndefined();
+    expect(salvageBotGoal.edgeDelta).toBeUndefined();
+    expect(salvageBotGoal.vertexDelta).toBeUndefined();
+    expect(evaluateBotGoals(ctx, 'p1', 'overload').some(item => item.id.startsWith('tidebound.wrecks'))).toBe(false);
   });
 
   it('scores demolish_bridge positively only for dead-end bridges with Salvage Crew, and prioritizes upgrading rickety bridges in Longest Road', () => {
@@ -252,15 +211,15 @@ describe('T13b: Salvage goal (1-step & 2-step wreck reach, demolish_bridge, rick
     g.players[0].stats.longestRoad = 2;
 
     // Without Salvage Crew, demolish_bridge is not legal / scores 0
-    expect(wreckBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBe(0);
+    expect(salvageBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBe(0);
 
     // With Salvage Crew on a dead-end bridge when low on cards, demolish_bridge scores > 0
     grantTech(g, 'p1', TECH_SALVAGE_CREW);
-    expect(wreckBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBeGreaterThan(0);
+    expect(salvageBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBeGreaterThan(0);
 
     // If a piece is at the far end (not a dead end), bot refuses to demolish it
     g.board.vertices[oceanEdge.v2].piece = { type: SETTLEMENT, owner: 'p1' };
-    expect(wreckBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBe(0);
+    expect(salvageBotGoal.actionScore!(ctx, 'p1', { type: DEMOLISH_BRIDGE, payload: { edgeId: oceanEdge.id } })).toBe(0);
 
     // Make the bridge rickety: upgrading a rickety bridge that connects two pieces scores higher when holding Longest Road
     grantTech(g, 'p1', TECH_RICKETY_BRIDGES);
@@ -339,82 +298,42 @@ describe('T13c: Port and net placement in vertex scoring & bot goals', () => {
   });
 });
 
-describe('T13d: Pirate avoidance & hunting', () => {
-  it('penalizes unprotected coastal vertices near a pirate and rewards armed bots that can intercept and drive it off', () => {
-    const { g, reg } = makeTideboundGame(1308);
+describe('T13d: Pirate raids on the timeline (2026-11-24)', () => {
+  /** Puts a pirate raid first on the timeline and returns its strength. */
+  function raidNext(g: GameState, reg: Registry): number {
+    const st = ensureEventTimeline(g, reg, g.round || 0);
+    st.deck[0] = PIRATE_EVENT_ID;
+    return pirateStrengthAt(st.rounds![0]);
+  }
+
+  it('wants a knight only while the next raid on the timeline would beat the bot', () => {
+    const { g, reg } = makeTideboundGame(1308, { eventsOn: true });
     const ctx = makeCtx(g, reg);
-    for (const v of g.board.vertices) v.piece = null;
-    for (const e of g.board.edges) e.piece = null;
+    g.round = 3;
+    const st = ensureEventTimeline(g, reg, 3);
+    st.deck = st.deck.map(id => (id === PIRATE_EVENT_ID ? SHIPWRECK_EVENT_ID : id));
+    expect(pirateBotGoal.wantsKnight!(ctx, 'p1')).toBe(false);
 
-    const seaHex = g.board.hexes.find(h => !reg.tiles.get(h.type)?.land && verticesOfHex(g, reg, h.id).length > 0)!;
-    addMarker(g, {
-      id: 'pirate_test',
-      kind: PIRATE_MARKER_KIND,
-      target: 'hex',
-      loc: seaHex.id,
-      ownerId: null,
-      countdown: null,
-      payload: { strength: 1, spawnRound: 1, mode: 'roam', robs: 0, fleeFromVertices: [], fleeStepsLeft: 0 }
-    });
-
-    const coastV = verticesOfHex(g, reg, seaHex.id)[0];
-    // Elevate adjacent land hexes so tides/rising_sea don't dominate the delta
-    for (const hId of g.board.vertices[coastV].hexIds) {
-      if (reg.tiles.get(g.board.hexes[hId]?.type)?.land) {
-        g.board.hexes[hId].ext = { ...g.board.hexes[hId].ext, elevation: 3 };
-      }
-    }
-    // Unprotected bot (0 knights vs strength 1) gets a negative vertexDelta on the pirate's coast
-    g.players[0].stats.knightsPlayed = 0;
-    const unprotectedDelta = botGoalVertexDelta(ctx, 'p1', coastV, 'overload');
-    expect(unprotectedDelta).toBeLessThan(0);
-
-    // Armed bot (1 knight >= needed 1) gets a positive edgeDelta on edges touching the pirate tile and an intercept goal
-    g.players[0].stats.knightsPlayed = 1;
-    const pirateVerts = new Set(verticesOfHex(g, reg, seaHex.id));
-    const vNear = [...pirateVerts].find(vId =>
-      g.board.vertices[vId].adjacentVertices.some(adj => !pirateVerts.has(adj))
-    )!;
-    const vFar = g.board.vertices[vNear].adjacentVertices.find(adj => !pirateVerts.has(adj))!;
-    g.board.vertices[vFar].piece = { type: SETTLEMENT, owner: 'p1' };
-    const connectEdge = g.board.edges.find(
-      e => (e.v1 === vFar && e.v2 === vNear) || (e.v2 === vFar && e.v1 === vNear)
-    )!;
-
-    expect(botGoalEdgeDelta(ctx, 'p1', connectEdge.id, 'overload')).toBeGreaterThan(0);
-
-    g.players[0].resources = { wood: 2, brick: 2, sheep: 1, wheat: 1, ore: 1 };
-    const interceptGoals = evaluateBotGoals(ctx, 'p1', 'overload');
-    expect(
-      interceptGoals.some(
-        item => item.id.startsWith('tidebound.pirates.intercept:') || item.id.startsWith('tidebound.pirates.drive:')
-      )
-    ).toBe(true);
-
-    // Placing the connecting road touches the pirate tile and immediately switches to the drive_off_pirate goal
-    connectEdge.piece = { type: ROAD, owner: 'p1' };
-    const driveGoals = evaluateBotGoals(ctx, 'p1', 'overload');
-    expect(driveGoals.some(item => item.action.type === DRIVE_OFF_PIRATE)).toBe(true);
-    const move = chooseBotAction(g, reg, 'p1', () => 0.5);
-    expect(move).toEqual({ type: DRIVE_OFF_PIRATE, payload: { hexId: seaHex.id } });
+    const strength = raidNext(g, reg);
+    g.players[0].stats.knightsPlayed = strength - 1;
+    expect(pirateBotGoal.wantsKnight!(ctx, 'p1')).toBe(true);
+    g.players[0].stats.knightsPlayed = strength;
+    expect(pirateBotGoal.wantsKnight!(ctx, 'p1')).toBe(false);
+    grantTech(g, 'p1', TECH_PIRATE_HUNTER);
+    g.players[0].stats.knightsPlayed = Math.max(0, strength - 2);
+    expect(pirateBotGoal.wantsKnight!(ctx, 'p1')).toBe(false);
   });
 
-  it('plays a knight development card when a pirate is active on the board', () => {
-    const { g, reg } = makeTideboundGame(1309);
-    const seaHex = g.board.hexes.find(h => !reg.tiles.get(h.type)?.land)!;
-    addMarker(g, {
-      id: 'pirate_k',
-      kind: PIRATE_MARKER_KIND,
-      target: 'hex',
-      loc: seaHex.id,
-      ownerId: null,
-      countdown: null,
-      payload: { strength: 1, spawnRound: 1, mode: 'roam', robs: 0, fleeFromVertices: [], fleeStepsLeft: 0 }
-    });
+  it('plays a knight development card when a raid it would lose is on the timeline', () => {
+    const { g, reg } = makeTideboundGame(1309, { eventsOn: true });
+    g.round = 3;
+    raidNext(g, reg);
     const p1 = g.players[0];
+    p1.stats.knightsPlayed = 0;
     p1.devCards = ['knight'];
     p1.flags.playedDev = false;
     p1.resources = {};
+    expect(botGoalWantsKnight(makeCtx(g, reg), 'p1')).toBe(true);
 
     const move = chooseBotAction(g, reg, 'p1', () => 0.5);
     expect(move?.type).toBe('play_dev');
@@ -493,15 +412,15 @@ describe('T13f: Public-info-only Tidebound dialogue lines', () => {
     }
   });
 
-  it('emits public-info-only bot chat for wreckClaimed, pirateRobbed, pirateDriven, harborBuilt, netBuilt, bridgeCollapsed, tideFlood and risingSeaDrowned', () => {
+  it('emits public-info-only bot chat for shipwreckEvent, pirateEvent (lost and won), harborBuilt, netBuilt, bridgeCollapsed, tideFlood and risingSeaDrowned', () => {
     const { g } = makeTideboundGame(1312);
     const landHex = g.board.hexes[0];
     g.board.vertices[landHex.vertexIds[0]].piece = { type: SETTLEMENT, owner: 'p1' };
 
     const triggers: { action: string; ev: any }[] = [
-      { action: 'build', ev: { type: 'wreckClaimed', data: { id: 'w1', hexId: 0, playerId: 'p1', resource: 'ore', amount: 4 } } },
-      { action: 'roll', ev: { type: 'pirateRobbed', data: { id: 'pir1', hexId: 0, vertexId: 0, victimId: 'p1', amount: 2 } } },
-      { action: 'drive_off_pirate', ev: { type: 'pirateDriven', data: { id: 'pir1', hexId: 0, playerId: 'p1', resource: 'brick', amount: 3 } } },
+      { action: 'roll', ev: { type: 'shipwreckEvent', data: { round: 6, results: [{ playerId: 'p1', roll: 17, cards: 6, got: { ore: 4, wood: 2 } }, { playerId: 'p2', roll: 3, cards: 2, got: { sheep: 2 } }] } } },
+      { action: 'roll', ev: { type: 'pirateEvent', data: { round: 9, strength: 2, results: [{ playerId: 'p1', won: false, defence: 0, strength: 2, got: {}, lost: { brick: 2 }, lostFish: 0 }] } } },
+      { action: 'roll', ev: { type: 'pirateEvent', data: { round: 9, strength: 2, results: [{ playerId: 'p1', won: true, defence: 3, strength: 2, got: { ore: 4 }, lost: {}, lostFish: 0 }] } } },
       { action: 'upgrade_harbor', ev: { type: 'portUpgraded', data: { playerId: 'p1', vertexId: 0, level: 2 } } },
       { action: 'place_net', ev: { type: 'netPlaced', data: { playerId: 'p1', hexId: 0, doubleCost: false } } },
       { action: 'roll', ev: { type: 'pieceBroken', data: { target: 'edge', loc: 0, piece: 'rickety_bridge', ownerId: 'p1' } } },
@@ -566,25 +485,6 @@ describe('T13 DLC-off invariant', () => {
   });
 });
 
-describe('T13 wreck reach in the salvage goal', () => {
-  it('rewards any corner of a wreck tile, port or not, because a settlement claims it like a road', () => {
-    const { g, reg } = makeTideboundGame(1313);
-    const ctx = makeCtx(g, reg);
-    for (const v of g.board.vertices) v.piece = null;
-    for (const e of g.board.edges) e.piece = null;
-
-    const wreckHex = g.board.hexes[1];
-    spawnWreckAt(ctx, wreckHex.id, { site: 'shore' });
-    const corners = new Set(verticesOfHex(g, reg, wreckHex.id));
-    const plainCorner = [...corners].find(vId => !g.board.vertices[vId].port);
-    expect(plainCorner).toBeDefined();
-    expect(wreckBotGoal.vertexDelta!(ctx, 'p1', plainCorner!)).toBeGreaterThan(0);
-
-    const away = g.board.vertices.find(v => !corners.has(v.id))!;
-    expect(wreckBotGoal.vertexDelta!(ctx, 'p1', away.id)).toBe(0);
-  });
-});
-
 describe('T13 bot brain stays generic', () => {
   const seededRand = (seed: number) => {
     let s = seed >>> 0;
@@ -598,8 +498,8 @@ describe('T13 bot brain stays generic', () => {
     expect(BOT_NET_PIECE).toBe(NET);
     expect(BOT_FEED_SEA_ACTION).toBe(FEED_SEA);
     expect(BOT_UPGRADE_HARBOR_ACTION).toBe(UPGRADE_HARBOR);
-    expect(BOT_WRECK_MARKER).toBe(WRECK_MARKER_KIND);
-    expect(BOT_PIRATE_MARKER).toBe(PIRATE_MARKER_KIND);
+    expect(BOT_SHIPWRECK_EVENT).toBe(SHIPWRECK_EVENT_ID);
+    expect(BOT_PIRATE_EVENT).toBe(PIRATE_EVENT_ID);
   });
 
   it('with Tidebound off, chooseBotAction picks the same moves as a registry built without the Tidebound pack', () => {

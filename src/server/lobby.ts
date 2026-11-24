@@ -175,6 +175,8 @@ export function applyTideboundMapDefaults(
   room.settings.boardRadius = Math.max(room.settings.boardRadius, TIDEBOUND_MAP_RADIUS);
   room.settings.mapSeed = '';
   room.settings.techTreeOn = true;
+  // Tidebound's tides, pirates and shipwrecks are Event Deck cards, so the deck comes on with it.
+  room.settings.eventsOn = true;
   refreshMap(room);
 }
 

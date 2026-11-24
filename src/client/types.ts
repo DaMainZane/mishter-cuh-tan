@@ -50,8 +50,6 @@ export interface PlayerView {
   harborsLeft?: number;
   /** Remaining 1:1 trades across your harbors this turn (max 4 per harbor per turn, T8b). */
   harborTradesLeft?: number;
-  /** Tiles of the pirates you could drive off right now (Tidebound T10b). Only sent to you on your main-phase turn; `[]` when none, undefined unless pirates are in the game. */
-  pirateDrives?: number[];
   vp: number;
   /** What other players see (differs from `vp` only for your own hidden VP cards). */
   publicVp?: number;
@@ -207,27 +205,23 @@ export interface GameState {
   fishIcons?: Record<number, number> | null;
   /** Port upgrade levels (T1, T8): vertex id -> level (1 = raised 2:1 port, 2 = 1:1 harbor). Null when no port is upgraded. */
   portLevels?: Record<number, number> | null;
-  /** Tidebound shipwrecks (T9): active wreck markers on sea or shore tiles. Null when Wrecks is off or no wrecks are active. */
-  wrecks?: WreckView[] | null;
-  /** Tidebound pirates (T10): ships on the ocean with their strength (played knights needed) and mode. Null when Pirates is off or none are out. */
-  pirates?: PirateView[] | null;
+  /** Event Deck timeline (2026-11-24): the next events with their rounds, and the last one that fired. Missing when the deck is off. */
+  eventTimeline?: EventTimelineView | null;
   /** Tidebound Tides (T6): tide facts for the title card, the warning and the heat map. Null when Tides is off. */
   tide?: TideView | null;
 }
 
-export interface PirateView {
-  id: string;
-  hexId: number;
-  strength: number;
-  mode: 'roam' | 'flee';
+export interface EventTimelineItemView {
+  cardId: string;
+  title: string;
+  icon?: string;
+  round: number;
+  detail?: string;
 }
 
-export interface WreckView {
-  id: string;
-  hexId: number;
-  site: 'sea' | 'shore';
-  countdown: number;
-  shoreDir: { dq: number; dr: number } | null;
+export interface EventTimelineView {
+  upcoming: EventTimelineItemView[];
+  last: { cardId: string; title: string; icon?: string; round: number } | null;
 }
 
 export interface TideView {

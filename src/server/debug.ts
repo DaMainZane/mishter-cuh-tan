@@ -341,16 +341,8 @@ export function applyDebugCommand(
       h.ext = h.ext || {};
       if (brush === 'clear') {
         delete h.ext.net;
-        delete h.ext.pirate;
-        delete h.ext.wreck;
       } else if (brush === 'net') {
         h.ext.net = { owner: p.id };
-      } else if (brush === 'pirate') {
-        h.ext.pirate = { strength: 2, spawnedRound: g.round || 1 };
-      } else if (brush === 'wreck_sea') {
-        h.ext.wreck = { id: `dbg_w_${id}`, site: 'sea', shoreDir: null, expiresOnRound: (g.round || 1) + 2 };
-      } else if (brush === 'wreck_shore') {
-        h.ext.wreck = { id: `dbg_w_${id}`, site: 'shore', shoreDir: 0, expiresOnRound: (g.round || 1) + 1 };
       } else if (brush === 'robber') {
         g.board.robberHexId = id;
       }

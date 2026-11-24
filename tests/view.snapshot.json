@@ -70,7 +70,6 @@
    "longestRoadOwner": null,
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": null,
    "players": [
     {
      "avatar": "🦊",
@@ -322,8 +321,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": null
+   "winner": null
   },
   "other": {
    "activeTrade": null,
@@ -395,7 +393,6 @@
    "longestRoadOwner": null,
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": null,
    "players": [
     {
      "avatar": "🦊",
@@ -647,8 +644,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": null
+   "winner": null
   },
   "spectator": {
    "activeTrade": null,
@@ -720,7 +716,6 @@
    "longestRoadOwner": null,
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": null,
    "players": [
     {
      "avatar": "🦊",
@@ -981,8 +976,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": null
+   "winner": null
   }
  },
  "tideboundOn": {
@@ -1112,27 +1106,11 @@
     {
      "color": null,
      "text": "🌊 The tide rises over 7 coast tiles"
-    },
-    {
-     "color": null,
-     "text": "⛈️ Storm at Sea: a sea shipwreck washed up on tile #0!"
-    },
-    {
-     "color": null,
-     "text": "🏴‍☠️ A pirate ship appeared on tile #126 (strength 1, takes 1 played knight to drive off)!"
     }
    ],
    "longestRoadOwner": "b",
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": [
-    {
-     "hexId": 126,
-     "id": "mk_2",
-     "mode": "roam",
-     "strength": 1
-    }
-   ],
    "players": [
     {
      "avatar": "🦊",
@@ -1304,7 +1282,6 @@
        "wood": 1
       }
      },
-     "pirateDrives": [],
      "playedDevCardThisTurn": false,
      "publicVp": 8,
      "resourceCount": 25,
@@ -1547,7 +1524,7 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 5,
-     "description": "+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
+     "description": "+1 card from every Shipwreck event, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
      "id": "tidebound.salvage_crew",
      "name": "Salvage crew",
      "owned": true,
@@ -1585,7 +1562,7 @@
      "branch": "tidebound",
      "canResearch": true,
      "cost": 7,
-     "description": "Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.",
+     "description": "Counts as 2 extra played knights against Pirate raids, and +1 loot card when you beat one.",
      "id": "tidebound.pirate_hunter",
      "name": "Pirate hunter",
      "owned": false,
@@ -1684,16 +1661,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": [
-    {
-     "countdown": 4,
-     "hexId": 0,
-     "id": "mk_1",
-     "shoreDir": null,
-     "site": "sea"
-    }
-   ]
+   "winner": null
   },
   "other": {
    "activeTrade": null,
@@ -1821,27 +1789,11 @@
     {
      "color": null,
      "text": "🌊 The tide rises over 7 coast tiles"
-    },
-    {
-     "color": null,
-     "text": "⛈️ Storm at Sea: a sea shipwreck washed up on tile #0!"
-    },
-    {
-     "color": null,
-     "text": "🏴‍☠️ A pirate ship appeared on tile #126 (strength 1, takes 1 played knight to drive off)!"
     }
    ],
    "longestRoadOwner": "b",
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": [
-    {
-     "hexId": 126,
-     "id": "mk_2",
-     "mode": "roam",
-     "strength": 1
-    }
-   ],
    "players": [
     {
      "avatar": "🦊",
@@ -2229,7 +2181,7 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 5,
-     "description": "+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
+     "description": "+1 card from every Shipwreck event, and unlocks Demolish Bridge (remove a bridge for half its cards back).",
      "id": "tidebound.salvage_crew",
      "name": "Salvage crew",
      "owned": false,
@@ -2267,7 +2219,7 @@
      "branch": "tidebound",
      "canResearch": false,
      "cost": 7,
-     "description": "Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.",
+     "description": "Counts as 2 extra played knights against Pirate raids, and +1 loot card when you beat one.",
      "id": "tidebound.pirate_hunter",
      "name": "Pirate hunter",
      "owned": false,
@@ -2366,16 +2318,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": [
-    {
-     "countdown": 4,
-     "hexId": 0,
-     "id": "mk_1",
-     "shoreDir": null,
-     "site": "sea"
-    }
-   ]
+   "winner": null
   },
   "spectator": {
    "activeTrade": null,
@@ -2503,27 +2446,11 @@
     {
      "color": null,
      "text": "🌊 The tide rises over 7 coast tiles"
-    },
-    {
-     "color": null,
-     "text": "⛈️ Storm at Sea: a sea shipwreck washed up on tile #0!"
-    },
-    {
-     "color": null,
-     "text": "🏴‍☠️ A pirate ship appeared on tile #126 (strength 1, takes 1 played knight to drive off)!"
     }
    ],
    "longestRoadOwner": "b",
    "mapMeta": null,
    "phase": "MAIN",
-   "pirates": [
-    {
-     "hexId": 126,
-     "id": "mk_2",
-     "mode": "roam",
-     "strength": 1
-    }
-   ],
    "players": [
     {
      "avatar": "🦊",
@@ -2817,16 +2744,7 @@
    "turnCount": 6,
    "turnHistory": [],
    "turnIndex": 1,
-   "winner": null,
-   "wrecks": [
-    {
-     "countdown": 4,
-     "hexId": 0,
-     "id": "mk_1",
-     "shoreDir": null,
-     "site": "sea"
-    }
-   ]
+   "winner": null
   }
  }
 }

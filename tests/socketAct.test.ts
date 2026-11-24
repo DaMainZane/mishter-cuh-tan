@@ -25,8 +25,7 @@ const LEGACY: Legacy[] = [
   ['demolishBridge', 'demolish_bridge', { edgeId: 0 }],
   ['convertTile', 'convert_tile', { hexId: 0, resource: 'wood' }],
   ['spendFish', 'spend_fish', { resource: 'wood' }],
-  ['feedSea', 'feed_sea', { hexId: 0 }],
-  ['drivePirate', 'drive_off_pirate', { hexId: 0 }]
+  ['feedSea', 'feed_sea', { hexId: 0 }]
 ];
 
 /** Every payload a hostile or broken client could send for an action that expects named fields. */

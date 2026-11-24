@@ -292,6 +292,8 @@ export function toggleDlc(dlcId: string): void {
   const newSettings: Record<string, any> = { dlc: curDlc };
   if (dlcId === 'tidebound' && curDlc[dlcId]) {
     newSettings.techTreeOn = true;
+    // Tidebound's tides, pirates and shipwrecks are Event Deck cards, so the deck comes on with it.
+    newSettings.eventsOn = true;
   }
   socket.emit('updateSettings', { code: state.code, newSettings });
   playTone(curDlc[dlcId] ? 560 : 440, 0.05);

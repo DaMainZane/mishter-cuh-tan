@@ -1917,6 +1917,24 @@ button.dlc-expand:hover { background: var(--surface-3); }
   transition: width 0.1s linear;
 }
 
+/* ---------- Event Deck timeline (2026-11-24): the next events under the round clock, flat chips ---------- */
+.event-timeline-hud {
+  position: absolute; top: 38px; right: 18px; z-index: 42;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 5px;
+  pointer-events: auto; user-select: none;
+}
+.event-chip {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 4px 11px 4px 6px;
+  font-size: 12px; font-weight: 700; opacity: 0.82;
+}
+.event-chip.next { opacity: 1; box-shadow: inset 0 0 0 2px var(--accent); }
+.event-chip-icon { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; }
+.event-chip-text { display: inline-flex; align-items: baseline; gap: 6px; }
+.event-chip-round { font-variant-numeric: tabular-nums; }
+.event-chip-detail { font-weight: 600; color: var(--ink-dim); font-size: 11px; }
+
 .event-title-mount {
   position: fixed; inset: 0; z-index: 65;
   display: flex; align-items: flex-start; justify-content: center;
@@ -2013,44 +2031,6 @@ button.dlc-expand:hover { background: var(--surface-3); }
 .fish-spot .fish-ring { fill: var(--accent); fill-opacity: 0.16; stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 4 3; }
 .fish-spot:hover .fish-ring { fill-opacity: 0.42; }
 .fish-spot .fish-new { opacity: 0.6; }
-
-/* ---------- Tidebound shipwrecks (T9e): two unique spawn animations (sea whirlpool vs shore surf wash) ---------- */
-.wreck-marker { filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
-.wreck-sea-whirlpool-ring {
-  fill: none; stroke: var(--accent, #38bdf8); stroke-width: 2.6; stroke-dasharray: 7 5;
-  animation: wreckSeaWhirlpool 0.76s cubic-bezier(0.2, 0.8, 0.3, 1) forwards;
-}
-.wreck-spawn-sea-anim {
-  animation: wreckSpawnSea 0.76s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-@keyframes wreckSeaWhirlpool {
-  0% { transform: scale(0.3) rotate(0deg); opacity: 0.95; }
-  70% { transform: scale(1.35) rotate(110deg); opacity: 0.65; }
-  100% { transform: scale(1.65) rotate(160deg); opacity: 0; }
-}
-@keyframes wreckSpawnSea {
-  0% { transform: translateY(-18px) scale(0.35) rotate(-22deg); opacity: 0; }
-  55% { transform: translateY(5px) scale(1.12) rotate(6deg); opacity: 1; }
-  100% { transform: translateY(0) scale(1) rotate(0deg); opacity: 1; }
-}
-
-.wreck-shore-surf-wave {
-  fill: none; stroke: var(--sand, #f3e2b8); stroke-width: 3.2; stroke-linecap: round;
-  animation: wreckShoreSurf 0.76s ease-out forwards;
-}
-.wreck-spawn-shore-anim {
-  animation: wreckSpawnShore 0.76s cubic-bezier(0.18, 0.88, 0.32, 1.08) forwards;
-}
-@keyframes wreckShoreSurf {
-  0% { transform: translateX(-16px) scale(0.55); opacity: 0.95; }
-  65% { transform: translateX(4px) scale(1.18); opacity: 0.75; }
-  100% { transform: translateX(10px) scale(1.35); opacity: 0; }
-}
-@keyframes wreckSpawnShore {
-  0% { transform: translate(-20px, -8px) scale(0.45) rotate(-18deg); opacity: 0; }
-  65% { transform: translate(4px, 2px) scale(1.08) rotate(5deg); opacity: 1; }
-  100% { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
-}
 
 /* ---------- Debug Mode HUD ---------- */
 .debug-hud-panel {

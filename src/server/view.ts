@@ -265,7 +265,7 @@ export function makeStateBuilder(room: Room): (viewerId: string) => any {
   const viewShared = g ? mergeViewShared(g, viewReg) : {};
   const viewOverlays = g ? mergeViewOverlays(g, viewReg) : null;
   // No game yet (lobby): the registry is only read with a game, so a field that moved to VIEW_DATA is set to null here, as before. Temporary (R7a.5), removed in R8.
-  const lobbyNulls = g ? {} : { fishIcons: null, portLevels: null, wrecks: null, pirates: null, tide: null };
+  const lobbyNulls = g ? {} : { fishIcons: null, portLevels: null, tide: null };
 
   const shared = {
     // Spread first, so a registered field never hides one of the core fields.

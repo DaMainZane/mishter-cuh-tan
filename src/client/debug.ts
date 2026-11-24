@@ -1,5 +1,5 @@
-// MODULE: client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays | DEPENDS ON: client/icons, client/pieceModel, client/render/board, client/render/pirates, client/render/terrainCanvas, client/socket, +3 more | USED BY: client/main
-import { fishGroundMarkup, hexIconLayout, netTileMarkup, robberMarkup, wreckMarkup } from './icons';
+// MODULE: client debug mode HUD, FPS/SVG node profiler, client-vs-server spot desync checker, sandbox controls, and board ID/icon-stress overlays | DEPENDS ON: client/icons, client/pieceModel, client/render/board, client/render/terrainCanvas, client/socket, client/store, +2 more | USED BY: client/main
+import { fishGroundMarkup, hexIconLayout, netTileMarkup, robberMarkup } from './icons';
 import { portRaiseSpots } from './pieceModel';
 import {
   canClientAffordHarbor,
@@ -8,7 +8,6 @@ import {
   canClientPlaceRoad,
   canClientPlaceSettlement
 } from './render/board';
-import { pirateMarkup } from './render/pirates';
 import { getTerrainCanvasStats } from './render/terrainCanvas';
 import { socket } from './socket';
 import { state } from './store';
@@ -23,9 +22,6 @@ export type DebugBrush =
   | 'bridge'
   | 'rickety_bridge'
   | 'net'
-  | 'pirate'
-  | 'wreck_sea'
-  | 'wreck_shore'
   | 'robber'
   | 'clear';
 
@@ -154,18 +150,7 @@ export function renderDebugBoardOverlayMarkup(): string {
   if (debugStressHex && hexes.length > 0) {
     const centerHex = hexes[Math.floor(hexes.length / 2)] || hexes[0];
     if (centerHex) {
-      const seaLayout = hexIconLayout({
-        hasFish: true,
-        hasSeaWreck: true,
-        hasPirate: true
-      });
-      const shoreLayout = hexIconLayout({
-        hasFish: false,
-        hasSeaWreck: false,
-        hasPirate: false,
-        shoreDir: { dq: 1, dr: 0 },
-        hasNumber: true
-      });
+      const seaLayout = hexIconLayout({ hasFish: true });
       const cx = Number(centerHex.x);
       const cy = Number(centerHex.y);
       html += `
@@ -173,15 +158,6 @@ export function renderDebugBoardOverlayMarkup(): string {
           ${netTileMarkup(centerHex.id, centerHex.corners, cx, cy, '#ff7043')}
           <g transform="translate(${(cx + seaLayout.fishOffset.dx).toFixed(1)}, ${(cy + seaLayout.fishOffset.dy).toFixed(1)}) scale(1.25)">
             ${fishGroundMarkup(3)}
-          </g>
-          <g transform="translate(${(cx + seaLayout.wreckOffset.dx).toFixed(1)}, ${(cy + seaLayout.wreckOffset.dy).toFixed(1)})">
-            <g class="piece-zoom-scale"><g transform="scale(1.18)">${wreckMarkup('sea', 1)}</g></g>
-          </g>
-          <g transform="translate(${(cx + shoreLayout.wreckOffset.dx).toFixed(1)}, ${(cy + shoreLayout.wreckOffset.dy).toFixed(1)})">
-            <g class="piece-zoom-scale"><g transform="scale(1.18)">${wreckMarkup('shore', 1)}</g></g>
-          </g>
-          <g transform="translate(${(cx + seaLayout.pirateOffset.dx).toFixed(1)}, ${(cy + seaLayout.pirateOffset.dy).toFixed(1)})">
-            <g class="piece-zoom-scale">${pirateMarkup(2, false)}</g>
           </g>
           <g transform="translate(${(cx + 30).toFixed(1)}, ${(cy - 8).toFixed(1)})">
             <g class="piece-zoom-scale"><g transform="scale(0.85)">${robberMarkup()}</g></g>
@@ -193,9 +169,6 @@ export function renderDebugBoardOverlayMarkup(): string {
 
   const hexBrushActive =
     debugBrush === 'net' ||
-    debugBrush === 'pirate' ||
-    debugBrush === 'wreck_sea' ||
-    debugBrush === 'wreck_shore' ||
     debugBrush === 'robber' ||
     debugBrush === 'clear';
   const vertBrushActive = debugBrush === 'settlement' || debugBrush === 'city' || debugBrush === 'clear';
@@ -257,8 +230,6 @@ function countSvgNodes(): { total: number; terrain: number; roads: number; verti
     countIn('boardOverlayLayer') +
     countIn('boardNetsLayer') +
     countIn('boardFishLayer') +
-    countIn('boardWrecksLayer') +
-    countIn('boardPiratesLayer') +
     countIn('boardHexDynamicLayer');
   const total = svg.getElementsByTagName('*').length;
   return { total, terrain, roads, vertices, overlays };
@@ -405,9 +376,6 @@ export function renderDebugHud(): void {
     { id: 'bridge', label: 'Bridge' },
     { id: 'rickety_bridge', label: 'Rickety' },
     { id: 'net', label: 'Net' },
-    { id: 'pirate', label: 'Pirate' },
-    { id: 'wreck_sea', label: 'SeaWreck' },
-    { id: 'wreck_shore', label: 'ShoreWreck' },
     { id: 'robber', label: 'Robber' },
     { id: 'clear', label: 'Erase' }
   ];

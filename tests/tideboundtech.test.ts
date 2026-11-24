@@ -21,10 +21,8 @@ import {
 import type { Board, Edge, GameState, Hex, Vertex } from '../src/shared';
 import {
   BRIDGE,
-  claimWreck,
-  computeWreckLootCount,
+  cardCount,
   DEMOLISH_BRIDGE,
-  DRIVE_OFF_PIRATE,
   FEED_SEA,
   GRAND_CAUSEWAY_BONUS_VP,
   GRAND_CAUSEWAY_VP,
@@ -32,11 +30,14 @@ import {
   harborLimitFor,
   longestRoadHasBridge,
   netPrice,
-  pirateKnightsNeeded,
+  pirateDefence,
+  pirateLoot,
+  pirateStrengthAt,
   PLACE_NET,
+  resolvePirateRaid,
+  resolveShipwreck,
+  shipwreckCards,
   RICKETY,
-  spawnPirate,
-  spawnWreckAt,
   syncBridgePool,
   TECH_FISHING_NETS,
   TECH_GRAND_CAUSEWAY,
@@ -287,16 +288,17 @@ describe('T11c — Nodes 1–3 (Harbor Charters, Rickety Bridges, Fishing Nets)'
 });
 
 describe('T11d — Nodes 4–6 (Salvage Crew, Net Works, Pirate Hunter)', () => {
-  it('Salvage Crew boosts wreck loot by +25% (4 -> 5 cards)', () => {
+  it('Salvage Crew salvages 1 more card from every shipwreck event (2026-11-24 event rework)', () => {
     const { g, ctx } = makeMainGame(true);
-    expect(computeWreckLootCount({ baseCards: 4, turnCount: 0, hasSalvageCrew: false })).toBe(4);
-    expect(computeWreckLootCount({ baseCards: 4, turnCount: 0, hasSalvageCrew: true })).toBe(5);
-
     giveTech(g, 'p1', TECH_SALVAGE_CREW);
-    const w = spawnWreckAt(ctx, 1, { site: 'sea', resource: 'wood', baseCards: 4, bonus: null });
-    expect(w).not.toBeNull();
-    const res = claimWreck(ctx, w!, 'p1');
-    expect(res?.amount).toBe(5);
+    g.round = 7;
+    const results = resolveShipwreck(ctx);
+    const [r1, r2] = results;
+    expect(r1.playerId).toBe('p1');
+    expect(r1.cards).toBe(shipwreckCards(r1.roll) + 1);
+    expect(r2.cards).toBe(shipwreckCards(r2.roll));
+    expect(cardCount(r1.got)).toBe(r1.cards);
+    expect(cardCount(r2.got)).toBe(r2.cards);
   });
 
   it('Net Works reduces net cost by 1 wood (2 wood + 1 sheep -> 1 wood + 1 sheep) and boosts catch rates', () => {
@@ -309,26 +311,22 @@ describe('T11d — Nodes 4–6 (Salvage Crew, Net Works, Pirate Hunter)', () => 
     expect(netPrice(g, reg, p1)).toEqual({ wood: 1, sheep: 1 });
   });
 
-  it('Pirate Hunter reduces knights needed by 2 (min 1) and increases pirate loot by +50%', () => {
-    const { g, reg, ctx } = makeMainGame(true);
+  it('Pirate Hunter counts as 2 knights against a raid and adds 1 loot card (2026-11-24 event rework)', () => {
+    const { g, ctx } = makeMainGame(true);
     const p1 = g.players[0];
-    g.board.vertices[1].piece = { type: 'settlement', owner: 'p1' };
-    g.round = 10; // strength 2 -> base loot 4 cards, +50% = 6 cards
-    spawnPirate(ctx, { hexId: 1 });
-
-    expect(pirateKnightsNeeded(g, 'p1', 4)).toBe(4);
-    expect(pirateKnightsNeeded(g, 'p1', 2)).toBe(2);
+    g.round = 14; // strength 2, loot 2 + 2 + 0 = 4
+    expect(pirateStrengthAt(14)).toBe(2);
+    expect(pirateDefence(g, 'p1')).toBe(0);
     giveTech(g, 'p1', TECH_PIRATE_HUNTER);
-    expect(pirateKnightsNeeded(g, 'p1', 4)).toBe(2);
-    expect(pirateKnightsNeeded(g, 'p1', 2)).toBe(1);
+    expect(pirateDefence(g, 'p1')).toBe(2);
+    expect(pirateLoot(2, 14, true)).toBe(5);
 
-    // With 1 played knight (discounted from 2), p1 can drive off the strength-2 pirate and gets 9 cards (+50% over 6)
-    p1.stats.knightsPlayed = 1;
-    const beforeCards = Object.values(p1.resources).reduce((a, b) => a + b, 0);
-    expect(checkAction(g, reg, { type: DRIVE_OFF_PIRATE, playerId: 'p1', payload: { hexId: 1 } })).toBeNull();
-    dispatch(g, reg, { type: DRIVE_OFF_PIRATE, playerId: 'p1', payload: { hexId: 1 } });
-    const gained = Object.values(p1.resources).reduce((a, b) => a + b, 0) - beforeCards;
-    expect(gained).toBe(9);
+    const before = Object.values(p1.resources).reduce((a, b) => a + b, 0);
+    const [r1, r2] = resolvePirateRaid(ctx);
+    expect(r1.won).toBe(true);
+    expect(cardCount(r1.got)).toBe(5);
+    expect(Object.values(p1.resources).reduce((a, b) => a + b, 0) - before).toBe(5);
+    expect(r2.won).toBe(false);
   });
 });
 

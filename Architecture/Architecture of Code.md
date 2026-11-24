@@ -248,7 +248,7 @@ src/packs/tidebound/*
 - **Per-player state:** `shared/views.ts` hides other hands and hidden tiles; `server/view.ts` builds the `gameState` the client renders and merges every `VIEW_DATA` entry an addon registered (`shared/viewData.ts`).
 - **Manifest:** a piece or action may carry a `visual` (`shared/visual.ts`): a slot (`vertex`, `edge`, `edge:ocean`, `hex`), a button, hint texts, and for an action the payload field that carries the spot (`spotKey`). `visualManifest.ts` builds and checks it; the server sends it once per addon set in a `visuals` event.
 - **Spots:** `packs/base/piecesView.ts` (`base.pieces_view`) sends each player `pieces[id] = { left, cost, spots }`. For a piece the spots come from the `build` validation; for an action from `legal()` filtered through `validate`, mapped by `spotKey`. The highlighted spots therefore cannot disagree with what the server accepts.
-- **Client side:** `pieceModel.ts` (pure: buttons, hints, spot markup), `pieceui.ts` (DOM and clicks: `clickSpot` emits `place` for a piece, `act` for an action), `visuals.ts` (the held manifest), `render/overlay.ts` (tile tints and popups), plus the tier 2 modules that stay code: `render/pirates.ts`, `render/bridgepicker.ts`, `pirateIcon.ts`, `icons.ts`.
+- **Client side:** `pieceModel.ts` (pure: buttons, hints, spot markup), `pieceui.ts` (DOM and clicks: `clickSpot` emits `place` for a piece, `act` for an action), `visuals.ts` (the held manifest), `render/overlay.ts` (tile tints and popups), plus the tier 2 modules that stay code: `render/bridgepicker.ts`, `render/eventTimeline.ts` (the Event Deck timeline strip), `icons.ts`. (Pirates and wrecks left the board on 2026-11-24: they are Event Deck events.)
 - **A "target action"** (act on an existing tile, port or vertex, e.g. feed the sea, harbor upgrade, ground work) is an `ActionDef` with a `visual`: it shares this whole path. It is not a piece. Plan: `Spot Actions Rework.md`.
 
 ```owns
@@ -257,14 +257,13 @@ src/shared/viewData.ts
 src/shared/visual.ts
 src/shared/visualManifest.ts
 src/packs/base/piecesView.ts
+src/packs/base/eventTimelineView.ts
 src/server/view.ts
 src/client/pieceModel.ts
 src/client/pieceui.ts
 src/client/visuals.ts
 src/client/icons.ts
-src/client/pirateIcon.ts
 src/client/render/overlay.ts
-src/client/render/pirates.ts
 src/client/render/bridgepicker.ts
 ```
 

@@ -11,15 +11,13 @@ import {
   TECH_SALVAGE_CREW,
   applyTides,
   ensureTides,
-  isWreckSeaHex,
-  seaHexIdsAt,
-  spawnPirate,
-  spawnWreckAt
+  PIRATE_EVENT_ID,
+  seaHexIdsAt
 } from '../src/packs/tidebound';
 import { clearBotTimers, createRoom, rooms } from '../src/server/rooms';
 import { defaultSettings } from '../src/server/runtime';
 import { makeStateBuilder } from '../src/server/view';
-import { buildTopology, createGame, hexDistance, makeCtx, registryFor } from '../src/shared';
+import { buildTopology, createGame, ensureEventTimeline, makeCtx, registryFor } from '../src/shared';
 
 // R7a.2: `makeStateBuilder(room)(viewerId)` for the player whose turn it is, another player and a spectator, with Tidebound fully on and with it off.
 // The result is compared with `tests/view.snapshot.json` (a different file from the golden one). The file is written the first time the test runs
@@ -85,7 +83,7 @@ function giveTech(g: any, pid: string, techId: string): void {
   g.ext.core.techs[pid] = [...new Set([...(g.ext.core.techs[pid] || []), techId])];
 }
 
-/** Tidebound with every field filled in for Bob: a net on a sea tile, a fishing ground, a harbor, a wreck, a pirate, a flood, a warning, a bridge on Longest Road. */
+/** Tidebound with every field filled in for Bob: a net on a sea tile, a fishing ground, a harbor, a flood, a warning, a bridge on Longest Road. (Wrecks and pirates are Event Deck events since 2026-11-24, nothing on the board.) */
 function tideboundScene() {
   const { g, reg, ctx } = makeGame(TIDE_RULES);
   const bob = g.players[1];
@@ -125,13 +123,6 @@ function tideboundScene() {
   // Round 5: one half of the coast is flooded, the other half is dry and about to flood (the warning shows during the last seat's turn).
   ensureTides(g, reg);
   applyTides(ctx);
-
-  // A wreck and a pirate far from every piece, so nobody claims the wreck and nothing is guarded.
-  const centre = g.board.hexes.find((h: any) => h.q === 0 && h.r === 0)!;
-  const far: number[] = g.board.hexes.filter((h: any) => isWreckSeaHex(reg, h) && hexDistance(h, centre) >= 5).map((h: any) => h.id);
-  expect(far.length).toBeGreaterThan(2);
-  expect(spawnWreckAt(ctx, far[0], { site: 'sea', resource: 'wood', baseCards: 3, bonus: null })).not.toBeNull();
-  expect(spawnPirate(ctx, { hexId: far[far.length - 1] })).not.toBeNull();
 
   return { g, reg };
 }
@@ -213,7 +204,7 @@ function viewsFor(g: any): { active: any; other: any; spectator: any } {
   }
 }
 
-const TIDEBOUND_PUBLIC_FIELDS = ['fishIcons', 'portLevels', 'wrecks', 'pirates', 'tide', 'hexOverlays'];
+const TIDEBOUND_PUBLIC_FIELDS = ['fishIcons', 'portLevels', 'tide', 'hexOverlays'];
 
 describe('R7a.6: portLevels with Tidebound off', () => {
   it('sends a raised port although the Harbor addon is off (portLevels is registered at pack level)', () => {
@@ -255,6 +246,28 @@ describe('R7a.6: the lobby state', () => {
   });
 });
 
+describe('the Event Deck timeline (2026-11-24)', () => {
+  it('is sent to every viewer while the deck is on: the next 3 events with their rounds, a pirate raid with its strength', () => {
+    const { g, reg } = makeGame({ ...TIDE_RULES, eventsOn: true });
+    const st = ensureEventTimeline(g, reg, g.round);
+    st.deck[0] = PIRATE_EVENT_ID;
+    const { active, other, spectator } = viewsFor(g);
+    for (const view of [active, other, spectator]) {
+      const tl = view.eventTimeline;
+      expect(tl.upcoming).toHaveLength(3);
+      expect(tl.upcoming[0]).toMatchObject({ cardId: PIRATE_EVENT_ID, icon: 'pirate', round: st.rounds![0] });
+      expect(tl.upcoming[0].detail).toMatch(/^Strength \d$/);
+      for (let i = 1; i < 3; i++) expect(tl.upcoming[i].round - tl.upcoming[i - 1].round).toBeGreaterThanOrEqual(2);
+      expect(tl.last).toBeNull();
+    }
+  });
+
+  it('is not sent while the deck is off', () => {
+    const { g } = makeGame(TIDE_RULES);
+    expect(viewsFor(g).active.eventTimeline).toBeUndefined();
+  });
+});
+
 describe('R7a.6: tech gates (Tidebound on, tech tree on)', () => {
   it('hides the gated fields and pieces until the tech is owned', () => {
     const locked = playerOf(viewsFor(lightScene(TIDE_RULES, []).g).active, 'b');
@@ -277,8 +290,8 @@ describe('R7a.6: tech gates (Tidebound on, tech tree on)', () => {
 const ADDON_OFF_CASES: { addon: string; pub: string[]; player: string[]; pieces: string[]; control: string }[] = [
   { addon: 'tidebound.fishing', pub: ['fishIcons'], player: ['netsLeft', 'netSpots', 'netCost', 'feedCost', 'feedSpots'], pieces: [], control: 'harborsLeft' },
   { addon: 'tidebound.harbor', pub: [], player: ['harborCost', 'harborSpots', 'harborsLeft', 'harborTradesLeft'], pieces: [], control: 'netsLeft' },
-  { addon: 'tidebound.wrecks', pub: ['wrecks'], player: [], pieces: [], control: 'netsLeft' },
-  { addon: 'tidebound.pirates', pub: ['pirates'], player: ['pirateDrives'], pieces: [], control: 'netsLeft' },
+  { addon: 'tidebound.wrecks', pub: [], player: [], pieces: [], control: 'netsLeft' },
+  { addon: 'tidebound.pirates', pub: [], player: [], pieces: [], control: 'netsLeft' },
   { addon: 'tidebound.tides', pub: ['tide', 'hexOverlays'], player: [], pieces: [], control: 'netsLeft' },
   { addon: 'tidebound.rickety_bridges', pub: [], player: ['bridgeUpgradeCost'], pieces: ['rickety_bridge'], control: 'netsLeft' },
   { addon: 'tidebound.bridges', pub: [], player: ['bridgeUpgradeCost', 'canDemolishBridge'], pieces: [BRIDGE, 'rickety_bridge'], control: 'netsLeft' }
@@ -312,8 +325,6 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       // Public fields.
       expect(active.fishIcons).not.toBeNull();
       expect(active.portLevels).not.toBeNull();
-      expect(active.wrecks).not.toBeNull();
-      expect(active.pirates).not.toBeNull();
       expect(active.hexOverlays).not.toBeNull();
       expect(active.tide).not.toBeNull();
       const kinds = Object.values(active.hexOverlays as Record<number, { kind: string }>).map(o => o.kind);
@@ -332,7 +343,6 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       expect(bob.harborsLeft).toBeDefined();
       expect(bob.harborTradesLeft).toBeDefined();
       expect(bob.canDemolishBridge).toBe(true);
-      expect(bob.pirateDrives).toBeDefined();
       expect(bob.bridgeUpgradeCost).toBeDefined();
       // A net is a tile action now: its tile is public (`netTiles`), and it is no longer in `pieceCosts` (the net price comes with the build UI rework, bug 5).
       expect(bob.netTiles.length).toBe(1);
@@ -364,15 +374,13 @@ describe('what the client gets, Tidebound on with every addon and the tech tree'
       for (const view of [offViews.active, offViews.other, offViews.spectator]) {
         expect(view.fishIcons).toBeNull();
         expect(view.portLevels).toBeNull();
-        expect(view.wrecks).toBeNull();
-        expect(view.pirates).toBeNull();
+        expect(view.eventTimeline).toBeUndefined();
         expect(view.hexOverlays).toBeNull();
         expect(view.tide).toBeNull();
         for (const p of view.players) {
           expect(p.netSpots).toBeUndefined();
           expect(p.feedSpots).toBeUndefined();
           expect(p.harborSpots).toBeUndefined();
-          expect(p.pirateDrives).toBeUndefined();
           expect(p.bridgeUpgradeCost).toBeUndefined();
           expect(p.netTiles).toBeUndefined();
           expect(p.netCost).toBeUndefined();

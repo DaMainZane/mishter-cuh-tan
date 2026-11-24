@@ -463,55 +463,38 @@ export function recordTurnHistory(
         break;
       }
 
-      case 'pirateSpawned': {
-        turnSummary.actions.push({
-          category: 'event',
-          icon: 'pirate',
-          badge: `Strength ${d.strength}`,
-          text: `Pirate ship appeared on tile #${d.hexId}`,
-          timestamp: now
-        });
+      // Tidebound sea events (2026-11-24): one line per player, cards shown face up (the log names them too).
+      case 'shipwreckEvent': {
+        for (const r of (d.results || []) as { playerId: string; roll: number; got: Record<string, number> }[]) {
+          const who = g.players.find(x => x.id === r.playerId);
+          const res = Object.entries(r.got || {}).filter(([, n]) => n > 0).map(([resource, amount]) => ({ resource, amount, sign: '+' as const }));
+          turnSummary.actions.push({
+            category: 'event',
+            icon: 'wreck',
+            badge: `d20: ${r.roll}`,
+            resources: res.length ? res : undefined,
+            text: `${who?.name || 'Player'} salvaged the shipwreck`,
+            timestamp: now
+          });
+        }
         break;
       }
 
-      case 'pirateRobbed': {
-        const victim = g.players.find(x => x.id === d.victimId);
-        const n = Number(d.amount) || 0;
-        turnSummary.actions.push({
-          category: 'rob',
-          icon: 'pirate',
-          badge: n > 0 ? `-${n}` : 'Raid',
-          resources: n > 0 ? [{ resource: 'mystery', amount: n, sign: '-' }] : undefined,
-          text: n > 0
-            ? `Pirates robbed ${victim?.name || 'a player'}`
-            : `Pirates raided ${victim?.name || 'a player'} (no cards)`,
-          timestamp: now
-        });
-        break;
-      }
-
-      case 'pirateFleeing': {
-        turnSummary.actions.push({
-          category: 'event',
-          icon: 'pirate',
-          badge: 'Fleeing',
-          text: 'Pirate ship fled for open water',
-          timestamp: now
-        });
-        break;
-      }
-
-      case 'pirateDriven': {
-        const driver = g.players.find(x => x.id === d.playerId);
-        const amt = Number(d.amount) || 0;
-        turnSummary.actions.push({
-          category: 'event',
-          icon: 'pirate',
-          badge: 'Pirate',
-          resources: d.resource && amt > 0 ? [{ resource: d.resource, amount: amt, sign: '+' }] : undefined,
-          text: `${driver?.name || 'Player'} drove off pirate (str ${d.strength})`,
-          timestamp: now
-        });
+      case 'pirateEvent': {
+        for (const r of (d.results || []) as { playerId: string; won: boolean; defence: number; got: Record<string, number>; lost: Record<string, number>; lostFish: number }[]) {
+          const who = g.players.find(x => x.id === r.playerId);
+          const cards = r.won ? r.got : r.lost;
+          const res = Object.entries(cards || {}).filter(([, n]) => n > 0).map(([resource, amount]) => ({ resource, amount, sign: (r.won ? '+' : '-') as '+' | '-' }));
+          if (!r.won && r.lostFish > 0) res.push({ resource: 'fish', amount: r.lostFish, sign: '-' });
+          turnSummary.actions.push({
+            category: r.won ? 'event' : 'rob',
+            icon: 'pirate',
+            badge: `${r.defence} vs ${d.strength}`,
+            resources: res.length ? res : undefined,
+            text: r.won ? `${who?.name || 'Player'} beat the pirates` : `Pirates robbed ${who?.name || 'a player'}`,
+            timestamp: now
+          });
+        }
         break;
       }
 

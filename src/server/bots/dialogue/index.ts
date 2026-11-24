@@ -181,21 +181,21 @@ export function emitBotDialogue(room: Room, actorId: string, actionType: string,
           break;
         }
 
-        case 'wreckClaimed': {
-          // Only the claiming player is read; d.resource and d.bonus are deliberately ignored.
-          say(botById(d.playerId), 'wreckClaimed');
+        case 'shipwreckEvent': {
+          // The bot with the best d20 speaks; what it salvaged is never read.
+          const rolls = ((d.results || []) as { playerId: string; roll: number }[]).filter(r => botById(r.playerId));
+          const best = rolls.reduce<{ playerId: string; roll: number } | null>((a, r) => (!a || r.roll > a.roll ? r : a), null);
+          if (best) say(botById(best.playerId), 'wreckClaimed');
           break;
         }
 
-        case 'pirateRobbed': {
-          // Only the raided player (victimId) is read; stolen resources are never read.
-          say(botById(d.victimId), 'pirateRaid');
-          break;
-        }
-
-        case 'pirateDriven': {
-          // Only the player who drove the pirate off is read; d.resource is deliberately ignored.
-          say(botById(d.playerId), 'pirateDriven');
+        case 'pirateEvent': {
+          // One bot speaks: a loser complains, otherwise a winner gloats. Only who won or lost is read, never the cards.
+          const res = (d.results || []) as { playerId: string; won: boolean }[];
+          const losers = bots.filter(b => res.some(r => r.playerId === b.id && !r.won));
+          const winners = bots.filter(b => res.some(r => r.playerId === b.id && r.won));
+          if (losers.length > 0) say(pickOf(losers), 'pirateRaid');
+          else if (winners.length > 0) say(pickOf(winners), 'pirateDriven');
           break;
         }
 

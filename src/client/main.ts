@@ -1,4 +1,4 @@
-// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +18 more | USED BY: none
+// MODULE: client entry point (wires DOM events, camera pan and zoom, and socket messages to the renderers) | DEPENDS ON: client/actions, client/audio, client/cursors, client/debug, client/icons, client/mapmenu, +17 more | USED BY: none
 import { socket } from './socket';
 import { playDiceRollSound, playDiscardSound, playTone, playVictoryFanfareSound, playYourTurnSound, toggleSound } from './audio';
 import { hydrateIcons } from './icons';
@@ -35,7 +35,6 @@ import { sendChat, toggleRoundCollapse, toggleLogFilter, renderSidebar } from '.
 import { toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick } from './render/techpanel';
 import { clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker } from './render/bridgepicker';
 import { openBuildMenu, chooseBuildOption, closeBuildMenu } from './render/buildmenu';
-import { clickPirate } from './render/pirates';
 import { setSetupTab, setupTabKey, toggleDlcOpen, openDlcRow, togglePreviewDrawer, closePreviewDrawer, openAllRulesFromPreview } from './render/setup';
 import { onVisualsEvent, resetManifest } from './visuals';
 import { clickSpot } from './pieceui';
@@ -79,7 +78,7 @@ Object.assign(window as any, {
   executeBankTrade, proposePlayerTrade, rollDice, confirmInlineAction, closeInlineDrawer,
   toggleTradeDrawer, buyDevCard, setBuildMode, mainTurnButton, sendChat,
   setLogTab: onSetLogTab, toggleRoundCollapse, toggleLogFilter, toggleTechPanel, researchTechClick, upgradePortClick, pickGroundHex, convertTileClick,
-  clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker, clickPirate, clickSpot,
+  clickPlacedBridge, chooseBridgeType, confirmBridgeUpgrade, confirmBridgeDemolish, closeBridgePicker, clickSpot,
   openBuildMenu, chooseBuildOption, closeBuildMenu, fishPickAdd, fishPickRemove, fishPickConfirm,
   confirmTradeWith, cancelTrade, respondToTrade, onClickHandResource, onClickHandWild, onClickDevCard,
   startCounter, adjustCounter, sendCounter, cancelCounter, toggleTradesCollapsed, cycleAvatar, cycleBotTier, setSetupOpen, setSetupTab, setupTabKey, toggleDlcOpen, openDlcRow, togglePreviewDrawer, closePreviewDrawer, openAllRulesFromPreview,
@@ -479,7 +478,7 @@ function init(): void {
       if (clickedOnclickEl) return;
 
       const svgCandidates = document.querySelectorAll<SVGGraphicsElement>(
-        '#boardVerticesLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""]), #boardPiratesLayer g[onclick]:not([onclick=""])'
+        '#boardVerticesLayer g[onclick]:not([onclick=""]), #boardPieceSpotsLayer g[onclick]:not([onclick=""])'
       );
       let nearestEl: SVGGraphicsElement | null = null;
       let nearestDist = 22;

@@ -1,9 +1,9 @@
 // MODULE: Tidebound tech tree nodes (T11a-T11f: 8 extension nodes across Expansion & Industrial paths, techGate re-export, Grand Causeway 6 VP hook, Harbor Empire ceil(V/2) bank card grant) | DEPENDS ON: packs/base/constants, packs/base/techEffects, packs/tidebound/bridgeConsts, packs/tidebound/ricketyBridges, shared/index | USED BY: packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/index, packs/tidebound/pirates, packs/tidebound/wrecks, +1 more
 import {
+  allEventCards,
   bankGive,
   BOT_GOALS,
   createRng,
-  getMarkers,
   getPlayer,
   hasTech,
   rngInt,
@@ -37,11 +37,11 @@ export { TECH_HARBOR_CHARTERS, techGate };
 export const TECH_RICKETY_BRIDGES = 'tidebound.rickety_bridges';
 /** Tier 2 — Industrial path (`offset = 3`, cost 6 at V = 2): unlocks fishing nets and allows upgrading a 3:1 port with a settlement to 2:1. */
 export const TECH_FISHING_NETS = 'tidebound.fishing_nets';
-/** Tier 3a — Expansion path (`offset = 5`, cost 9 at V = 2): +25% wreck loot, higher sea-wreck dev card chance, and unlocks `demolish_bridge`. */
+/** Tier 3a — Expansion path (`offset = 5`, cost 9 at V = 2): +1 card from every shipwreck event, and unlocks `demolish_bridge`. */
 export const TECH_SALVAGE_CREW = 'tidebound.salvage_crew';
 /** Tier 3a — Industrial path (`offset = 5`, cost 9 at V = 2): net cost -1 wood, base catch chance 1 in 4 (boosted 1 in 2), 1 in 3 chance to save a fish boost. */
 export const TECH_NET_WORKS = 'tidebound.net_works';
-/** Tier 3b — Expansion path (`offset = 7`, cost 11 at V = 2): 2 fewer knights needed to beat pirates (min 1) and +50% pirate loot. */
+/** Tier 3b — Expansion path (`offset = 7`, cost 11 at V = 2): counts as 2 extra knights against pirate raids, and +1 loot card for beating one. */
 export const TECH_PIRATE_HUNTER = 'tidebound.pirate_hunter';
 /** Tier 3b — Industrial path (`offset = 7`, cost 11 at V = 2): unlocks Harbors (`upgrade_harbor`, 1:1 trade up to 4/turn) and Feed the Sea (`feed_sea`). */
 export const TECH_HARBOR_MASTER = 'tidebound.harbor_master';
@@ -247,7 +247,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     costResources: ['sheep', 'brick'],
     dlc: 'tidebound',
     description:
-      '+25% shipwreck salvage loot, higher dev-card chance on sea wrecks, and unlocks Demolish Bridge (remove a bridge for half its cards back).',
+      '+1 card from every Shipwreck event, and unlocks Demolish Bridge (remove a bridge for half its cards back).',
     replace: true
   },
   {
@@ -277,7 +277,7 @@ export const TIDEBOUND_TECH_DEFS: TechDef[] = [
     costResources: ['ore', 'wheat'],
     dlc: 'tidebound',
     description:
-      'Driving off a pirate requires 2 fewer played knights (minimum 1) and grants +50% pirate loot.',
+      'Counts as 2 extra played knights against Pirate raids, and +1 loot card when you beat one.',
     replace: true
   },
   {
@@ -340,8 +340,14 @@ export const BOT_NET_PIECE = 'net';
 export const BOT_PLACE_NET_ACTION = 'place_net';
 export const BOT_FEED_SEA_ACTION = 'feed_sea';
 export const BOT_UPGRADE_HARBOR_ACTION = 'upgrade_harbor';
-export const BOT_WRECK_MARKER = 'wreck';
-export const BOT_PIRATE_MARKER = 'pirate';
+/** Event card ids of the shipwreck and pirate raid events (2026-11-24: events in the Event Deck, no pieces on the board). */
+export const BOT_SHIPWRECK_EVENT = 'tidebound.shipwreck';
+export const BOT_PIRATE_EVENT = 'tidebound.pirate_raid';
+
+/** True when the Event Deck is on and holds the card `cardId`. */
+function deckHas(g: GameState, reg: Registry, cardId: string): boolean {
+  return !!g.rules?.eventsOn && allEventCards(reg).has(cardId);
+}
 
 /** Bridges and rickety bridges `pid` has on the board. */
 function bridgeEdgeCount(g: GameState, pid: Id): number {
@@ -386,8 +392,7 @@ export const tideboundTechBotGoal: BotGoalDef = {
         return netBonus + (hasPortSettlement ? 4 : 0);
       }
       case TECH_SALVAGE_CREW: {
-        const wrecksOut = getMarkers(g, { kind: BOT_WRECK_MARKER, target: 'hex' }).length;
-        return 14 + (wrecksOut > 0 ? 6 : 0) + (bridgeEdgeCount(g, pid) > 0 ? 2 : 0);
+        return 14 + (deckHas(g, reg, BOT_SHIPWRECK_EVENT) ? 6 : 0) + (bridgeEdgeCount(g, pid) > 0 ? 2 : 0);
       }
       case TECH_NET_WORKS: {
         if (!reg.actions.has(BOT_PLACE_NET_ACTION)) return 0;
@@ -395,9 +400,8 @@ export const tideboundTechBotGoal: BotGoalDef = {
         return 16 + Math.min(6, myNets * 3);
       }
       case TECH_PIRATE_HUNTER: {
-        const piratesOut = getMarkers(g, { kind: BOT_PIRATE_MARKER, target: 'hex' }).length;
         const knights = (p.stats.knightsPlayed || 0) + p.devCards.filter(c => c === 'knight').length;
-        return (piratesOut > 0 ? 18 : 11) + Math.min(4, knights * 2);
+        return (deckHas(g, reg, BOT_PIRATE_EVENT) ? 18 : 11) + Math.min(4, knights * 2);
       }
       case TECH_HARBOR_MASTER: {
         if (!reg.actions.has(BOT_UPGRADE_HARBOR_ACTION) && !reg.actions.has(BOT_FEED_SEA_ACTION)) return 0;

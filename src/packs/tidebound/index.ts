@@ -1,4 +1,4 @@
-// MODULE: tidebound pack (DLC: 8 addons with links; T1 sea tiles, T2 wide water + sea data, T3 bridges, T4 rickety bridges, T5a tides schedule, T5b spring tide, T5c tide level, T5d elevation, T5e idle ports, T6 tide view for the client, T7a fish token, T7b1 fishing nets, T7b2 net spots + net bot goal, T7c fish icon boosts, T7d tide replenish, T7e feed the sea, T8a harbor 1:1 upgrade, T8b 4 trades/turn + invalid-ratio prompt, T9 wrecks, T10 pirates, T11 tech tree nodes & gates, T12 rising sea lowest-elevation drowning & rate settings) | DEPENDS ON: packs/tidebound/addons.generated, packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/pirates, packs/tidebound/ricketyBridges, +5 more | USED BY: packs/index, server/lobby, server/runtime
+// MODULE: tidebound pack (DLC: 8 addons with links; T1 sea tiles, T2 wide water + sea data, T3 bridges, T4 rickety bridges, T5a tides schedule, T5b spring tide, T5c tide level, T5d elevation, T5e idle ports, T6 tide view for the client, T7a fish token, T7b1 fishing nets, T7b2 net spots + net bot goal, T7c fish icon boosts, T7d tide replenish, T7e feed the sea, T8a harbor 1:1 upgrade, T8b 4 trades/turn + invalid-ratio prompt, T9 wrecks, T10 pirates, T11 tech tree nodes & gates, T12 rising sea lowest-elevation drowning & rate settings) | DEPENDS ON: packs/tidebound/addons.generated, packs/tidebound/bridges, packs/tidebound/fishing, packs/tidebound/harbor, packs/tidebound/pirates, packs/tidebound/ricketyBridges, +6 more | USED BY: packs/index, server/lobby, server/runtime
 import { VIEW_DATA } from '../../shared';
 import type { Pack, ViewDataDef } from '../../shared';
 import { tideboundAddons } from './addons.generated';
@@ -163,6 +163,8 @@ export {
   HARBOR_EMPIRE_RNG_SALT,
   TECH_GRAND_CAUSEWAY,
   TECH_HARBOR_CHARTERS,
+  TECH_PIRATE_HUNTER,
+  TECH_SALVAGE_CREW,
   TIDEBOUND_TECH_DEFS,
   deriveHarborEmpireRng,
   grandCausewayBonusVp,
@@ -209,101 +211,46 @@ export {
 export type { TideClientView, TideCluster, TideLevelDef, TideState, TideWarning } from './tides';
 
 export {
-  DRIVE_OFF_PIRATE,
-  PIRATE_AVOID_RADIUS,
   PIRATE_BASE_STRENGTH,
-  PIRATE_CADENCE_ROUNDS,
-  PIRATE_CREW_KNIGHT_DISCOUNT,
-  PIRATE_CREW_LOOT_MULT,
+  PIRATE_COPIES,
   PIRATE_EVENT_ID,
   PIRATE_FIRST_ROUND,
-  PIRATE_FLEE_BASE,
-  PIRATE_FLEE_CLOSE_STEP,
-  PIRATE_FLEE_DISTANCE,
-  PIRATE_FLEE_MAX,
-  PIRATE_FLEE_ROB_STEP,
-  PIRATE_FLEE_STEPS,
   PIRATE_GROWTH_ROUNDS,
-  PIRATE_LOOT_BASE,
+  PIRATE_HUNTER_KNIGHTS,
+  PIRATE_HUNTER_LOOT,
+  PIRATE_LOOT_MAX,
+  PIRATE_LOOT_ROUND_STEP,
   PIRATE_MARKER_KIND,
-  PIRATE_MAX,
   PIRATE_MAX_STRENGTH,
   PIRATE_ROB_CARDS,
-  TECH_PIRATE_HUNTER,
-  activePirates,
-  canDrivePirate,
-  derivePirateRng,
-  drivablePirateHexIds,
-  driveOffPirateAction,
-  ensurePirateRng,
-  guardedVertices,
-  hexVertexDistance,
-  isGuardedHex,
-  passivePirateSpawn,
-  pirateAt,
+  clearOldPirates,
+  nextPirateRaid,
   pirateBotGoal,
-  pirateClientView,
-  pirateContactVertices,
-  pirateDriveView,
+  pirateDefence,
   pirateKnights,
-  pirateKnightsNeeded,
-  pirateLootCards,
+  pirateLoot,
   pirateRaidCard,
-  pirateRoundStep,
-  pirateSpawnCandidates,
-  pirateStrengthAt,
   piratesAddon,
-  seaNeighborIds,
-  spawnPirate
+  pirateStrengthAt,
+  resolvePirateRaid
 } from './pirates';
-export type { PirateClientItem, PirateMode, PiratePayload } from './pirates';
+export type { PirateResult } from './pirates';
 
 export {
-  SALVAGE_CREW_LOOT_MULT,
-  STORM_CADENCE_ROUNDS,
-  STORM_EVENT_ID,
-  STORM_FIRST_ROUND,
-  TECH_SALVAGE_CREW,
-  WRECK_COUNTDOWN_ROUNDS,
+  SALVAGE_CREW_BONUS,
+  SHIPWRECK_BANDS,
+  SHIPWRECK_COPIES,
+  SHIPWRECK_EVENT_ID,
   WRECK_MARKER_KIND,
-  WRECK_MAX_PLAYER_DIST,
-  WRECK_MAX_TIME_BOOST,
-  WRECK_SCALE_TURNS,
-  WRECK_SEA_CHANCE,
-  WRECK_SEA_DEV_CHANCE,
-  WRECK_SEA_DEV_TECH_CHANCE,
-  WRECK_SEA_FISH_CHANCE,
-  WRECK_SEA_MAX_CARDS,
-  WRECK_SEA_MIN_CARDS,
-  WRECK_SHORE_MAX_CARDS,
-  WRECK_SHORE_MIN_CARDS,
-  activeWrecks,
-  claimWreck,
-  computeWreckLootCount,
-  deriveWreckRng,
-  edgesOfHex,
-  ensureWreckRng,
-  expectedWreckLootValue,
-  isWreckSeaHex,
-  isWreckShoreHex,
-  minPlayerDistanceToHex,
-  pickWreckHex,
-  playerHexDistance,
-  playerTouchesWreck,
-  shoreSeaDirection,
-  spawnStormWreck,
-  spawnWreckAt,
-  stormEventCard,
-  touchingPlayersOfWreck,
-  verticesOfHex,
-  wreckBotGoal,
-  wreckCandidates,
-  wreckClientView,
-  wreckRoundBonus,
-  wreckTimeMultiplier,
+  clearOldWrecks,
+  resolveShipwreck,
+  salvageBotGoal,
+  shipwreckCards,
+  shipwreckEventCard,
   wrecksAddon
 } from './wrecks';
-export type { WreckBonus, WreckClaimResult, WreckClientItem, WreckPayload, WreckSite } from './wrecks';
+export type { ShipwreckResult } from './wrecks';
+export { cardCount, cardList, eventStream, giveRandomResources, rollD20 } from './seaEvents';
 
 /**
  * Always-on view defaults (R7a.5, trap 1). A public field of the client state is `null` when its addon is off, but an entry registered inside an
@@ -314,7 +261,7 @@ export type { WreckBonus, WreckClaimResult, WreckClientItem, WreckPayload, Wreck
 const tideboundViewDefaults: ViewDataDef = {
   id: 'tidebound.view_defaults',
   priority: -100,
-  shared: () => ({ fishIcons: null, wrecks: null, pirates: null, tide: null })
+  shared: () => ({ fishIcons: null, tide: null })
 };
 
 /**
