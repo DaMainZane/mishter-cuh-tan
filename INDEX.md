@@ -110,6 +110,7 @@ What every file does. Paths are relative to the repo root. Every source file sta
 | `base/hooks.ts` | base hooks (game start state, S0.10 per-pack stats handler, round hooks, pick settling and trade pruning) |
 | `base/longestRoad.ts` | longest road metric (DFS over a player's roads and road-like edge pieces, blocked by opponent pieces) |
 | `base/map/index.ts` | base map content (hexagon shape, random terrain, standard numbers, Standard and Blank quick starts) |
+| `base/map/clusters.ts` | island clusters (the Tidebound default map shape: island sizes 4 to 20 drawn about 65% small, 25% medium, 10% large; islands grouped in clusters that merge when they meet; 1 or 2 tiles of water inside a cluster, at least 3 between clusters) |
 | `base/map/numbers.ts` | base number styles (balanced; `standard` lives in index.ts) |
 | `base/map/shapes.ts` | base map shapes (continent, ring, islands, archipelago, continents; lake, river, satellites, ragged) |
 | `base/map/terrain.ts` | base terrain styles (spread, clustered, realistic; `random` lives in index.ts) |

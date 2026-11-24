@@ -1,4 +1,4 @@
-// MODULE: base map shapes (continent, ring, islands, archipelago, continents; lake, river, satellites, ragged) | DEPENDS ON: shared/index, shared/mapshape | USED BY: packs/base/map/index
+// MODULE: base map shapes (continent, ring, islands, archipelago, continents; lake, river, satellites, ragged) | DEPENDS ON: packs/base/map/clusters, shared/index, shared/mapshape | USED BY: packs/base/map/index
 import { rngInt, rngNext } from '../../../shared';
 import type { MapCtx, PackApi } from '../../../shared';
 // The land-field helpers are imported from their module directly (their names are generic and stay out of the shared index).
@@ -7,6 +7,7 @@ import {
   waterNeighbours, wideGap
 } from '../../../shared/mapshape';
 import type { BlobSpec, LandField } from '../../../shared/mapshape';
+import { ISLAND_MIN, clusterCanvasRadius, growIslandClusters } from './clusters';
 
 const clampInt = (v: number, min: number, max: number) => Math.max(min, Math.min(max, Math.floor(v)));
 
@@ -410,6 +411,25 @@ export function registerShapes(api: PackApi): void {
         oy: 53.7 * (i + 1)
       }));
       if (!growBlobs(f, specs, fit.gap)) f.failed = 'archipelago: grow';
+    }
+  });
+
+  // The Tidebound default map (2026-11-24): many mixed-size islands in clusters. Plan and growth are in ./clusters.ts.
+  api.mapShape({
+    id: 'island_clusters',
+    label: 'Island clusters',
+    description: 'Many islands of 4 to 20 tiles, mostly small, in clusters: 1 or 2 tiles of water between islands of a cluster, at least 3 between clusters. Clusters that meet merge.',
+    stage: 'shape',
+    phase: 'base',
+    slot: 'shape',
+    params: [landParam(55)],
+    canvasRadius: clusterCanvasRadius,
+    run(f) {
+      f.single = false;
+      f.cleanup = false;
+      f.minSize = ISLAND_MIN;
+      const why = growIslandClusters(f);
+      if (why) f.failed = why;
     }
   });
 

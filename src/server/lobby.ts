@@ -158,7 +158,7 @@ export function applyRecipeStyle(
 }
 
 /** What Tidebound is built for: islands with wide seas between them (the `wide_water` perk), on a board big enough to hold the water. */
-export const TIDEBOUND_MAP_PICKS = ['islands', 'wide_water'];
+export const TIDEBOUND_MAP_PICKS = ['island_clusters', 'wide_water'];
 export const TIDEBOUND_MAP_RADIUS = 7;
 
 /**

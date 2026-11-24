@@ -1,4 +1,4 @@
-// MODULE: seeded lattice value noise (integer hash, only + - * / and floor, so a saved seed gives the same map on any engine) | DEPENDS ON: shared/rng | USED BY: packs/tidebound/seaData, shared/index, shared/mapcells, shared/mapgen, shared/mapshape
+// MODULE: seeded lattice value noise (integer hash, only + - * / and floor, so a saved seed gives the same map on any engine) | DEPENDS ON: shared/rng | USED BY: packs/base/map/clusters, packs/tidebound/seaData, shared/index, shared/mapcells, shared/mapgen, shared/mapshape
 import { createRng } from './rng';
 
 const SQRT3_2 = 0.8660254037844386;

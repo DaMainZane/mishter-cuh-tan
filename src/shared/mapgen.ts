@@ -7,7 +7,7 @@ import type { RngState } from './rng';
 import { addWaterTopology, buildTopology } from './topology';
 import type { HexInit } from './topology';
 import type { Board, Rules } from './types';
-import { MAX_RADIUS, MIN_RADIUS, makeRecipe, stageRng } from './maprecipe';
+import { MAX_CANVAS_RADIUS, MAX_RADIUS, MIN_RADIUS, makeRecipe, stageRng } from './maprecipe';
 import type { MapRecipe, MapStage } from './maprecipe';
 import { effectiveFlags, paramOf, resolveMapOptions, resolveParams } from './mapoptions';
 import type { CellInfo, DropReason, MapCtx, NumbersDef, PerkDef, ShapeOpDef, TerrainDef } from './mapoptions';
@@ -190,7 +190,8 @@ export function generateMap(reg: Registry, rules: Rules, input: Partial<MapRecip
   // A wide-water pick (Tidebound) grows the canvas around the normal map: the land count stays what the radius gives, and the extra room is sea,
   // so wide gaps work at any radius. Only the radius cap can hold it back; say so instead of looking broken.
   const seaExtra = seaExtraOf(paramOf(resolved.options, params, 'water.extra'));
-  const canvasRadius = canvasRadiusFor(recipe.radius, seaExtra);
+  const shapeCanvas = resolved.options.reduce((r, o) => (o.stage === 'shape' && (o as ShapeOpDef).canvasRadius ? Math.max(r, (o as ShapeOpDef).canvasRadius!(recipe.radius, seaExtra)) : r), 0);
+  const canvasRadius = Math.min(MAX_CANVAS_RADIUS, Math.max(canvasRadiusFor(recipe.radius, seaExtra), shapeCanvas));
   if (seaExtra > 0 && canvasRadius < recipe.radius + seaGrow(seaExtra)) {
     warnings.push({
       code: 'wide-water-small',

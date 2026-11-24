@@ -586,3 +586,8 @@ Nothing open right now.
 - `lakePorts` flag and ports on lake shores.
 - Map quality score exposed to the host ("balanced", "rich west side") from `fairness` and pip stats.
 - A "daily seed" for the group.
+
+
+## Island clusters (Tidebound default, 2026-11-24)
+
+Shape `island_clusters` (`src/packs/base/map/clusters.ts`). Island sizes 4 to 20 tiles, drawn about 65% small (4 to 7), 25% medium (8 to 13) and 10% large (14 to 20) until the land count of the radius is used. Islands are grouped into clusters (a lone island now and then, otherwise 2 to 6); a cluster whose disc would come within 3 tiles of another merges into it. Inside a cluster two islands keep 1 or 2 tiles of water (random per pair; a 1-tile strait is crossed by one bridge), between clusters at least 3. Islands grow one at a time, biggest first, from a free cell of their cluster's disc (wider discs, then anywhere free, when it is full). The shape declares `canvasRadius` (optional `ShapeOpDef` hook) so the canvas grows with the radius: many islands with moats need about 3.6 canvas cells per land tile. Tidebound picks it with `wide_water` (`TIDEBOUND_MAP_PICKS`).

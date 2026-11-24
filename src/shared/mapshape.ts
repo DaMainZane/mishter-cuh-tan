@@ -1,4 +1,4 @@
-// MODULE: land field for the shape stage (heightfield, cleanup, exact count fix, blob growth, retry loop) | DEPENDS ON: shared/mapcheck, shared/mapoptions, shared/maprecipe, shared/noise, shared/rng, shared/topology | USED BY: packs/base/map/shapes, packs/tidebound/risingSea, packs/tidebound/seaData, packs/tidebound/tides, shared/index, shared/mapcells, +2 more
+// MODULE: land field for the shape stage (heightfield, cleanup, exact count fix, blob growth, retry loop) | DEPENDS ON: shared/mapcheck, shared/mapoptions, shared/maprecipe, shared/noise, shared/rng, shared/topology | USED BY: packs/base/map/clusters, packs/base/map/shapes, packs/tidebound/risingSea, packs/tidebound/seaData, packs/tidebound/tides, shared/index, +3 more
 import { BASELINE_SPOTS, estimateVertices } from './mapcheck';
 import type { MapCtx, ShapeOpDef } from './mapoptions';
 import { cellPoint } from './noise';
@@ -482,8 +482,10 @@ export function splitSizes(rng: RngState, total: number, k: number, min: number,
  * Grows all blobs together, always the one that is furthest behind its target size. A cell may join a blob when no
  * other blob has land within `gap` of it. Each blob prefers cells near its center (stretched), cells where its own
  * noise is high, and cells with several neighbours already in the blob. Returns false when a blob gets stuck.
+ * `pairGap(a, b)`, when given, is the water two blobs must keep instead (at most `gap`): island clusters keep 1 or 2 tiles inside a cluster and
+ * `gap` between clusters. Without it every pair keeps `gap`, exactly as before.
  */
-export function growBlobs(f: LandField, specs: BlobSpec[], gap: number): boolean {
+export function growBlobs(f: LandField, specs: BlobSpec[], gap: number, pairGap?: (a: number, b: number) => number): boolean {
   const K = specs.length;
   if (K === 0) return false;
   const owner = new Int16Array(f.size).fill(-1);
@@ -493,14 +495,14 @@ export function growBlobs(f: LandField, specs: BlobSpec[], gap: number): boolean
   const centers = specs.map(s => cellPoint(f.q[s.center], f.r[s.center]));
   const scale = specs.map(s => Math.sqrt(s.size) + 1);
 
-  const offsets: [number, number][] = [];
+  const offsets: [number, number, number][] = [];
   for (let dq = -gap; dq <= gap; dq++) {
-    for (let dr = Math.max(-gap, -dq - gap); dr <= Math.min(gap, -dq + gap); dr++) offsets.push([dq, dr]);
+    for (let dr = Math.max(-gap, -dq - gap); dr <= Math.min(gap, -dq + gap); dr++) offsets.push([dq, dr, Math.max(Math.abs(dq), Math.abs(dr), Math.abs(dq + dr))]);
   }
   const gapOk = (c: number, k: number): boolean => {
-    for (const [dq, dr] of offsets) {
+    for (const [dq, dr, d] of offsets) {
       const j = f.at(f.q[c] + dq, f.r[c] + dr);
-      if (j >= 0 && owner[j] >= 0 && owner[j] !== k) return false;
+      if (j >= 0 && owner[j] >= 0 && owner[j] !== k && (!pairGap || d <= pairGap(k, owner[j]))) return false;
     }
     return true;
   };

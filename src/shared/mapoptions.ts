@@ -94,6 +94,12 @@ export interface ShapeOpDef extends MapOptionBase {
    * The base builds that many extra (carve) or fewer (scatter), so the final land count stays exact.
    */
   budget?(field: LandField, ctx: MapCtx): number;
+  /**
+   * Base ops: the canvas radius this shape needs for a normal map of `radius` (with `seaExtra` wide water), when that is more than the usual
+   * canvas. Island clusters use it: many islands each with their own moat need more sea than a few big ones. The land count still comes from
+   * `radius`; the generator caps the result at the canvas limit.
+   */
+  canvasRadius?(radius: number, seaExtra: number): number;
 }
 
 export interface TerrainDef extends MapOptionBase {
